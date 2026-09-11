@@ -142,6 +142,61 @@ export const aiService = {
   checkMissing: async (documentType: string, structuredFacts: any) => {
     const res = await api.post('/ai/check-missing', { documentType, structuredFacts });
     return res.data;
+  },
+  suggestFix: async (params: {
+    documentType: string;
+    content: string;
+    issue: any;
+    structuredFacts: any;
+  }) => {
+    const res = await api.post<{
+      issueType: string;
+      explanation: string;
+      legalRisk: string;
+      targetSnippet?: string;
+      replacementSnippet: string;
+      actionType: 'REPLACE' | 'INSERT' | 'APPEND';
+      fixedContent: string;
+    }>('/ai/suggest-fix', params);
+    return res.data;
+  },
+  syncFacts: async (params: {
+    documentType: string;
+    content: string;
+    structuredFacts: any;
+  }) => {
+    const res = await api.post<{
+      fixedContent: string;
+      changes: string[];
+    }>('/ai/sync-facts', params);
+    return res.data;
+  },
+  customEdit: async (params: {
+    documentType: string;
+    content: string;
+    selectedText?: string;
+    instruction: string;
+    structuredFacts?: any;
+  }) => {
+    const res = await api.post<{
+      instruction: string;
+      originalSnippet: string;
+      revisedSnippet: string;
+      explanation: string;
+      appliedContent: string;
+    }>('/ai/custom-edit', params);
+    return res.data;
+  },
+  getStandardClauses: async (documentType: string = 'NDA') => {
+    const res = await api.get<{
+      clauses: Array<{
+        id: string;
+        title: string;
+        category: string;
+        content: string;
+      }>;
+    }>('/ai/standard-clauses', { params: { documentType } });
+    return res.data.clauses;
   }
 };
 

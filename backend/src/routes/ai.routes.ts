@@ -11,5 +11,9 @@ router.post('/classify-document', (req, res) => aiController.classifyDocument(re
 router.post('/explain-clause', (req, res) => aiController.explainClause(req, res));
 router.post('/rewrite-clause', (req, res) => aiController.rewriteClause(req, res));
 router.post('/check-missing', (req, res) => aiController.checkMissing(req, res));
+router.post('/suggest-fix', (req, res) => aiController.suggestFix(req, res));
+router.post('/sync-facts', (req, res) => aiController.syncFacts(req, res));
+router.post('/custom-edit', (req, res) => aiController.customEdit(req, res));
+router.get('/standard-clauses', (req, res) => aiController.getStandardClauses(req, res));
 
 export default router;
