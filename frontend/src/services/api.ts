@@ -88,6 +88,37 @@ export const documentService = {
     const res = await api.post<{ message: string; document: DocumentRecord }>(`/documents/${id}/restore/${versionId}`);
     return res.data;
   },
+  getIssuePatch: async (id: string, issueId: string) => {
+    const res = await api.get<{ patch: any }>(`/documents/${id}/issues/${issueId}/patch`);
+    return res.data.patch;
+  },
+  applyIssuePatch: async (id: string, issueId: string, patch?: any) => {
+    const res = await api.post<{
+      success: boolean;
+      document: DocumentRecord;
+      validationResult: any;
+      patch: any;
+    }>(`/documents/${id}/issues/${issueId}/fix`, { patch });
+    return res.data;
+  },
+  fixAllSafe: async (id: string) => {
+    const res = await api.post<{
+      success: boolean;
+      appliedCount: number;
+      remainingIssuesCount: number;
+      document: DocumentRecord;
+      validationResult: any;
+    }>(`/documents/${id}/fix-safe`);
+    return res.data;
+  },
+  undoLastFix: async (id: string) => {
+    const res = await api.post<{
+      success: boolean;
+      document: DocumentRecord;
+      message: string;
+    }>(`/documents/${id}/undo`);
+    return res.data;
+  },
   downloadDocx: async (id: string, filename: string) => {
     const res = await api.get(`/documents/${id}/export/docx`, { responseType: 'blob' });
     const url = window.URL.createObjectURL(new Blob([res.data]));

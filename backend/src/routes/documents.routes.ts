@@ -17,6 +17,11 @@ router.post('/:id/validate', (req, res) => documentsController.validate(req, res
 
 router.get('/:id/versions', (req, res) => documentsController.getVersions(req, res));
 router.post('/:id/restore/:versionId', (req, res) => documentsController.restoreVersion(req, res));
+router.post('/:id/undo', (req, res) => documentsController.undoLastFix(req, res));
+
+router.get('/:id/issues/:issueId/patch', (req, res) => documentsController.getIssuePatch(req, res));
+router.post('/:id/issues/:issueId/fix', (req, res) => documentsController.applyIssuePatch(req, res));
+router.post('/:id/fix-safe', (req, res) => documentsController.fixAllSafe(req, res));
 
 router.get('/:id/export/docx', (req, res) => documentsController.exportDocx(req, res));
 router.get('/:id/export/pdf', (req, res) => documentsController.exportPdf(req, res));

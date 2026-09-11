@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { documentService, aiService } from '../services/api';
-import { DocumentRecord, ValidationIssue } from '../types';
+import { DocumentRecord, ValidationIssue, DocumentPatch, DocumentLocation } from '../types';
 import { 
   FileText, 
   CheckCircle2, 
@@ -28,7 +28,13 @@ import {
   Send,
   CornerDownRight,
   BookOpen,
-  Copy
+  Copy,
+  Undo2,
+  Eye,
+  X,
+  ShieldAlert,
+  Scale,
+  CheckCircle
 } from 'lucide-react';
 
 export const DocumentEditor: React.FC = () => {
@@ -49,6 +55,16 @@ export const DocumentEditor: React.FC = () => {
   const [loadingFix, setLoadingFix] = useState(false);
   const [applyingFix, setApplyingFix] = useState(false);
   const [fixSuccessMsg, setFixSuccessMsg] = useState('');
+
+  // Surgical Fix, Review Modal & Undo State
+  const [batchFixing, setBatchFixing] = useState(false);
+  const [undoing, setUndoing] = useState(false);
+  const [reviewModalOpen, setReviewModalOpen] = useState(false);
+  const [reviewIssue, setReviewIssue] = useState<ValidationIssue | null>(null);
+  const [reviewPatch, setReviewPatch] = useState<DocumentPatch | null>(null);
+  const [loadingReviewPatch, setLoadingReviewPatch] = useState(false);
+  const [applyingReviewPatch, setApplyingReviewPatch] = useState(false);
+  const [expandedManualIssues, setExpandedManualIssues] = useState<Record<string, boolean>>({});
 
   // AI Assistant advanced state
   const [explanation, setExplanation] = useState<any>(null);
@@ -135,7 +151,7 @@ export const DocumentEditor: React.FC = () => {
   /**
    * Jump & highlight exact section/text in the editor textarea
    */
-  const locateAndHighlight = (targetStringOrPattern: string, fallbackSection?: string) => {
+  const locateAndHighlight = (targetStringOrPattern?: string, fallbackSection?: string, location?: DocumentLocation) => {
     if (!textareaRef.current) return;
     const el = textareaRef.current;
     const text = el.value;
@@ -143,8 +159,16 @@ export const DocumentEditor: React.FC = () => {
     let start = -1;
     let end = -1;
 
-    // 1. Try exact target string if specific and meaningful
-    if (targetStringOrPattern && targetStringOrPattern.trim().length > 1) {
+    // 1. Direct offset range if provided by document structure
+    const rangeStart = location?.startOffset ?? location?.textRange?.start;
+    const rangeEnd = location?.endOffset ?? location?.textRange?.end;
+    if (typeof rangeStart === 'number' && typeof rangeEnd === 'number' && rangeStart >= 0 && rangeEnd <= text.length && rangeStart < rangeEnd) {
+      start = rangeStart;
+      end = rangeEnd;
+    }
+
+    // 2. Try exact target string if specific and meaningful
+    if (start === -1 && targetStringOrPattern && targetStringOrPattern.trim().length > 1) {
       const cleanTarget = targetStringOrPattern.trim().toLowerCase();
       const idx = text.toLowerCase().indexOf(cleanTarget);
       if (idx !== -1) {
@@ -153,7 +177,7 @@ export const DocumentEditor: React.FC = () => {
       }
     }
 
-    // 2. Fallback to matching section headers or keyword in text
+    // 3. Fallback to matching section headers or keyword in text
     if (start === -1 && fallbackSection) {
       const secClean = fallbackSection.trim().toLowerCase();
       const lines = text.split('\n');
@@ -169,7 +193,7 @@ export const DocumentEditor: React.FC = () => {
       }
     }
 
-    // 3. Fallback to start of document if still not found
+    // 4. Fallback to start of document if still not found
     if (start === -1) {
       start = 0;
       end = Math.min(text.length, 100);
@@ -186,18 +210,17 @@ export const DocumentEditor: React.FC = () => {
 
   /**
    * Click on a validation issue/flag:
-   * 1. Scrolls and highlights in the center editor
+   * 1. Scrolls and highlights in the center editor using structured location
    * 2. Synchronizes the left outline panel
-   * 3. Fetches an intelligent AI fix suggestion
    */
-  const handleSelectIssue = async (issue: ValidationIssue, idx: number) => {
+  const handleSelectIssue = (issue: ValidationIssue, idx: number) => {
     setActiveIssueIndex(idx);
 
-    // Extract potential quoted text or numerical token from description
+    // Extract potential target from evidence or description
     const quotedMatch = issue.description.match(/'([^']+)'/);
-    const targetToken = quotedMatch ? quotedMatch[1] : '';
+    const targetToken = issue.evidence || (quotedMatch ? quotedMatch[1] : '');
 
-    locateAndHighlight(targetToken, issue.section);
+    locateAndHighlight(targetToken, issue.section, issue.location);
 
     // Synchronize section selection in outline
     const matchedSection = sections.find(s => 
@@ -207,98 +230,142 @@ export const DocumentEditor: React.FC = () => {
     if (matchedSection) {
       setSelectedSection(matchedSection.title);
     }
-
-    // Fetch AI fix suggestion
-    if (document) {
-      setLoadingFix(true);
-      try {
-        const suggestion = await aiService.suggestFix({
-          documentType: document.documentType,
-          content,
-          issue,
-          structuredFacts: document.structuredFacts
-        });
-        setActiveFix(suggestion);
-      } catch (err) {
-        console.warn('Could not fetch AI fix suggestion:', err);
-      } finally {
-        setLoadingFix(false);
-      }
-    }
   };
 
   /**
-   * Apply an AI suggestion to document content and auto-revalidate
+   * One-click surgical Safe AI Fix
    */
-  const handleApplyFix = async (fixObj: any) => {
-    if (!fixObj || !fixObj.fixedContent || !id || !document) return;
-    setApplyingFix(true);
-    try {
-      const updatedContent = fixObj.fixedContent;
-      setContent(updatedContent);
-      setFixSuccessMsg('✓ AI Fix applied to document!');
-      setTimeout(() => setFixSuccessMsg(''), 4000);
-
-      // Save draft and revalidate immediately
-      await documentService.update(id, { content: updatedContent, saveAsVersion: false });
-      const valRes = await documentService.validate(id, {
-        content: updatedContent,
-        structuredFacts: document.structuredFacts
-      });
-      setDocument(valRes.document);
-
-      setActiveFix(null);
-      setActiveIssueIndex(null);
-    } catch (err: any) {
-      alert(`Failed to apply fix: ${err.message}`);
-    } finally {
-      setApplyingFix(false);
-    }
-  };
-
-  /**
-   * One-click direct fix for any flag
-   */
-  const handleDirectFix = async (issue: ValidationIssue, idx: number) => {
+  const handleApplySingleIssuePatch = async (issue: ValidationIssue, idx: number) => {
     if (!id || !document) return;
     setActiveIssueIndex(idx);
     setApplyingFix(true);
     try {
-      // 1. Locate and highlight in editor
-      const quotedMatch = issue.description.match(/'([^']+)'/);
-      const targetToken = quotedMatch ? quotedMatch[1] : '';
-      locateAndHighlight(targetToken, issue.section);
+      // Pinpoint in editor before applying
+      locateAndHighlight(issue.evidence, issue.section, issue.location);
 
-      // 2. Fetch AI fix suggestion
-      const suggestion = await aiService.suggestFix({
-        documentType: document.documentType,
-        content,
-        issue,
-        structuredFacts: document.structuredFacts
-      });
+      const issueId = issue.issueId || issue.id || `iss_${idx}`;
+      const res = await documentService.applyIssuePatch(id, issueId, issue.proposedPatch);
 
-      if (suggestion && suggestion.fixedContent) {
-        // 3. Apply fix to content
-        const updatedContent = suggestion.fixedContent;
-        setContent(updatedContent);
-        setFixSuccessMsg('✓ AI Fix applied & validated!');
+      if (res.success && res.document) {
+        setContent(res.document.content);
+        setDocument(res.document);
+        setFixSuccessMsg(`✓ Fixed: ${issue.title || issue.section}`);
         setTimeout(() => setFixSuccessMsg(''), 4000);
-
-        // 4. Save and auto-revalidate
-        await documentService.update(id, { content: updatedContent, saveAsVersion: false });
-        const valRes = await documentService.validate(id, {
-          content: updatedContent,
-          structuredFacts: document.structuredFacts
-        });
-        setDocument(valRes.document);
-        setActiveFix(null);
         setActiveIssueIndex(null);
       }
     } catch (err: any) {
-      alert(`Auto-fix failed: ${err.message}`);
+      const msg = err.response?.data?.error || err.message || 'Failed to apply patch';
+      alert(`Could not apply fix: ${msg}`);
     } finally {
       setApplyingFix(false);
     }
+  };
+
+  /**
+   * Open Before / After Review Modal for non-trivial or medium-confidence fixes
+   */
+  const handleOpenReviewModal = async (issue: ValidationIssue, idx: number) => {
+    if (!id || !document) return;
+    setActiveIssueIndex(idx);
+    setReviewIssue(issue);
+    setReviewModalOpen(true);
+    setLoadingReviewPatch(true);
+    locateAndHighlight(issue.evidence, issue.section, issue.location);
+
+    try {
+      if (issue.proposedPatch) {
+        setReviewPatch(issue.proposedPatch);
+      } else {
+        const issueId = issue.issueId || issue.id || `iss_${idx}`;
+        const patch = await documentService.getIssuePatch(id, issueId);
+        setReviewPatch(patch);
+      }
+    } catch (err: any) {
+      console.warn('Could not load patch for review:', err);
+    } finally {
+      setLoadingReviewPatch(false);
+    }
+  };
+
+  /**
+   * Apply reviewed patch after user confirmation
+   */
+  const handleApplyReviewPatch = async () => {
+    if (!id || !document || !reviewIssue) return;
+    setApplyingReviewPatch(true);
+    try {
+      const issueId = reviewIssue.issueId || reviewIssue.id || 'current';
+      const res = await documentService.applyIssuePatch(id, issueId, reviewPatch || undefined);
+
+      if (res.success && res.document) {
+        setContent(res.document.content);
+        setDocument(res.document);
+        setFixSuccessMsg(`✓ Applied reviewed fix: ${reviewIssue.title || reviewIssue.section}`);
+        setTimeout(() => setFixSuccessMsg(''), 4000);
+        setReviewModalOpen(false);
+        setReviewIssue(null);
+        setReviewPatch(null);
+        setActiveIssueIndex(null);
+      }
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || 'Failed to apply reviewed fix';
+      alert(`Could not apply fix: ${msg}`);
+    } finally {
+      setApplyingReviewPatch(false);
+    }
+  };
+
+  /**
+   * Batch apply all safe auto-fixes in a single transaction
+   */
+  const handleFixAllSafe = async () => {
+    if (!id || !document) return;
+    setBatchFixing(true);
+    try {
+      const res = await documentService.fixAllSafe(id);
+      if (res.success && res.document) {
+        setContent(res.document.content);
+        setDocument(res.document);
+        setFixSuccessMsg(`✓ Fixed ${res.appliedCount} safe issues! Snapshot saved for 1-click Undo.`);
+        setTimeout(() => setFixSuccessMsg(''), 5000);
+        setActiveIssueIndex(null);
+      }
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || 'Batch fix failed';
+      alert(`Batch fix error: ${msg}`);
+    } finally {
+      setBatchFixing(false);
+    }
+  };
+
+  /**
+   * 1-Click Undo last AI fix and restore previous version snapshot
+   */
+  const handleUndoLastFix = async () => {
+    if (!id || !document) return;
+    setUndoing(true);
+    try {
+      const res = await documentService.undoLastFix(id);
+      if (res.success && res.document) {
+        setContent(res.document.content);
+        setDocument(res.document);
+        setFixSuccessMsg('✓ Restored to previous version snapshot (Undo successful).');
+        setTimeout(() => setFixSuccessMsg(''), 4000);
+        setActiveIssueIndex(null);
+      }
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || 'Undo failed';
+      alert(`Undo error: ${msg}`);
+    } finally {
+      setUndoing(false);
+    }
+  };
+
+  const toggleManualExpanded = (key: string) => {
+    setExpandedManualIssues(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
   };
 
   /**
@@ -454,6 +521,11 @@ export const DocumentEditor: React.FC = () => {
   const issuesList = document.validationSummary?.issues || [];
   const validationScore = document.validationScore || 0;
 
+  // Multi-tier categorized issues
+  const safeIssues = issuesList.filter((iss: ValidationIssue) => iss.mode === 'SAFE_AUTO' || (iss.canAutoFix && (iss.confidence ?? 1) >= 0.9));
+  const reviewIssues = issuesList.filter((iss: ValidationIssue) => iss.mode === 'REVIEW' || (iss.canAutoFix && (iss.confidence ?? 0) < 0.9));
+  const manualIssues = issuesList.filter((iss: ValidationIssue) => iss.mode === 'MANUAL' || !iss.canAutoFix);
+
   return (
     <div className="space-y-4">
       {/* Top Action Bar */}
@@ -517,6 +589,16 @@ export const DocumentEditor: React.FC = () => {
           >
             <History className="w-3.5 h-3.5" />
             Save as Version
+          </button>
+
+          <button
+            onClick={handleUndoLastFix}
+            disabled={undoing || (document.versions?.length || 0) <= 0}
+            className="px-3 py-1.5 bg-white border border-amber-300 hover:bg-amber-50 text-amber-900 text-xs font-semibold rounded-lg flex items-center gap-1.5 shadow-2xs disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            title="Restore previous version snapshot (Undo last AI fix)"
+          >
+            <Undo2 className={`w-3.5 h-3.5 text-amber-600 ${undoing ? 'animate-spin' : ''}`} />
+            {undoing ? 'Restoring...' : 'Undo AI Fix'}
           </button>
 
           <button
@@ -753,7 +835,7 @@ export const DocumentEditor: React.FC = () => {
                   </button>
                 </div>
               ) : (
-                <div className="p-3 bg-purple-50/70 border border-purple-200 rounded-xl space-y-2">
+                <div className="p-3 bg-purple-50/70 border border-purple-200 rounded-xl space-y-2.5">
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-bold text-mira-dark flex items-center gap-1.5">
                       <span className="text-sm font-black text-mira-primary">{validationScore}%</span>
@@ -773,6 +855,34 @@ export const DocumentEditor: React.FC = () => {
                       style={{ width: `${validationScore}%` }}
                     />
                   </div>
+
+                  {/* Mode Breakdown Pills */}
+                  <div className="flex items-center gap-1.5 flex-wrap pt-1 text-[10px] font-semibold">
+                    <span className="px-2 py-0.5 rounded-md bg-emerald-100/90 text-emerald-800 border border-emerald-200 flex items-center gap-1">
+                      <Zap className="w-2.5 h-2.5 text-emerald-600" />
+                      {safeIssues.length} Safe
+                    </span>
+                    <span className="px-2 py-0.5 rounded-md bg-amber-100/90 text-amber-800 border border-amber-200 flex items-center gap-1">
+                      <Eye className="w-2.5 h-2.5 text-amber-600" />
+                      {reviewIssues.length} Review
+                    </span>
+                    <span className="px-2 py-0.5 rounded-md bg-rose-100/90 text-rose-800 border border-rose-200 flex items-center gap-1">
+                      <ShieldAlert className="w-2.5 h-2.5 text-rose-600" />
+                      {manualIssues.length} Manual
+                    </span>
+                  </div>
+
+                  {/* Batch Safe Fix Action Button */}
+                  {safeIssues.length > 0 && (
+                    <button
+                      onClick={handleFixAllSafe}
+                      disabled={batchFixing}
+                      className="w-full mt-2 py-2 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 shadow-xs transition-all disabled:opacity-50"
+                    >
+                      <Zap className={`w-3.5 h-3.5 text-yellow-300 ${batchFixing ? 'animate-spin' : ''}`} />
+                      {batchFixing ? 'Applying Safe Fixes...' : `⚡ Fix All Safe Issues (${safeIssues.length})`}
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -780,7 +890,7 @@ export const DocumentEditor: React.FC = () => {
               <div className="space-y-2.5">
                 <div className="flex items-center justify-between text-xs text-mira-muted font-medium">
                   <span>Detected Flags ({issuesList.length})</span>
-                  <span className="text-[10px] text-purple-700">Click card to jump • 1-Click Fix</span>
+                  <span className="text-[10px] text-purple-700">Click card to jump • Surgical Fixes</span>
                 </div>
 
                 {issuesList.length === 0 ? (
@@ -790,77 +900,189 @@ export const DocumentEditor: React.FC = () => {
                     <p className="text-[11px] text-mira-muted">Your draft is free of factual discrepancies or missing sections.</p>
                   </div>
                 ) : (
-                  <div className="space-y-2.5 max-h-[55vh] overflow-y-auto pr-1">
+                  <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-1">
                     {issuesList.map((issue: ValidationIssue, idx: number) => {
                       const isActive = activeIssueIndex === idx;
+                      const isSafe = issue.mode === 'SAFE_AUTO' || (issue.canAutoFix && (issue.confidence ?? 1) >= 0.9);
+                      const isReview = issue.mode === 'REVIEW' || (issue.canAutoFix && !isSafe);
+                      const isManual = issue.mode === 'MANUAL' || !issue.canAutoFix;
+                      const issueKey = issue.id || issue.issueId || `iss_${idx}`;
 
                       return (
                         <div
                           key={idx}
-                          className={`p-3 rounded-xl border text-xs transition-all ${
+                          className={`p-3.5 rounded-xl border text-xs transition-all space-y-2.5 ${
                             isActive
                               ? 'border-purple-500 bg-purple-50/70 shadow-xs ring-1 ring-purple-400'
-                              : issue.severity === 'HIGH'
-                              ? 'border-red-200 bg-red-50/30 hover:border-red-300 hover:bg-red-50/60'
-                              : 'border-amber-200 bg-amber-50/30 hover:border-amber-300 hover:bg-amber-50/60'
+                              : isManual
+                              ? 'border-rose-200 bg-rose-50/20 hover:border-rose-300 hover:bg-rose-50/40'
+                              : isReview
+                              ? 'border-amber-200 bg-amber-50/20 hover:border-amber-300 hover:bg-amber-50/40'
+                              : 'border-emerald-200 bg-emerald-50/20 hover:border-emerald-300 hover:bg-emerald-50/40'
                           }`}
                         >
-                          {/* Card Header & Description */}
+                          {/* Card Header */}
                           <div 
                             onClick={() => handleSelectIssue(issue, idx)}
                             className="cursor-pointer space-y-1"
                             title="Click to jump to this section in text"
                           >
-                            <div className="flex items-center justify-between font-bold text-[11px]">
-                              <span className="flex items-center gap-1.5 truncate">
-                                <AlertCircle className={`w-3.5 h-3.5 flex-shrink-0 ${
-                                  issue.severity === 'HIGH' ? 'text-red-600' : 'text-amber-600'
-                                }`} />
-                                <span className="truncate text-mira-dark">{issue.section}</span>
+                            <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                              <span className="flex items-center gap-1.5 font-bold text-[11px] text-mira-dark truncate">
+                                {isManual ? (
+                                  <ShieldAlert className="w-3.5 h-3.5 text-rose-600 flex-shrink-0" />
+                                ) : isReview ? (
+                                  <Eye className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+                                ) : (
+                                  <Zap className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                                )}
+                                <span className="truncate">{issue.title || issue.section}</span>
                               </span>
-                              <span className={`text-[9px] px-1.5 py-0.2 rounded font-bold uppercase tracking-wider ${
-                                issue.severity === 'HIGH' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'
-                              }`}>
-                                {issue.severity}
-                              </span>
+
+                              <div className="flex items-center gap-1">
+                                {isSafe && (
+                                  <span className="text-[9px] px-1.5 py-0.2 rounded font-bold uppercase bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                    Safe Auto
+                                  </span>
+                                )}
+                                {isReview && (
+                                  <span className="text-[9px] px-1.5 py-0.2 rounded font-bold uppercase bg-amber-100 text-amber-800 border border-amber-200">
+                                    Review
+                                  </span>
+                                )}
+                                {isManual && (
+                                  <span className="text-[9px] px-1.5 py-0.2 rounded font-bold uppercase bg-rose-100 text-rose-800 border border-rose-200">
+                                    Manual
+                                  </span>
+                                )}
+                                <span className={`text-[9px] px-1.5 py-0.2 rounded font-bold uppercase tracking-wider ${
+                                  issue.severity === 'HIGH' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'
+                                }`}>
+                                  {issue.severity}
+                                </span>
+                              </div>
                             </div>
-                            <p className="text-[11px] text-mira-dark/85 leading-snug">
-                              {issue.description}
+
+                            {/* Problem Description */}
+                            <p className="text-[11px] text-mira-dark/90 leading-snug">
+                              {issue.message || issue.description}
                             </p>
                           </div>
 
-                          {/* Direct 1-Click Fix Action */}
-                          <div className="mt-2.5 pt-2 border-t border-gray-200/80 flex items-center gap-1.5">
-                            <button
-                              onClick={() => handleDirectFix(issue, idx)}
-                              disabled={applyingFix}
-                              className="flex-1 py-1.5 px-2.5 bg-mira-primary hover:bg-purple-800 text-white rounded-lg font-bold text-[11px] flex items-center justify-center gap-1.5 shadow-2xs transition-colors"
-                            >
-                              {applyingFix && activeIssueIndex === idx ? (
-                                <>
-                                  <RefreshCw className="w-3 h-3 animate-spin" />
-                                  <span>Applying Fix...</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Zap className="w-3 h-3 text-yellow-300" />
-                                  <span>1-Click AI Fix</span>
-                                </>
-                              )}
-                            </button>
+                          {/* Why Flagged Explanation */}
+                          {issue.reason && (
+                            <div className="p-2 bg-purple-50/70 rounded-lg border border-purple-100 text-[10px] text-purple-950 leading-snug">
+                              <span className="font-bold text-mira-primary">Why: </span>
+                              {issue.reason}
+                            </div>
+                          )}
 
-                            <button
-                              onClick={() => {
-                                const q = issue.description.match(/'([^']+)'/)?.[1] || '';
-                                locateAndHighlight(q, issue.section);
-                              }}
-                              className="py-1.5 px-2 bg-white hover:bg-gray-100 border border-mira-border text-mira-dark rounded-lg text-[10px] font-semibold flex items-center gap-1"
-                              title="Locate & highlight in editor"
-                            >
-                              <span>Locate</span>
-                              <CornerDownRight className="w-3 h-3 opacity-60" />
-                            </button>
-                          </div>
+                          {/* Evidence Quote */}
+                          {issue.evidence && (
+                            <div className="p-2 bg-gray-50 rounded-lg border border-gray-200 text-[10px] text-gray-700 flex items-start gap-1.5">
+                              <span className="font-bold text-gray-400 select-none">“</span>
+                              <span className="flex-1 italic truncate">{issue.evidence}</span>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  locateAndHighlight(issue.evidence, issue.section, issue.location);
+                                }}
+                                className="text-[10px] text-purple-700 hover:text-purple-900 font-bold flex items-center gap-0.5 flex-shrink-0"
+                                title="Locate quote in document"
+                              >
+                                <CornerDownRight className="w-3 h-3" />
+                                Locate
+                              </button>
+                            </div>
+                          )}
+
+                          {/* Suggestion / Guidance */}
+                          {issue.suggestion && (
+                            <div className="text-[10px] text-mira-muted leading-relaxed flex items-start gap-1.5">
+                              <Lightbulb className="w-3.5 h-3.5 text-amber-500 flex-shrink-0 mt-0.5" />
+                              <span>{issue.suggestion}</span>
+                            </div>
+                          )}
+
+                          {/* Action Button Strip by Mode */}
+                          {isSafe && (
+                            <div className="pt-2 border-t border-emerald-100 flex items-center gap-1.5">
+                              <button
+                                onClick={() => handleApplySingleIssuePatch(issue, idx)}
+                                disabled={applyingFix}
+                                className="flex-1 py-1.5 px-2.5 bg-mira-primary hover:bg-purple-800 text-white rounded-lg font-bold text-[11px] flex items-center justify-center gap-1.5 shadow-2xs transition-colors"
+                              >
+                                {applyingFix && activeIssueIndex === idx ? (
+                                  <>
+                                    <RefreshCw className="w-3 h-3 animate-spin" />
+                                    <span>Applying Patch...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Zap className="w-3 h-3 text-yellow-300" />
+                                    <span>Quick AI Fix</span>
+                                  </>
+                                )}
+                              </button>
+                              <button
+                                onClick={() => locateAndHighlight(issue.evidence, issue.section, issue.location)}
+                                className="py-1.5 px-2 bg-white hover:bg-gray-100 border border-mira-border text-mira-dark rounded-lg text-[10px] font-semibold flex items-center gap-1"
+                                title="Locate in editor"
+                              >
+                                <span>Locate</span>
+                                <CornerDownRight className="w-3 h-3 opacity-60" />
+                              </button>
+                            </div>
+                          )}
+
+                          {isReview && (
+                            <div className="pt-2 border-t border-amber-100 flex items-center gap-1.5">
+                              <button
+                                onClick={() => handleOpenReviewModal(issue, idx)}
+                                className="flex-1 py-1.5 px-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-[11px] flex items-center justify-center gap-1.5 shadow-2xs transition-colors"
+                              >
+                                <Eye className="w-3 h-3" />
+                                <span>Review AI Fix</span>
+                              </button>
+                              <button
+                                onClick={() => locateAndHighlight(issue.evidence, issue.section, issue.location)}
+                                className="py-1.5 px-2 bg-white hover:bg-gray-100 border border-mira-border text-mira-dark rounded-lg text-[10px] font-semibold flex items-center gap-1"
+                                title="Locate in editor"
+                              >
+                                <span>Locate</span>
+                                <CornerDownRight className="w-3 h-3 opacity-60" />
+                              </button>
+                            </div>
+                          )}
+
+                          {isManual && (
+                            <div className="pt-2 border-t border-rose-100 space-y-2">
+                              <div className="text-[10px] text-rose-800 bg-rose-50/80 p-2 rounded-lg border border-rose-200">
+                                ✋ <span className="font-semibold">Manual Action:</span> ATHARV does not invent missing terms or decide commercial terms.
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  onClick={() => locateAndHighlight(issue.evidence, issue.section, issue.location)}
+                                  className="flex-1 py-1.5 px-2.5 bg-white hover:bg-purple-50 border border-purple-200 text-mira-primary rounded-lg font-bold text-[10px] flex items-center justify-center gap-1 shadow-2xs"
+                                >
+                                  <CornerDownRight className="w-3 h-3" />
+                                  <span>Edit in Document</span>
+                                </button>
+                                <button
+                                  onClick={() => toggleManualExpanded(issueKey)}
+                                  className="py-1.5 px-2 bg-white hover:bg-gray-50 border border-mira-border text-mira-muted hover:text-mira-dark rounded-lg text-[10px] font-medium"
+                                >
+                                  {expandedManualIssues[issueKey] ? 'Hide Guide' : 'What to Change?'}
+                                </button>
+                              </div>
+                              {expandedManualIssues[issueKey] && (
+                                <div className="p-2 bg-white rounded-lg border border-gray-200 text-[10px] text-gray-700 space-y-1 animate-in fade-in">
+                                  <div className="font-semibold text-gray-900">Recommended Steps:</div>
+                                  <p>{issue.suggestion || 'Review the highlighted clause in the editor and insert the agreed commercial terms directly.'}</p>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -1035,6 +1257,127 @@ export const DocumentEditor: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Before / After Diff Review Modal */}
+      {reviewModalOpen && reviewIssue && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-mira-border shadow-2xl max-w-2xl w-full overflow-hidden animate-in fade-in zoom-in-95">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-mira-border bg-gray-50/70 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-amber-100 rounded-xl text-amber-700">
+                  <Eye className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-mira-dark">Review AI Proposed Fix</h3>
+                  <p className="text-[11px] text-mira-muted">
+                    Section: <span className="font-semibold text-mira-dark">{reviewIssue.section}</span> • Confidence: {Math.round((reviewIssue.confidence ?? 0.85) * 100)}%
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setReviewModalOpen(false);
+                  setReviewIssue(null);
+                  setReviewPatch(null);
+                }}
+                className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+              {/* Problem Explanation */}
+              <div className="p-3 bg-purple-50/70 rounded-xl border border-purple-200 text-xs text-purple-950 space-y-1">
+                <span className="font-bold flex items-center gap-1.5 text-mira-primary">
+                  <Lightbulb className="w-3.5 h-3.5" />
+                  Why ATHARV flags this:
+                </span>
+                <p className="text-[11px] leading-relaxed text-purple-900">
+                  {reviewIssue.reason || reviewIssue.description}
+                </p>
+              </div>
+
+              {loadingReviewPatch ? (
+                <div className="py-8 text-center text-xs text-mira-muted flex flex-col items-center justify-center gap-2">
+                  <RefreshCw className="w-5 h-5 animate-spin text-mira-primary" />
+                  <span>Computing surgical patch and dry-run safety verification...</span>
+                </div>
+              ) : reviewPatch ? (
+                <div className="space-y-3">
+                  {/* Before */}
+                  <div>
+                    <div className="flex items-center justify-between text-[11px] font-bold text-red-700 mb-1">
+                      <span>BEFORE (Current Document Content)</span>
+                      <span className="text-[10px] uppercase font-normal text-red-600">To be removed</span>
+                    </div>
+                    <div className="p-3 bg-red-50/70 border border-red-200 rounded-xl text-xs font-mono text-red-900 whitespace-pre-wrap leading-relaxed line-through decoration-red-400">
+                      {reviewPatch.originalText || reviewIssue.evidence || '(Blank or missing)'}
+                    </div>
+                  </div>
+
+                  {/* After */}
+                  <div>
+                    <div className="flex items-center justify-between text-[11px] font-bold text-emerald-700 mb-1">
+                      <span>AFTER (Proposed Surgical Replacement)</span>
+                      <span className="text-[10px] uppercase font-normal text-emerald-600">Surgical replacement</span>
+                    </div>
+                    <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl text-xs font-mono text-emerald-950 whitespace-pre-wrap leading-relaxed">
+                      {reviewPatch.replacementText}
+                    </div>
+                  </div>
+
+                  {/* Preserved elements notice */}
+                  <div className="p-2.5 bg-gray-50 rounded-lg border border-gray-200 text-[11px] text-gray-600 flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                    <span>
+                      Guaranteed preservation: Surrounding formatting, cross-references, and unrelated clauses are unaffected.
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 bg-gray-50 rounded-xl text-center text-xs text-gray-500">
+                  No automated replacement available. Please apply this change manually.
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-3.5 border-t border-mira-border bg-gray-50 flex items-center justify-end gap-2.5">
+              <button
+                onClick={() => {
+                  setReviewModalOpen(false);
+                  setReviewIssue(null);
+                  setReviewPatch(null);
+                }}
+                className="px-4 py-2 bg-white border border-mira-border hover:bg-gray-100 text-mira-dark rounded-xl text-xs font-semibold"
+              >
+                Cancel
+              </button>
+
+              <button
+                onClick={handleApplyReviewPatch}
+                disabled={applyingReviewPatch || !reviewPatch}
+                className="px-4 py-2 bg-mira-primary hover:bg-purple-800 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-colors"
+              >
+                {applyingReviewPatch ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Applying Verified Fix...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Apply Verified Fix</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

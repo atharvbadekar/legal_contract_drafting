@@ -12,16 +12,64 @@ export type DocumentStatus = 'DRAFT' | 'VALIDATING' | 'COMPLETED' | 'NEEDS_REVIE
 export type GenerationMode = 'BASELINE' | 'MIRA';
 export type ClauseStatus = 'DRAFT' | 'APPROVED' | 'ARCHIVED';
 
+export interface DocumentLocation {
+  sectionId?: string;
+  sectionTitle?: string;
+  clauseId?: string;
+  paragraphId?: string;
+  startOffset?: number;
+  endOffset?: number;
+  textRange?: {
+    start: number;
+    end: number;
+  };
+}
+
+export interface DocumentPatch {
+  id: string;
+  issueId: string;
+  action: 'REPLACE_TEXT' | 'INSERT_AFTER' | 'INSERT_BEFORE' | 'DELETE';
+  target: DocumentLocation;
+  originalText: string;
+  replacementText: string;
+  reason: string;
+  preserve?: string[];
+  canAutoFix: boolean;
+  mode: 'SAFE_AUTO' | 'REVIEW' | 'MANUAL';
+  confidence: number;
+  requiresUserInput: boolean;
+}
+
 export interface ValidationIssue {
+  id?: string;
+  issueId?: string;
   type: string;
+  category?: 'FACTUAL' | 'STRUCTURAL' | 'RISK' | 'COMPLIANCE';
   severity: 'HIGH' | 'MEDIUM' | 'LOW';
   section: string;
+  title?: string;
+  message?: string;
   description: string;
+  location?: DocumentLocation;
+  evidence?: string;
+  reason?: string;
+  suggestion?: string;
+  canAutoFix?: boolean;
+  mode?: 'SAFE_AUTO' | 'REVIEW' | 'MANUAL';
+  confidence?: number;
+  sources?: Array<{ title: string; source: string; relevance?: number }>;
+  proposedPatch?: DocumentPatch;
 }
 
 export interface ValidationSummary {
   status: 'PASSED' | 'NEEDS_REVIEW' | 'FAILED';
   score: number;
+  summaryCounts?: {
+    passedChecks: number;
+    needsAttention: number;
+    highPriority: number;
+    safeFixable: number;
+  };
   layerScores?: {
     factualAccuracy: number;
     sectionCompleteness: number;

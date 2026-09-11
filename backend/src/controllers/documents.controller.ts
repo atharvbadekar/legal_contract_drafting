@@ -3,6 +3,7 @@ import { prisma } from '../utils/prisma.js';
 import { AuthRequest } from '../middleware/auth.js';
 import { agentPlanner } from '../services/agent/agent_planner.js';
 import { validationEngine } from '../services/validation/validation_engine.js';
+import { patchService } from '../services/validation/patch_service.js';
 import { exportService } from '../services/documents/export_service.js';
 
 export class DocumentsController {
@@ -281,6 +282,7 @@ export class DocumentsController {
             score: validationResult.overallScore,
             layerScores: validationResult.layerScores,
             issues: validationResult.allIssues,
+            summaryCounts: validationResult.summaryCounts,
             disclaimer: validationResult.disclaimer
           } as any
         }
@@ -370,6 +372,93 @@ export class DocumentsController {
     } catch (err: any) {
       console.error('PDF export error:', err);
       return res.status(500).json({ error: 'Failed to export PDF' });
+    }
+  }
+
+  async getIssuePatch(req: AuthRequest, res: Response) {
+    try {
+      const { id, issueId } = req.params;
+      const doc = await prisma.document.findUnique({ where: { id } });
+      if (!doc) return res.status(404).json({ error: 'Document not found' });
+
+      const summary = (doc.validationSummary as any) || {};
+      const issue = (summary.issues || []).find((i: any) => i.id === issueId || i.issueId === issueId) || req.body.issue;
+      if (!issue) return res.status(404).json({ error: 'Issue not found' });
+
+      const patch = await patchService.generatePatchForIssue({
+        documentType: doc.documentType,
+        content: doc.content,
+        issue,
+        structuredFacts: (doc.structuredFacts as any) || {}
+      });
+
+      return res.json({ patch });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  async applyIssuePatch(req: AuthRequest, res: Response) {
+    try {
+      const { id, issueId } = req.params;
+      const { patch } = req.body;
+      const userId = req.user?.id || 'system';
+
+      let targetPatch = patch;
+      if (!targetPatch) {
+        const doc = await prisma.document.findUnique({ where: { id } });
+        if (!doc) return res.status(404).json({ error: 'Document not found' });
+        const summary = (doc.validationSummary as any) || {};
+        const issue = (summary.issues || []).find((i: any) => i.id === issueId || i.issueId === issueId);
+        targetPatch = await patchService.generatePatchForIssue({
+          documentType: doc.documentType,
+          content: doc.content,
+          issue: issue || { id: issueId },
+          structuredFacts: (doc.structuredFacts as any) || {}
+        });
+      }
+
+      const result = await patchService.verifyAndApplyPatch({
+        documentId: id,
+        patch: targetPatch,
+        userId
+      });
+
+      return res.json(result);
+    } catch (err: any) {
+      return res.status(400).json({ error: err.message });
+    }
+  }
+
+  async fixAllSafe(req: AuthRequest, res: Response) {
+    try {
+      const { id } = req.params;
+      const userId = req.user?.id || 'system';
+
+      const result = await patchService.batchApplySafePatches({
+        documentId: id,
+        userId
+      });
+
+      return res.json(result);
+    } catch (err: any) {
+      return res.status(400).json({ error: err.message });
+    }
+  }
+
+  async undoLastFix(req: AuthRequest, res: Response) {
+    try {
+      const { id } = req.params;
+      const userId = req.user?.id || 'system';
+
+      const result = await patchService.undoLastFix({
+        documentId: id,
+        userId
+      });
+
+      return res.json(result);
+    } catch (err: any) {
+      return res.status(400).json({ error: err.message });
     }
   }
 }
