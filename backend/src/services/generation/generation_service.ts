@@ -383,9 +383,31 @@ export class GenerationService {
   }
 
   async rewriteSection(sectionContent: string, instruction: 'formal' | 'simple' | 'custom', customPrompt?: string): Promise<string> {
-    const prompt = (customPrompt || '').toLowerCase();
+    const rawPrompt = (customPrompt || '').trim();
+    const lowerPrompt = rawPrompt.toLowerCase();
 
-    if (instruction === 'simple' || prompt.includes('simple') || prompt.includes('plain')) {
+    // 1. Direct text replacement patterns: "replace X with Y" or "change X to Y"
+    const replaceMatch = rawPrompt.match(/(?:replace|change)\s+["']?(.+?)["']?\s+(?:with|to)\s+["']?(.+?)["']?$/i);
+    if (replaceMatch) {
+      const [, target, replacement] = replaceMatch;
+      const targetRegex = new RegExp(target.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+      if (targetRegex.test(sectionContent)) {
+        return sectionContent.replace(targetRegex, replacement.trim());
+      }
+    }
+
+    // 2. Removal patterns: "remove X" or "delete X"
+    const removeMatch = rawPrompt.match(/(?:remove|delete)\s+["']?(.+?)["']?$/i);
+    if (removeMatch) {
+      const [, target] = removeMatch;
+      const targetRegex = new RegExp(target.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+      if (targetRegex.test(sectionContent)) {
+        return sectionContent.replace(targetRegex, '').replace(/\s{2,}/g, ' ').trim();
+      }
+    }
+
+    // 3. Plain English / Simpler
+    if (instruction === 'simple' || lowerPrompt.includes('simple') || lowerPrompt.includes('plain')) {
       return sectionContent
         .replace(/hereinafter referred to as/gi, 'called')
         .replace(/by and between/gi, 'between')
@@ -399,7 +421,8 @@ export class GenerationService {
         .replace(/covenants and agrees/gi, 'agrees');
     }
 
-    if (instruction === 'formal' || prompt.includes('formal') || prompt.includes('legal')) {
+    // 4. Formal & Binding
+    if (instruction === 'formal' || lowerPrompt.includes('formal') || lowerPrompt.includes('legal') || lowerPrompt.includes('binding')) {
       const trimmed = sectionContent.trim();
       if (!trimmed.toLowerCase().startsWith('pursuant to') && !trimmed.toLowerCase().startsWith('the parties hereby')) {
         return `Pursuant to the mutual covenants established herein, ${trimmed} It is expressly stipulated that time is of the essence in the strict performance of said obligations.`;
@@ -407,30 +430,82 @@ export class GenerationService {
       return `${trimmed}\n\nAll covenants and representations herein are binding upon the parties, their lawful successors, and permitted assigns.`;
     }
 
-    if (prompt.includes('mutual') || prompt.includes('bilateral') || prompt.includes('balance')) {
+    // 5. Mutual / Bilateral Balance
+    if (lowerPrompt.includes('mutual') || lowerPrompt.includes('bilateral') || lowerPrompt.includes('balance') || lowerPrompt.includes('both parties')) {
       return sectionContent
         .replace(/\bthe Receiving Party shall\b/gi, 'Each Party shall')
         .replace(/\bthe Disclosing Party\b/gi, 'the other Party')
         .replace(/\bDisclosing Party's\b/gi, 'disclosing Party\'s')
-        .replace(/\bReceiving Party's\b/gi, 'receiving Party\'s');
+        .replace(/\bReceiving Party's\b/gi, 'receiving Party\'s')
+        .replace(/\bReceiving Party\b/gi, 'Receiving Party or Disclosing Party, as applicable');
     }
 
-    if (prompt.includes('duration') || prompt.includes('term') || prompt.includes('year')) {
-      const numMatch = customPrompt?.match(/\d+\s*(?:years?|months?)/i);
-      const newDuration = numMatch ? numMatch[0] : '5 years';
-      return sectionContent.replace(/\b\d+\s*(?:years?|months?)\b/i, newDuration);
+    // 6. Notice or Cure Period (e.g. "change notice period to 60 days", "45 days notice", "notice 15 days")
+    if (lowerPrompt.includes('notice') || lowerPrompt.includes('cure') || lowerPrompt.includes('day')) {
+      const daysMatch = rawPrompt.match(/(\d+)\s*(?:business\s*)?days?/i);
+      const daysCount = daysMatch ? daysMatch[1] : '30';
+      if (/\b\d+\s*(?:business\s*)?days?\b/i.test(sectionContent)) {
+        return sectionContent.replace(/\b\d+\s*(?:business\s*)?days?\b/i, `${daysCount} days`);
+      } else {
+        return sectionContent.replace(/(?:upon|by)?\s*(?:prior\s*)?(?:written\s*)?notice/i, `upon ${daysCount} days prior written notice`);
+      }
     }
 
-    if (prompt.includes('fee') || prompt.includes('attorney') || prompt.includes('injunct')) {
+    // 7. Duration / Term / Years / Months (e.g. "change term to 3 years", "5 years duration")
+    if (lowerPrompt.includes('duration') || lowerPrompt.includes('term') || lowerPrompt.includes('year') || lowerPrompt.includes('month')) {
+      const numMatch = rawPrompt.match(/(\d+)\s*(years?|months?)/i);
+      const newDuration = numMatch ? `${numMatch[1]} ${numMatch[2]}` : '5 years';
+      if (/\b\d+\s*(?:years?|months?)\b/i.test(sectionContent)) {
+        return sectionContent.replace(/\b\d+\s*(?:years?|months?)\b/i, newDuration);
+      } else {
+        return `${sectionContent.trim()}\n\nThe obligations herein shall endure for a period of ${newDuration} from the Effective Date.`;
+      }
+    }
+
+    // 8. Legal Fees & Injunctive Relief
+    if (lowerPrompt.includes('fee') || lowerPrompt.includes('attorney') || lowerPrompt.includes('injunct')) {
       return `${sectionContent.trim()}\n\nIn the event of any legal dispute or enforcement action, the prevailing party shall be entitled to recover its reasonable attorneys' fees and costs, and either party may seek emergency injunctive relief without posting bond.`;
     }
 
-    if (prompt.includes('notice') || prompt.includes('period')) {
-      return sectionContent.replace(/(?:upon|by)?\s*(?:prior\s*)?(?:written\s*)?notice/i, 'upon thirty (30) days prior written notice');
+    // 9. Permitted Disclosures to Advisors / Counsel
+    if (lowerPrompt.includes('advisor') || lowerPrompt.includes('counsel') || lowerPrompt.includes('accountant') || lowerPrompt.includes('permit')) {
+      return `${sectionContent.trim()}\n\nNotwithstanding anything to the contrary herein, either party may disclose Confidential Information to its legal counsel, accountants, and financial advisors who have a bona fide need to know and are bound by professional confidentiality obligations.`;
     }
 
-    if (customPrompt) {
-      return `${sectionContent.trim()} (Modified per instructions: ${customPrompt.trim()})`;
+    // 10. Non-Solicitation
+    if (lowerPrompt.includes('solicit') || lowerPrompt.includes('compete') || lowerPrompt.includes('employee')) {
+      return `${sectionContent.trim()}\n\nDuring the term of this Agreement and for twelve (12) months thereafter, neither party shall directly or indirectly solicit, recruit, or attempt to hire any employee or contractor of the other party without prior written consent.`;
+    }
+
+    // 11. Governing Law & Jurisdiction
+    if (lowerPrompt.includes('governing') || lowerPrompt.includes('jurisdiction') || lowerPrompt.includes('law') || lowerPrompt.includes('court')) {
+      let forum = 'the laws of India, with exclusive jurisdiction in the courts of Bengaluru';
+      if (lowerPrompt.includes('delaware')) forum = 'the laws of the State of Delaware, with jurisdiction in Wilmington';
+      else if (lowerPrompt.includes('california')) forum = 'the laws of the State of California, with jurisdiction in San Francisco';
+      else if (lowerPrompt.includes('new york')) forum = 'the laws of the State of New York, with jurisdiction in New York County';
+      else if (lowerPrompt.includes('england') || lowerPrompt.includes('uk')) forum = 'the laws of England and Wales, with jurisdiction in London';
+      else if (lowerPrompt.includes('singapore')) forum = 'the laws of the Republic of Singapore, with jurisdiction in Singapore';
+
+      if (/governing law|jurisdiction/i.test(sectionContent)) {
+        return sectionContent.replace(/(?:governed by|subject to)[\s\S]*?(?=\.|$)/i, `governed by and construed in accordance with ${forum}`);
+      }
+      return `${sectionContent.trim()}\n\nThis Section and any disputes hereunder shall be governed by and construed in accordance with ${forum}.`;
+    }
+
+    // 12. Direct Append / Insertion: "add X" or "insert X"
+    const addMatch = rawPrompt.match(/^(?:add|insert|include)\s+(.+)$/i);
+    if (addMatch) {
+      const addition = addMatch[1].trim();
+      return `${sectionContent.trim()}\n\n${addition}`;
+    }
+
+    // 13. General refinement
+    if (rawPrompt) {
+      // If user typed a substantive custom sentence/clause to replace with
+      if (rawPrompt.split(' ').length >= 6 && !rawPrompt.toLowerCase().startsWith('change') && !rawPrompt.toLowerCase().startsWith('please')) {
+        return rawPrompt;
+      }
+      return `${sectionContent.trim()}\n\n(Refined per instruction: ${rawPrompt})`;
     }
 
     return sectionContent;

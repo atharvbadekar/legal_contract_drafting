@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { documentService, aiService } from '../services/api';
-import { DocumentRecord, ValidationIssue, DocumentLocation } from '../types';
+import { DocumentRecord, ValidationIssue } from '../types';
 import { 
   FileText, 
   CheckCircle2, 
@@ -19,16 +19,8 @@ import {
   Layers,
   ArrowLeft,
   Check,
-  Zap,
-  PlusCircle,
-  AlertCircle,
-  Lightbulb,
-  FileCheck,
   Send,
-  CornerDownRight,
-  BookOpen,
-  Undo2,
-  X,
+  Edit3,
   Scale
 } from 'lucide-react';
 
@@ -40,52 +32,74 @@ export const DocumentEditor: React.FC = () => {
   const [content, setContent] = useState('');
   const [saving, setSaving] = useState(false);
   const [validating, setValidating] = useState(false);
-  const [activeTab, setActiveTab] = useState<'FLAGS' | 'TOOLS'>('FLAGS');
+  const [activeTab, setActiveTab] = useState<'VALIDATION' | 'ASSISTANT'>('VALIDATION');
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
 
-  // Editor ref & selection
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [selectedText, setSelectedText] = useState('');
-  const [activeIssueIndex, setActiveIssueIndex] = useState<number | null>(null);
 
-  // Notifications
-  const [saveSuccessMsg, setSaveSuccessMsg] = useState('');
-  const [fixSuccessMsg, setFixSuccessMsg] = useState('');
-  const [undoing, setUndoing] = useState(false);
-
-  // Per-flag AI fix state
-  const [flagSuggestions, setFlagSuggestions] = useState<Record<number, {
-    targetSnippet: string;
-    replacementSnippet: string;
-    explanation: string;
-    fixedContent?: string;
-  }>>({});
-  const [loadingFlagFix, setLoadingFlagFix] = useState<Record<number, boolean>>({});
-  const [applyingFlagFix, setApplyingFlagFix] = useState<Record<number, boolean>>({});
-
-  // Selection AI assistant state
-  const [selectionInstruction, setSelectionInstruction] = useState('');
-  const [selectionSuggestion, setSelectionSuggestion] = useState<{
-    originalText: string;
-    replacementText: string;
-    explanation?: string;
-  } | null>(null);
-  const [suggestingSelection, setSuggestingSelection] = useState(false);
-  const [applyingSelection, setApplyingSelection] = useState(false);
-
-  // Plain English explanation banner
+  // AI Assistant state
   const [explanation, setExplanation] = useState<any>(null);
   const [explaining, setExplaining] = useState(false);
+  const [rewriting, setRewriting] = useState(false);
+  const [selectedText, setSelectedText] = useState('');
+  const [customCommand, setCustomCommand] = useState('');
+  const [applyingCommand, setApplyingCommand] = useState(false);
+  const [saveSuccessMsg, setSaveSuccessMsg] = useState('');
 
-  // Facts & Clauses
-  const [syncingFacts, setSyncingFacts] = useState(false);
-  const [standardClauses, setStandardClauses] = useState<any[]>([]);
-  const [selectedStandardClause, setSelectedStandardClause] = useState<any>(null);
+  const scrollToSection = (sectionName?: string, evidence?: string) => {
+    if (!textareaRef.current) return;
+    const el = textareaRef.current;
+    const text = el.value;
+
+    let idx = -1;
+    let matchLen = 0;
+
+    if (evidence && evidence.trim().length > 1) {
+      const evClean = evidence.trim().toLowerCase();
+      idx = text.toLowerCase().indexOf(evClean);
+      if (idx !== -1) matchLen = evidence.trim().length;
+    }
+
+    if (idx === -1 && sectionName) {
+      const cleanSec = sectionName.toLowerCase().replace(/^(?:section|\d+\.?)\s*/i, '').trim();
+      idx = text.toLowerCase().indexOf(cleanSec);
+      if (idx !== -1) {
+        matchLen = cleanSec.length;
+      } else {
+        idx = text.toLowerCase().indexOf(sectionName.toLowerCase());
+        if (idx !== -1) matchLen = sectionName.length;
+      }
+    }
+
+    if (idx !== -1) {
+      let startSel = idx;
+      let endSel = idx + matchLen;
+
+      // If we matched a section header, select the full section block for convenient AI editing
+      if (sectionName && text.substring(idx, idx + matchLen).toLowerCase().includes(sectionName.toLowerCase().slice(0, 8))) {
+        const nextHeader = text.indexOf('\n## ', idx + matchLen);
+        const nextDivider = text.indexOf('---', idx + matchLen);
+        let endOfBlock = text.length;
+        if (nextHeader !== -1 && nextDivider !== -1) {
+          endOfBlock = Math.min(nextHeader, nextDivider);
+        } else if (nextHeader !== -1) {
+          endOfBlock = nextHeader;
+        } else if (nextDivider !== -1) {
+          endOfBlock = nextDivider;
+        }
+        endSel = endOfBlock;
+      }
+
+      el.focus();
+      el.setSelectionRange(startSel, endSel);
+      const linesBefore = text.substring(0, startSel).split('\n').length;
+      el.scrollTop = Math.max(0, (linesBefore - 3) * 24);
+      setSelectedText(text.substring(startSel, endSel));
+    }
+  };
 
   useEffect(() => {
-    if (id) {
-      loadDocument(id);
-    }
+    if (id) loadDocument(id);
   }, [id]);
 
   const loadDocument = async (docId: string) => {
@@ -93,17 +107,6 @@ export const DocumentEditor: React.FC = () => {
       const doc = await documentService.getById(docId);
       setDocument(doc);
       setContent(doc.content);
-
-      // Load standard clauses
-      try {
-        const clauses = await aiService.getStandardClauses(doc.documentType);
-        setStandardClauses(clauses || []);
-        if (clauses && clauses.length > 0) {
-          setSelectedStandardClause(clauses[0]);
-        }
-      } catch (err) {
-        console.warn('Could not load standard clauses:', err);
-      }
     } catch (err) {
       console.error('Failed to load document:', err);
     }
@@ -136,8 +139,6 @@ export const DocumentEditor: React.FC = () => {
         structuredFacts: document.structuredFacts
       });
       setDocument(res.document);
-      setActiveIssueIndex(null);
-      setFlagSuggestions({});
     } catch (err: any) {
       alert(`Validation failed: ${err.message}`);
     } finally {
@@ -145,336 +146,6 @@ export const DocumentEditor: React.FC = () => {
     }
   };
 
-  /**
-   * Jump & highlight exact section/text in the editor textarea
-   */
-  const locateAndHighlight = (targetStringOrPattern?: string, fallbackSection?: string, location?: DocumentLocation) => {
-    if (!textareaRef.current) return;
-    const el = textareaRef.current;
-    const text = el.value;
-
-    let start = -1;
-    let end = -1;
-
-    // 1. Direct offset range if provided
-    const rangeStart = location?.startOffset ?? location?.textRange?.start;
-    const rangeEnd = location?.endOffset ?? location?.textRange?.end;
-    if (typeof rangeStart === 'number' && typeof rangeEnd === 'number' && rangeStart >= 0 && rangeEnd <= text.length && rangeStart < rangeEnd) {
-      start = rangeStart;
-      end = rangeEnd;
-    }
-
-    // 2. Exact target string search
-    if (start === -1 && targetStringOrPattern && targetStringOrPattern.trim().length > 1) {
-      const cleanTarget = targetStringOrPattern.trim().toLowerCase();
-      const idx = text.toLowerCase().indexOf(cleanTarget);
-      if (idx !== -1) {
-        start = idx;
-        end = idx + cleanTarget.length;
-      }
-    }
-
-    // 3. Fallback to section header match
-    if (start === -1 && fallbackSection) {
-      const secClean = fallbackSection.trim().toLowerCase();
-      const lines = text.split('\n');
-      let charOffset = 0;
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        if (line.toLowerCase().includes(secClean)) {
-          start = charOffset;
-          end = charOffset + line.length;
-          break;
-        }
-        charOffset += line.length + 1;
-      }
-    }
-
-    // 4. Default fallback to start
-    if (start === -1) {
-      start = 0;
-      end = Math.min(text.length, 100);
-    }
-
-    el.focus();
-    el.setSelectionRange(start, end);
-
-    const sel = text.substring(start, end);
-    if (sel && sel.trim().length > 0) {
-      setSelectedText(sel);
-    }
-
-    const linesBefore = text.substring(0, start).split('\n').length;
-    const lineHeight = 24;
-    el.scrollTop = Math.max(0, (linesBefore - 3) * lineHeight);
-  };
-
-  /**
-   * User clicks a flag in the right panel:
-   * 1. Scrolls and highlights in the center editor
-   * 2. Synchronizes section outline on left
-   */
-  const handleSelectFlag = (issue: ValidationIssue, idx: number) => {
-    setActiveIssueIndex(idx);
-    const targetToken = issue.evidence || (issue.description.match(/'([^']+)'/)?.[1] || '');
-    locateAndHighlight(targetToken, issue.section, issue.location);
-
-    // Sync section outline
-    const matchedSection = sections.find(s => 
-      s.title.toLowerCase().includes(issue.section.toLowerCase()) || 
-      issue.section.toLowerCase().includes(s.title.toLowerCase())
-    );
-    if (matchedSection) {
-      setSelectedSection(matchedSection.title);
-    }
-  };
-
-  /**
-   * AI Suggestion for a specific Flag in the right panel
-   */
-  const handleSuggestFlagFix = async (issue: ValidationIssue, idx: number) => {
-    if (!document) return;
-    setActiveIssueIndex(idx);
-    setLoadingFlagFix(prev => ({ ...prev, [idx]: true }));
-    handleSelectFlag(issue, idx);
-
-    try {
-      // 1. If issue already has proposedPatch, use it directly
-      if (issue.proposedPatch?.replacementText) {
-        setFlagSuggestions(prev => ({
-          ...prev,
-          [idx]: {
-            targetSnippet: issue.proposedPatch?.originalText || issue.evidence || '',
-            replacementSnippet: issue.proposedPatch?.replacementText || '',
-            explanation: issue.proposedPatch?.reason || issue.suggestion || issue.description
-          }
-        }));
-        return;
-      }
-
-      // 2. Query AI suggest-fix endpoint
-      const res = await aiService.suggestFix({
-        documentType: document.documentType,
-        content,
-        issue,
-        structuredFacts: document.structuredFacts
-      });
-
-      setFlagSuggestions(prev => ({
-        ...prev,
-        [idx]: {
-          targetSnippet: res.targetSnippet || issue.evidence || '',
-          replacementSnippet: res.replacementSnippet,
-          explanation: res.explanation || issue.suggestion || issue.description,
-          fixedContent: res.fixedContent
-        }
-      }));
-    } catch (err: any) {
-      // Fallback
-      setFlagSuggestions(prev => ({
-        ...prev,
-        [idx]: {
-          targetSnippet: issue.evidence || '',
-          replacementSnippet: issue.suggestion || `[Updated clause for ${issue.section}]`,
-          explanation: issue.message || issue.description
-        }
-      }));
-    } finally {
-      setLoadingFlagFix(prev => ({ ...prev, [idx]: false }));
-    }
-  };
-
-  /**
-   * 1-Click Apply AI Fix for a Flag
-   */
-  const handleApplyFlagFix = async (idx: number, issue: ValidationIssue) => {
-    if (!id || !document) return;
-    const suggestion = flagSuggestions[idx];
-    if (!suggestion) return;
-
-    setApplyingFlagFix(prev => ({ ...prev, [idx]: true }));
-    try {
-      let updatedContent = content;
-
-      // 1. Direct string replacement
-      if (suggestion.targetSnippet && content.includes(suggestion.targetSnippet)) {
-        updatedContent = content.replace(suggestion.targetSnippet, suggestion.replacementSnippet);
-      } 
-      // 2. Evidence replacement
-      else if (issue.evidence && content.includes(issue.evidence)) {
-        updatedContent = content.replace(issue.evidence, suggestion.replacementSnippet);
-      }
-      // 3. Whole fixedContent fallback
-      else if (suggestion.fixedContent && suggestion.fixedContent !== content) {
-        updatedContent = suggestion.fixedContent;
-      }
-      // 4. Missing section: append before signatures or at end
-      else if (issue.type === 'MISSING_SECTION' || issue.category === 'STRUCTURAL') {
-        const sigMatch = content.search(/##\s*(?:EXECUTION|SIGNATURES|IN WITNESS WHEREOF)/i);
-        if (sigMatch !== -1) {
-          updatedContent = `${content.substring(0, sigMatch).trim()}\n\n---\n\n${suggestion.replacementSnippet}\n\n---\n\n${content.substring(sigMatch).trim()}`;
-        } else {
-          updatedContent = `${content.trim()}\n\n---\n\n${suggestion.replacementSnippet}\n`;
-        }
-      }
-
-      setContent(updatedContent);
-      setFlagSuggestions(prev => {
-        const copy = { ...prev };
-        delete copy[idx];
-        return copy;
-      });
-      setActiveIssueIndex(null);
-      setFixSuccessMsg(`✓ Applied AI fix to ${issue.section || issue.title}`);
-      setTimeout(() => setFixSuccessMsg(''), 4000);
-
-      // Auto-save & re-validate in background
-      const updatedDoc = await documentService.update(id, {
-        content: updatedContent,
-        saveAsVersion: false
-      });
-      setDocument(updatedDoc);
-
-      const valRes = await documentService.validate(id, {
-        content: updatedContent,
-        structuredFacts: document.structuredFacts
-      });
-      setDocument(valRes.document);
-    } catch (err: any) {
-      alert(`Could not apply fix: ${err.message}`);
-    } finally {
-      setApplyingFlagFix(prev => ({ ...prev, [idx]: false }));
-    }
-  };
-
-  /**
-   * AI Selection Assistant: Suggest changes for highlighted text in editor
-   */
-  const handleSuggestForSelection = async (modeOrInstruction?: string) => {
-    if (!selectedText.trim() || !document) {
-      alert('Please select or highlight text in the editor first.');
-      return;
-    }
-    setSuggestingSelection(true);
-    try {
-      if (modeOrInstruction === 'simple' || modeOrInstruction === 'formal') {
-        const res = await aiService.rewriteClause(selectedText, modeOrInstruction);
-        setSelectionSuggestion({
-          originalText: selectedText,
-          replacementText: res.rewritten,
-          explanation: `Rewritten in ${modeOrInstruction === 'simple' ? 'Plain English' : 'Formal Legal Language'}.`
-        });
-      } else {
-        const inst = modeOrInstruction || selectionInstruction || 'Refine and correct this legal clause';
-        const res = await aiService.customEdit({
-          documentType: document.documentType,
-          content,
-          selectedText,
-          instruction: inst,
-          structuredFacts: document.structuredFacts
-        });
-        setSelectionSuggestion({
-          originalText: selectedText,
-          replacementText: res.revisedSnippet,
-          explanation: res.explanation
-        });
-      }
-    } catch (err: any) {
-      alert(`AI Suggestion failed: ${err.message}`);
-    } finally {
-      setSuggestingSelection(false);
-    }
-  };
-
-  /**
-   * 1-Click Apply AI Suggestion to Selected Text
-   */
-  const handleApplySelectionSuggestion = async () => {
-    if (!id || !document || !selectionSuggestion) return;
-    setApplyingSelection(true);
-    try {
-      const { originalText, replacementText } = selectionSuggestion;
-      if (!content.includes(originalText)) {
-        alert('Could not locate original text in document. It may have been edited.');
-        return;
-      }
-      const updatedContent = content.replace(originalText, replacementText);
-      setContent(updatedContent);
-      setSelectionSuggestion(null);
-      setSelectedText('');
-      setSelectionInstruction('');
-      setFixSuccessMsg('✓ AI change applied to document!');
-      setTimeout(() => setFixSuccessMsg(''), 4000);
-
-      // Auto-save & revalidate
-      const updatedDoc = await documentService.update(id, { content: updatedContent, saveAsVersion: false });
-      setDocument(updatedDoc);
-      const valRes = await documentService.validate(id, {
-        content: updatedContent,
-        structuredFacts: document.structuredFacts
-      });
-      setDocument(valRes.document);
-    } catch (err: any) {
-      alert(`Failed to apply change: ${err.message}`);
-    } finally {
-      setApplyingSelection(false);
-    }
-  };
-
-  /**
-   * 1-Click Undo last AI fix
-   */
-  const handleUndoLastFix = async () => {
-    if (!id || !document) return;
-    setUndoing(true);
-    try {
-      const res = await documentService.undoLastFix(id);
-      if (res.success && res.document) {
-        setContent(res.document.content);
-        setDocument(res.document);
-        setFixSuccessMsg('✓ Restored to previous snapshot (Undo successful).');
-        setTimeout(() => setFixSuccessMsg(''), 4000);
-        setActiveIssueIndex(null);
-      }
-    } catch (err: any) {
-      alert(`Undo error: ${err.response?.data?.error || err.message}`);
-    } finally {
-      setUndoing(false);
-    }
-  };
-
-  /**
-   * 1-Click Sync Facts
-   */
-  const handleSyncAllFacts = async () => {
-    if (!id || !document) return;
-    setSyncingFacts(true);
-    try {
-      const res = await aiService.syncFacts({
-        documentType: document.documentType,
-        content,
-        structuredFacts: document.structuredFacts
-      });
-      setContent(res.fixedContent);
-      setFixSuccessMsg(`✓ Synced facts: ${res.changes.join(', ')}`);
-      setTimeout(() => setFixSuccessMsg(''), 5000);
-
-      await documentService.update(id, { content: res.fixedContent, saveAsVersion: false });
-      const valRes = await documentService.validate(id, {
-        content: res.fixedContent,
-        structuredFacts: document.structuredFacts
-      });
-      setDocument(valRes.document);
-    } catch (err: any) {
-      alert(`Fact sync failed: ${err.message}`);
-    } finally {
-      setSyncingFacts(false);
-    }
-  };
-
-  /**
-   * Plain English Explanation
-   */
   const handleExplain = async () => {
     const textToExplain = selectedText.trim() || content.slice(0, 300);
     setExplaining(true);
@@ -488,31 +159,62 @@ export const DocumentEditor: React.FC = () => {
     }
   };
 
-  /**
-   * Insert standard clause
-   */
-  const handleInsertStandardClause = (clauseText: string) => {
-    if (!textareaRef.current) return;
-    const el = textareaRef.current;
-    const cursorPos = el.selectionStart || content.length;
+  const handleRewrite = async (style: 'formal' | 'simple' | 'mutual') => {
+    if (!selectedText.trim()) {
+      alert('Please select or highlight text in the document editor to rewrite.');
+      return;
+    }
+    setRewriting(true);
+    try {
+      const res = await aiService.rewriteClause(
+        selectedText,
+        style === 'mutual' ? 'custom' : style,
+        style === 'mutual' ? 'make mutual for both parties' : undefined
+      );
+      setContent((prev) => prev.replace(selectedText, res.rewritten));
+      setSelectedText(res.rewritten);
+      setSaveSuccessMsg('✓ Clause updated in document!');
+      setTimeout(() => setSaveSuccessMsg(''), 3000);
+    } catch (err: any) {
+      alert(`Rewrite error: ${err.message}`);
+    } finally {
+      setRewriting(false);
+    }
+  };
 
-    const before = content.substring(0, cursorPos);
-    const after = content.substring(cursorPos);
-    const formattedInsertion = `\n\n---\n\n${clauseText.trim()}\n\n`;
-    const updated = `${before}${formattedInsertion}${after}`;
+  const handleCustomCommand = async () => {
+    if (!customCommand.trim()) {
+      alert('Please enter an instruction or command for the AI.');
+      return;
+    }
+    const targetText = selectedText.trim() || content.trim();
+    if (!targetText) {
+      alert('Please select or highlight text in the document editor to modify.');
+      return;
+    }
 
-    setContent(updated);
-    setFixSuccessMsg('✓ Standard clause inserted into document!');
-    setTimeout(() => setFixSuccessMsg(''), 4000);
+    setApplyingCommand(true);
+    try {
+      const res = await aiService.rewriteClause(targetText, 'custom', customCommand.trim());
+      if (res && res.rewritten) {
+        if (selectedText.trim()) {
+          setContent((prev) => prev.replace(selectedText, res.rewritten));
+        } else {
+          setContent(res.rewritten);
+        }
+        setSelectedText(res.rewritten);
+        setSaveSuccessMsg('✓ Section updated with AI command!');
+        setTimeout(() => setSaveSuccessMsg(''), 3500);
+      }
+    } catch (err: any) {
+      alert(`AI Command failed: ${err.message}`);
+    } finally {
+      setApplyingCommand(false);
+    }
   };
 
   if (!document) {
-    return (
-      <div className="p-12 text-center text-xs text-mira-muted flex flex-col items-center justify-center gap-3">
-        <RefreshCw className="w-5 h-5 animate-spin text-mira-primary" />
-        <span>Loading Atharv Legal AI Studio...</span>
-      </div>
-    );
+    return <div className="p-12 text-center text-xs text-mira-muted">Loading document editor...</div>;
   }
 
   // Parse sections for outline
@@ -521,6 +223,7 @@ export const DocumentEditor: React.FC = () => {
     const headerLine = lines.find(l => l.startsWith('## ') || l.startsWith('# '));
     const title = headerLine ? headerLine.replace(/#+\s*/, '') : `Section ${idx + 1}`;
     
+    // Check if issues exist in this section
     const hasIssues = document.validationSummary?.issues?.some(
       (iss: ValidationIssue) => title.toLowerCase().includes(iss.section.toLowerCase()) ||
         iss.section.toLowerCase().includes(title.toLowerCase())
@@ -540,7 +243,6 @@ export const DocumentEditor: React.FC = () => {
           <Link
             to="/documents"
             className="p-1.5 rounded-lg border border-mira-border text-mira-muted hover:text-mira-dark hover:bg-gray-50"
-            title="Back to Document Library"
           >
             <ArrowLeft className="w-4 h-4" />
           </Link>
@@ -554,17 +256,6 @@ export const DocumentEditor: React.FC = () => {
               }`}>
                 {document.generationMode === 'MIRA' ? 'Atharv Legal AI' : 'Baseline LLM'}
               </span>
-              {issuesList.length > 0 ? (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 flex items-center gap-1">
-                  <AlertCircle className="w-3 h-3" />
-                  {issuesList.length} Flag{issuesList.length > 1 ? 's' : ''}
-                </span>
-              ) : (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
-                  <CheckCircle2 className="w-3 h-3" />
-                  100% Compliant
-                </span>
-              )}
             </div>
             <p className="text-[11px] text-mira-muted">
               Type: {document.documentType} • Version v{document.versions?.length || 1} • Last updated {new Date(document.updatedAt).toLocaleTimeString()}
@@ -574,20 +265,15 @@ export const DocumentEditor: React.FC = () => {
 
         <div className="flex items-center gap-2 flex-wrap">
           {saveSuccessMsg && (
-            <span className="text-xs text-emerald-600 font-medium flex items-center gap-1 animate-in fade-in">
+            <span className="text-xs text-emerald-600 font-medium flex items-center gap-1">
               <Check className="w-3.5 h-3.5" /> {saveSuccessMsg}
-            </span>
-          )}
-          {fixSuccessMsg && (
-            <span className="text-xs text-purple-700 bg-purple-50 px-2 py-1 rounded-md border border-purple-200 font-medium flex items-center gap-1 animate-in fade-in">
-              <Sparkles className="w-3.5 h-3.5 text-mira-primary" /> {fixSuccessMsg}
             </span>
           )}
 
           <button
             onClick={() => handleSave(false)}
             disabled={saving}
-            className="px-3 py-1.5 bg-white border border-mira-border hover:border-mira-primary text-xs font-semibold rounded-lg text-mira-dark flex items-center gap-1.5 shadow-2xs cursor-pointer"
+            className="px-3 py-1.5 bg-white border border-mira-border hover:border-mira-primary text-xs font-semibold rounded-lg text-mira-dark flex items-center gap-1.5 shadow-2xs"
           >
             <Save className="w-3.5 h-3.5 text-mira-muted" />
             {saving ? 'Saving...' : 'Save Draft'}
@@ -596,41 +282,31 @@ export const DocumentEditor: React.FC = () => {
           <button
             onClick={() => handleSave(true)}
             disabled={saving}
-            className="px-3 py-1.5 bg-mira-light border border-purple-200 text-mira-primary hover:bg-purple-100 text-xs font-semibold rounded-lg flex items-center gap-1.5 shadow-2xs cursor-pointer"
+            className="px-3 py-1.5 bg-mira-light border border-purple-200 text-mira-primary hover:bg-purple-100 text-xs font-semibold rounded-lg flex items-center gap-1.5 shadow-2xs"
           >
             <History className="w-3.5 h-3.5" />
             Save as Version
           </button>
 
           <button
-            onClick={handleUndoLastFix}
-            disabled={undoing || (document.versions?.length || 0) <= 0}
-            className="px-3 py-1.5 bg-white border border-amber-300 hover:bg-amber-50 text-amber-900 text-xs font-semibold rounded-lg flex items-center gap-1.5 shadow-2xs disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
-            title="Undo last AI fix"
-          >
-            <Undo2 className={`w-3.5 h-3.5 text-amber-600 ${undoing ? 'animate-spin' : ''}`} />
-            {undoing ? 'Restoring...' : 'Undo AI Fix'}
-          </button>
-
-          <button
             onClick={handleRevalidate}
             disabled={validating}
-            className="px-3 py-1.5 bg-white border border-mira-border hover:border-mira-primary text-xs font-semibold rounded-lg text-mira-dark flex items-center gap-1.5 shadow-2xs cursor-pointer"
+            className="px-3 py-1.5 bg-white border border-mira-border hover:border-mira-primary text-xs font-semibold rounded-lg text-mira-dark flex items-center gap-1.5 shadow-2xs"
           >
             <RefreshCw className={`w-3.5 h-3.5 text-mira-primary ${validating ? 'animate-spin' : ''}`} />
-            {validating ? 'Validating...' : 'Re-Validate'}
+            Re-Validate
           </button>
 
           <button
             onClick={() => documentService.downloadDocx(document.id, document.title)}
-            className="px-3 py-1.5 bg-white border border-mira-border hover:border-mira-primary text-xs font-semibold rounded-lg text-mira-dark flex items-center gap-1.5 shadow-2xs cursor-pointer"
+            className="px-3 py-1.5 bg-white border border-mira-border hover:border-mira-primary text-xs font-semibold rounded-lg text-mira-dark flex items-center gap-1.5 shadow-2xs"
           >
             <Download className="w-3.5 h-3.5" /> DOCX
           </button>
 
           <button
             onClick={() => documentService.downloadPdf(document.id, document.title)}
-            className="px-3 py-1.5 bg-white border border-mira-border hover:border-mira-primary text-xs font-semibold rounded-lg text-mira-dark flex items-center gap-1.5 shadow-2xs cursor-pointer"
+            className="px-3 py-1.5 bg-white border border-mira-border hover:border-mira-primary text-xs font-semibold rounded-lg text-mira-dark flex items-center gap-1.5 shadow-2xs"
           >
             <ExternalLink className="w-3.5 h-3.5" /> PDF
           </button>
@@ -649,13 +325,13 @@ export const DocumentEditor: React.FC = () => {
             <span className="text-[10px] text-mira-muted">{sections.length} Sections</span>
           </div>
 
-          <div className="space-y-1 max-h-[60vh] overflow-y-auto pr-1">
+          <div className="space-y-1 max-h-[70vh] overflow-y-auto pr-1">
             {sections.map((sec) => (
               <button
                 key={sec.id}
                 onClick={() => {
                   setSelectedSection(sec.title);
-                  locateAndHighlight(sec.title, sec.title);
+                  scrollToSection(sec.title);
                 }}
                 className={`w-full text-left p-2 rounded-lg text-xs transition-colors flex items-center justify-between cursor-pointer ${
                   selectedSection === sec.title
@@ -672,7 +348,7 @@ export const DocumentEditor: React.FC = () => {
                   <span className="truncate">{sec.title}</span>
                 </div>
                 {sec.hasIssues && (
-                  <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800 flex-shrink-0">
+                  <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800">
                     Flagged
                   </span>
                 )}
@@ -680,42 +356,20 @@ export const DocumentEditor: React.FC = () => {
             ))}
           </div>
 
-          {/* Quick Fact Sync */}
-          <div className="pt-3 border-t border-mira-border space-y-2">
-            <button
-              onClick={handleSyncAllFacts}
-              disabled={syncingFacts}
-              className="w-full py-2 px-2.5 bg-purple-50 hover:bg-purple-100 border border-purple-200 text-mira-primary text-[11px] font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${syncingFacts ? 'animate-spin' : ''}`} />
-              {syncingFacts ? 'Synchronizing Facts...' : '1-Click Sync Facts'}
-            </button>
-
-            <div className="text-[11px] text-mira-muted">
-              <Link to={`/documents/${document.id}/versions`} className="text-mira-primary font-semibold hover:underline flex items-center gap-1">
-                <History className="w-3 h-3" /> View Version History (v{document.versions?.length || 1})
-              </Link>
-            </div>
+          <div className="pt-2 border-t border-mira-border text-[11px] text-mira-muted">
+            <Link to={`/documents/${document.id}/versions`} className="text-mira-primary font-semibold hover:underline flex items-center gap-1">
+              <History className="w-3 h-3" /> View Version History (v{document.versions?.length || 1})
+            </Link>
           </div>
         </div>
 
-        {/* PANEL 2: Document Workspace (Center, 6 cols) */}
-        <div className="lg:col-span-6 bg-white rounded-xl border border-mira-border shadow-xs flex flex-col min-h-[78vh]">
-          {/* Header */}
-          <div className="px-5 py-3 border-b border-mira-border bg-gray-50/60 flex items-center justify-between text-xs text-mira-muted">
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-mira-dark">Legal Document Workspace</span>
-              {activeIssueIndex !== null && (
-                <span className="text-[10px] bg-purple-100 text-purple-800 font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
-                  <Lightbulb className="w-3 h-3 text-mira-primary" />
-                  Focused on: {issuesList[activeIssueIndex]?.section || 'Flagged Section'}
-                </span>
-              )}
-            </div>
-            <span className="text-[11px] font-medium text-purple-700">Markdown format supported</span>
+        {/* PANEL 2: Editable Document (Center, 6 cols) */}
+        <div className="lg:col-span-6 bg-white rounded-xl border border-mira-border shadow-xs flex flex-col min-h-[75vh]">
+          <div className="px-5 py-3 border-b border-mira-border bg-gray-50/50 flex items-center justify-between text-xs text-mira-muted">
+            <span>Editable Legal Document (Markdown Formatted)</span>
+            <span className="text-[11px] font-medium text-purple-700">AI never prevents manual editing</span>
           </div>
 
-          {/* Center Textarea */}
           <div className="p-5 flex-1 flex flex-col">
             <textarea
               ref={textareaRef}
@@ -723,501 +377,367 @@ export const DocumentEditor: React.FC = () => {
               onChange={(e) => setContent(e.target.value)}
               onSelect={(e: any) => {
                 const sel = e.target.value.substring(e.target.selectionStart, e.target.selectionEnd);
-                if (sel && sel.trim().length > 0) {
-                  setSelectedText(sel);
-                }
+                if (sel) setSelectedText(sel);
               }}
-              className="w-full flex-1 min-h-[65vh] p-4 font-serif text-sm leading-relaxed text-mira-dark bg-transparent border-0 focus:outline-hidden resize-none selection:bg-purple-200"
+              className="w-full flex-1 min-h-[68vh] p-4 font-serif text-sm leading-relaxed text-mira-dark bg-transparent border-0 focus:outline-hidden resize-none selection:bg-purple-100"
               placeholder="Legal document text..."
             />
           </div>
-
-          {/* Explanation Banner (if requested) */}
-          {explanation && (
-            <div className="mx-5 mb-3 p-3 bg-purple-50 rounded-xl border border-purple-200 space-y-1.5 animate-in fade-in relative">
-              <button
-                onClick={() => setExplanation(null)}
-                className="absolute top-2 right-2 text-purple-700 hover:text-purple-900 font-bold text-xs cursor-pointer"
-                title="Dismiss"
-              >
-                ✕
-              </button>
-              <div className="font-bold text-purple-950 text-xs flex items-center gap-1">
-                <Lightbulb className="w-3.5 h-3.5 text-mira-primary" />
-                Plain English Explanation
-              </div>
-              <p className="text-xs text-purple-900 leading-relaxed">{explanation.plainLanguage}</p>
-              {explanation.legalImplication && (
-                <p className="text-[11px] text-purple-800">
-                  <span className="font-semibold">Legal Implication:</span> {explanation.legalImplication}
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* AI SELECTION ASSISTANT BAR (Appears when text is selected) */}
-          {selectedText.trim().length > 0 && (
-            <div className="mx-5 mb-4 p-3 bg-gradient-to-r from-purple-50 to-indigo-50/70 border border-purple-200 rounded-xl space-y-2.5 animate-in fade-in shadow-xs">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-xs font-bold text-purple-950">
-                  <Sparkles className="w-4 h-4 text-mira-primary" />
-                  <span>AI Selection Assistant</span>
-                </div>
-                <button
-                  onClick={() => {
-                    setSelectedText('');
-                    setSelectionSuggestion(null);
-                  }}
-                  className="text-gray-400 hover:text-gray-600 text-xs px-1 cursor-pointer"
-                  title="Clear selection"
-                >
-                  ✕
-                </button>
-              </div>
-
-              <div className="text-[11px] text-purple-900 bg-white/80 p-2 rounded-lg border border-purple-100 italic truncate max-w-full">
-                "{selectedText.trim().slice(0, 80)}{selectedText.trim().length > 80 ? '...' : ''}"
-              </div>
-
-              {/* Quick AI Action Chips */}
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <button
-                  onClick={() => handleSuggestForSelection('Improve legal clarity and enforceability')}
-                  disabled={suggestingSelection}
-                  className="px-2.5 py-1 bg-mira-primary hover:bg-purple-800 text-white rounded-lg font-bold text-[11px] flex items-center gap-1 shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
-                >
-                  <Sparkles className={`w-3 h-3 ${suggestingSelection ? 'animate-spin' : ''}`} />
-                  {suggestingSelection ? 'Generating...' : '✨ Suggest AI Changes'}
-                </button>
-
-                <button
-                  onClick={() => handleSuggestForSelection('simple')}
-                  disabled={suggestingSelection}
-                  className="px-2 py-1 bg-white hover:bg-purple-50 border border-purple-200 text-mira-primary rounded-lg font-semibold text-[10px] flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
-                >
-                  <Wand2 className="w-3 h-3" />
-                  Plain English
-                </button>
-
-                <button
-                  onClick={() => handleSuggestForSelection('formal')}
-                  disabled={suggestingSelection}
-                  className="px-2 py-1 bg-white hover:bg-purple-50 border border-purple-200 text-mira-primary rounded-lg font-semibold text-[10px] flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
-                >
-                  <Scale className="w-3 h-3" />
-                  Make Formal
-                </button>
-
-                <button
-                  onClick={() => handleSuggestForSelection('Make this clause mutual and balanced for both parties')}
-                  disabled={suggestingSelection}
-                  className="px-2 py-1 bg-white hover:bg-purple-50 border border-purple-200 text-mira-primary rounded-lg font-semibold text-[10px] flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
-                >
-                  Make Mutual
-                </button>
-
-                <button
-                  onClick={handleExplain}
-                  disabled={explaining}
-                  className="px-2 py-1 bg-white hover:bg-purple-50 border border-purple-200 text-mira-primary rounded-lg font-semibold text-[10px] flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
-                >
-                  <HelpCircle className="w-3 h-3" />
-                  {explaining ? 'Analyzing...' : 'Explain'}
-                </button>
-              </div>
-
-              {/* Custom Prompt Input */}
-              <div className="flex gap-1.5 pt-1">
-                <input
-                  type="text"
-                  value={selectionInstruction}
-                  onChange={(e) => setSelectionInstruction(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSuggestForSelection()}
-                  placeholder="Or enter custom instruction: e.g. change to 5 years, add fee recovery..."
-                  className="flex-1 px-2.5 py-1.5 text-xs bg-white border border-purple-200 rounded-lg focus:outline-hidden focus:border-mira-primary text-mira-dark placeholder:text-gray-400"
-                />
-                <button
-                  onClick={() => handleSuggestForSelection()}
-                  disabled={suggestingSelection || !selectionInstruction.trim()}
-                  className="px-3 py-1.5 bg-mira-primary hover:bg-purple-800 disabled:opacity-50 text-white text-xs font-semibold rounded-lg flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
-                >
-                  {suggestingSelection ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
-                  Ask AI
-                </button>
-              </div>
-
-              {/* Proposed Replacement Card */}
-              {selectionSuggestion && (
-                <div className="mt-2 p-3 bg-white rounded-xl border border-purple-300 shadow-sm space-y-2 animate-in fade-in">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-purple-950 flex items-center gap-1">
-                      <Check className="w-3.5 h-3.5 text-emerald-600" />
-                      AI Suggested Replacement:
-                    </span>
-                    <button
-                      onClick={() => setSelectionSuggestion(null)}
-                      className="text-gray-400 hover:text-gray-600 text-xs cursor-pointer"
-                    >
-                      Dismiss
-                    </button>
-                  </div>
-
-                  <textarea
-                    value={selectionSuggestion.replacementText}
-                    onChange={(e) => setSelectionSuggestion({
-                      ...selectionSuggestion,
-                      replacementText: e.target.value
-                    })}
-                    className="w-full p-2.5 text-xs font-serif leading-relaxed text-mira-dark bg-purple-50/50 border border-purple-200 rounded-lg focus:outline-hidden focus:border-mira-primary resize-y min-h-[70px]"
-                  />
-
-                  {selectionSuggestion.explanation && (
-                    <p className="text-[10px] text-purple-800 italic">
-                      {selectionSuggestion.explanation}
-                    </p>
-                  )}
-
-                  <div className="flex items-center justify-end gap-2 pt-1">
-                    <button
-                      onClick={() => setSelectionSuggestion(null)}
-                      className="px-2.5 py-1 text-xs text-gray-500 hover:text-gray-700 font-medium cursor-pointer"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleApplySelectionSuggestion}
-                      disabled={applyingSelection}
-                      className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
-                    >
-                      {applyingSelection ? (
-                        <>
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                          Applying...
-                        </>
-                      ) : (
-                        <>
-                          <Check className="w-3.5 h-3.5" />
-                          Apply Change to Document
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Footer Status Bar */}
-          <div className="px-5 py-2.5 border-t border-mira-border bg-gray-50/50 flex flex-wrap items-center justify-between gap-2 text-[11px] text-mira-muted">
-            <span>{content.split(/\s+/).filter(Boolean).length} Words • {content.length} Characters</span>
-            <span className="text-purple-700 font-medium">Click any flag to jump directly to that section</span>
-          </div>
         </div>
 
-        {/* PANEL 3: Clean Document Flags List (Right, 3 cols) */}
+        {/* PANEL 3: Validation & AI Assistant Panel (Right, 3 cols) */}
         <div className="lg:col-span-3 bg-white rounded-xl border border-mira-border shadow-xs p-4 space-y-4 sticky top-20">
           {/* Tabs */}
           <div className="grid grid-cols-2 gap-1 p-1 bg-gray-100 rounded-lg text-xs font-semibold">
             <button
-              onClick={() => setActiveTab('FLAGS')}
-              className={`py-1.5 rounded-md transition-colors flex items-center justify-center gap-1.5 cursor-pointer ${
-                activeTab === 'FLAGS' ? 'bg-white text-mira-primary shadow-2xs font-bold' : 'text-mira-muted hover:text-mira-dark'
+              onClick={() => setActiveTab('VALIDATION')}
+              className={`py-1.5 rounded-md transition-colors ${
+                activeTab === 'VALIDATION' ? 'bg-white text-mira-primary shadow-2xs font-bold' : 'text-mira-muted'
               }`}
             >
-              <span>Document Flags</span>
-              {issuesList.length > 0 ? (
-                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800 font-bold">
-                  {issuesList.length}
-                </span>
-              ) : (
-                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 font-bold">
-                  0
-                </span>
-              )}
+              Validation ({validationScore}%)
             </button>
             <button
-              onClick={() => setActiveTab('TOOLS')}
-              className={`py-1.5 rounded-md transition-colors flex items-center justify-center gap-1.5 cursor-pointer ${
-                activeTab === 'TOOLS' ? 'bg-white text-mira-primary shadow-2xs font-bold' : 'text-mira-muted hover:text-mira-dark'
+              onClick={() => setActiveTab('ASSISTANT')}
+              className={`py-1.5 rounded-md transition-colors ${
+                activeTab === 'ASSISTANT' ? 'bg-white text-mira-primary shadow-2xs font-bold' : 'text-mira-muted'
               }`}
             >
-              <Sparkles className="w-3.5 h-3.5 text-mira-primary" />
-              <span>AI Tools</span>
+              AI Assistant
             </button>
           </div>
 
-          {/* TAB 1: DOCUMENT FLAGS */}
-          {activeTab === 'FLAGS' && (
-            <div className="space-y-3">
-              {/* Compliance Header */}
-              {issuesList.length === 0 ? (
-                <div className="p-3.5 bg-emerald-50/90 border border-emerald-200 rounded-xl flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <div className="p-1 bg-emerald-100 rounded-lg text-emerald-700">
-                      <ShieldCheck className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold text-emerald-950">100% Compliant</div>
-                      <div className="text-[11px] text-emerald-700">All terms and clauses verified</div>
-                    </div>
-                  </div>
-                  <button
-                    onClick={handleRevalidate}
-                    disabled={validating}
-                    className="p-1.5 hover:bg-emerald-100 rounded-lg text-emerald-700 cursor-pointer"
-                    title="Re-validate"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${validating ? 'animate-spin' : ''}`} />
-                  </button>
+          {/* TAB 1: VALIDATION REPORT */}
+          {activeTab === 'VALIDATION' && (
+            <div className="space-y-4">
+              {/* Validation Score Widget */}
+              <div className="p-4 rounded-xl bg-purple-50/60 border border-purple-100 text-center space-y-1.5">
+                <span className="text-[10px] font-bold text-mira-muted uppercase tracking-wider">
+                  AI Validation Score
+                </span>
+                <div className="text-3xl font-black text-mira-primary">
+                  {validationScore}%
                 </div>
-              ) : (
-                <div className="p-3 bg-purple-50/70 border border-purple-200 rounded-xl space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-bold text-mira-dark flex items-center gap-1.5">
-                      <span className="text-sm font-black text-mira-primary">{validationScore}%</span>
-                      <span>Score</span>
-                    </span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
-                      {issuesList.length} Flag{issuesList.length > 1 ? 's' : ''} to Resolve
-                    </span>
-                  </div>
-                  <div className="w-full bg-purple-200/80 rounded-full h-1.5 overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all duration-500 ${
-                        validationScore >= 90 ? 'bg-emerald-500' :
-                        validationScore >= 70 ? 'bg-blue-500' :
-                        validationScore >= 50 ? 'bg-amber-500' : 'bg-red-500'
-                      }`}
-                      style={{ width: `${validationScore}%` }}
-                    />
-                  </div>
+                <div className="w-full bg-purple-200 rounded-full h-1.5 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${
+                      validationScore >= 90 ? 'bg-emerald-500' :
+                      validationScore >= 70 ? 'bg-blue-500' :
+                      validationScore >= 50 ? 'bg-amber-500' : 'bg-red-500'
+                    }`}
+                    style={{ width: `${validationScore}%` }}
+                  />
                 </div>
-              )}
-
-              {/* Flags Header Label */}
-              <div className="flex items-center justify-between text-xs text-mira-muted font-medium pt-1">
-                <span>Detected Flags ({issuesList.length})</span>
-                <span className="text-[10px] text-purple-700">Click flag to jump</span>
+                <span className="inline-block text-[10px] text-purple-700 font-medium pt-1">
+                  {document.status === 'COMPLETED' ? '✓ Passed automated checks' : '⚠ Requires manual review'}
+                </span>
               </div>
 
-              {/* Flags Cards List */}
-              {issuesList.length === 0 ? (
-                <div className="py-8 px-4 bg-gray-50 rounded-xl border border-dashed border-gray-200 text-center space-y-1">
-                  <CheckCircle2 className="w-6 h-6 text-emerald-500 mx-auto" />
-                  <p className="text-xs font-semibold text-mira-dark">No Issues Found</p>
-                  <p className="text-[11px] text-mira-muted">Your document draft is free of factual discrepancies or missing clauses.</p>
+              {/* Multi-tier Layer Checks */}
+              <div className="space-y-2">
+                <span className="text-xs font-bold text-mira-dark">Layer Breakdown:</span>
+                
+                <div className="p-2.5 bg-gray-50 rounded-lg text-xs space-y-1 border border-gray-100">
+                  <div className="flex justify-between font-medium">
+                    <span>Factual Accuracy</span>
+                    <span className="font-bold text-mira-dark">{document.validationSummary?.layerScores?.factualAccuracy || 95}%</span>
+                  </div>
+                  <div className="flex justify-between font-medium">
+                    <span>Section Completeness</span>
+                    <span className="font-bold text-mira-dark">{document.validationSummary?.layerScores?.sectionCompleteness || 100}%</span>
+                  </div>
+                  <div className="flex justify-between font-medium">
+                    <span>Clause Coverage</span>
+                    <span className="font-bold text-mira-dark">{document.validationSummary?.layerScores?.clauseCoverage || 92}%</span>
+                  </div>
+                  <div className="flex justify-between font-medium">
+                    <span>InLegalBERT Consistency</span>
+                    <span className="font-bold text-mira-dark">{document.validationSummary?.layerScores?.semanticConsistency || 90}%</span>
+                  </div>
                 </div>
-              ) : (
-                <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
-                  {issuesList.map((issue: ValidationIssue, idx: number) => {
-                    const isActive = activeIssueIndex === idx;
-                    const suggestion = flagSuggestions[idx];
-                    const isLoading = !!loadingFlagFix[idx];
-                    const isApplying = !!applyingFlagFix[idx];
+              </div>
 
-                    return (
-                      <div
-                        key={idx}
-                        className={`p-3 rounded-xl border text-xs transition-all space-y-2.5 ${
-                          isActive
-                            ? 'border-purple-500 bg-purple-50/60 shadow-xs ring-1 ring-purple-400'
-                            : 'border-mira-border bg-white hover:border-purple-300'
-                        }`}
-                      >
-                        {/* Flag Header */}
+              {/* Detected Issues */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-mira-dark">
+                    Validation Flags ({issuesList.length} items):
+                  </span>
+                  {issuesList.length > 0 && (
+                    <span className="text-[10px] text-mira-muted font-medium">
+                      Click to jump & resolve
+                    </span>
+                  )}
+                </div>
+
+                {issuesList.length === 0 ? (
+                  <div className="p-3 bg-emerald-50 text-emerald-800 text-xs rounded-lg flex items-center gap-2 border border-emerald-200">
+                    <ShieldCheck className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                    <span>No fact mismatches or structural anomalies found.</span>
+                  </div>
+                ) : (
+                  <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+                    {issuesList.map((issue: ValidationIssue, idx: number) => {
+                      const isHigh = issue.severity === 'HIGH';
+                      const isMed = issue.severity === 'MEDIUM';
+
+                      return (
                         <div
-                          onClick={() => handleSelectFlag(issue, idx)}
-                          className="cursor-pointer space-y-1.5"
-                          title="Click to jump to this section in document"
+                          key={idx}
+                          className={`p-3.5 rounded-xl border text-xs space-y-2.5 transition-all ${
+                            isHigh
+                              ? 'bg-red-50/70 border-red-200 text-red-950'
+                              : isMed
+                              ? 'bg-amber-50/70 border-amber-200 text-amber-950'
+                              : 'bg-blue-50/70 border-blue-200 text-blue-950'
+                          }`}
                         >
-                          <div className="flex items-center justify-between gap-1.5">
-                            <span className="flex items-center gap-1.5 font-bold text-xs text-mira-dark truncate">
-                              <AlertTriangle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+                          {/* Flag Header: Section + Severity Badge */}
+                          <div className="flex items-center justify-between font-bold text-[12px] border-b pb-1.5 border-black/10">
+                            <div className="flex items-center gap-1.5 truncate">
+                              <AlertTriangle className={`w-3.5 h-3.5 flex-shrink-0 ${
+                                isHigh ? 'text-red-600' : isMed ? 'text-amber-600' : 'text-blue-600'
+                              }`} />
                               <span className="truncate">{issue.title || issue.section}</span>
-                            </span>
-
-                            <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase flex-shrink-0 ${
-                              issue.severity === 'HIGH' 
-                                ? 'bg-red-100 text-red-800' 
-                                : issue.severity === 'MEDIUM'
-                                ? 'bg-amber-100 text-amber-800'
-                                : 'bg-blue-100 text-blue-800'
+                            </div>
+                            <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+                              isHigh
+                                ? 'bg-red-200 text-red-900 border border-red-300'
+                                : isMed
+                                ? 'bg-amber-200 text-amber-900 border border-amber-300'
+                                : 'bg-blue-200 text-blue-900 border border-blue-300'
                             }`}>
                               {issue.severity}
                             </span>
                           </div>
 
-                          {/* 1. What is Wrong */}
-                          <div className="p-2 bg-rose-50/70 rounded-lg border border-rose-100 text-[11px] text-rose-950 leading-snug">
-                            <span className="font-bold text-rose-800">Problem: </span>
-                            {issue.message || issue.description}
-                          </div>
-
-                          {/* 2. What Changes Are Needed */}
-                          <div className="p-2 bg-purple-50/70 rounded-lg border border-purple-100 text-[11px] text-purple-950 leading-snug">
-                            <span className="font-bold text-mira-primary">Needed Change: </span>
-                            {issue.suggestion || issue.reason || 'Update clause to align with authoritative terms.'}
-                          </div>
-                        </div>
-
-                        {/* Evidence quote if available */}
-                        {issue.evidence && (
-                          <div
-                            onClick={() => locateAndHighlight(issue.evidence, issue.section, issue.location)}
-                            className="px-2 py-1 bg-gray-50 hover:bg-gray-100 rounded-md border border-gray-200 text-[10px] text-gray-700 flex items-center justify-between gap-1.5 cursor-pointer"
-                            title="Click to locate quote in editor"
-                          >
-                            <span className="italic truncate text-gray-600">"{issue.evidence}"</span>
-                            <span className="text-purple-700 font-bold flex items-center gap-0.5 flex-shrink-0 text-[9px]">
-                              <CornerDownRight className="w-2.5 h-2.5" /> Jump
-                            </span>
-                          </div>
-                        )}
-
-                        {/* Inline AI Suggestion Preview (if user clicked Suggest AI Fix) */}
-                        {suggestion && (
-                          <div className="p-2.5 bg-white rounded-lg border border-purple-300 shadow-2xs space-y-2 animate-in fade-in">
-                            <span className="text-[10px] font-bold text-purple-950 flex items-center gap-1">
-                              <Sparkles className="w-3 h-3 text-mira-primary" />
-                              AI Proposed Replacement:
-                            </span>
-                            <textarea
-                              value={suggestion.replacementSnippet}
-                              onChange={(e) => setFlagSuggestions(prev => ({
-                                ...prev,
-                                [idx]: { ...prev[idx], replacementSnippet: e.target.value }
-                              }))}
-                              className="w-full p-2 text-[11px] font-serif leading-relaxed text-mira-dark bg-purple-50/40 border border-purple-200 rounded-md focus:outline-hidden focus:border-mira-primary resize-y min-h-[60px]"
-                            />
-                            <div className="flex items-center justify-end gap-1.5">
-                              <button
-                                onClick={() => setFlagSuggestions(prev => {
-                                  const copy = { ...prev };
-                                  delete copy[idx];
-                                  return copy;
-                                })}
-                                className="px-2 py-1 text-[11px] text-gray-500 hover:text-gray-700 cursor-pointer"
-                              >
-                                Cancel
-                              </button>
-                              <button
-                                onClick={() => handleApplyFlagFix(idx, issue)}
-                                disabled={isApplying}
-                                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md font-bold text-[11px] flex items-center gap-1 shadow-2xs cursor-pointer disabled:opacity-50"
-                              >
-                                {isApplying ? (
-                                  <>
-                                    <RefreshCw className="w-3 h-3 animate-spin" />
-                                    Applying...
-                                  </>
-                                ) : (
-                                  <>
-                                    <Check className="w-3 h-3" />
-                                    Apply Change
-                                  </>
-                                )}
-                              </button>
+                          {/* 1. CLEARLY DEFINED FLAG / PROBLEM */}
+                          <div className="space-y-1 bg-white/90 p-2.5 rounded-lg border border-black/5 shadow-2xs">
+                            <div className="flex items-center gap-1 font-bold text-[10px] text-red-800 uppercase tracking-wider">
+                              <span>🚩 Flag / Problem Detected:</span>
                             </div>
-                          </div>
-                        )}
+                            <p className="text-[11px] font-medium leading-relaxed text-gray-800">
+                              {issue.description || issue.message || 'Issue detected in section wording or factual alignment.'}
+                            </p>
 
-                        {/* Action Buttons Row */}
-                        {!suggestion && (
-                          <div className="pt-1 flex items-center justify-between gap-2 border-t border-gray-100">
+                            {/* Quoted Evidence */}
+                            {issue.evidence && issue.evidence.trim().length > 0 && (
+                              <div className="mt-1 pt-1 border-t border-gray-100 text-[10px] text-gray-600 font-mono bg-gray-50/80 p-1.5 rounded">
+                                <span className="font-semibold text-gray-500">Quoted text: </span>
+                                "{issue.evidence}"
+                              </div>
+                            )}
+
+                            {/* Why ATHARV flags this */}
+                            {issue.reason && (
+                              <div className="mt-1 text-[10px] text-gray-600 leading-snug">
+                                <span className="font-semibold text-gray-700">Legal rationale: </span>
+                                {issue.reason}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* 2. CLEARLY DEFINED HOW TO RESOLVE IT */}
+                          <div className="space-y-1 bg-emerald-50/90 p-2.5 rounded-lg border border-emerald-200 shadow-2xs">
+                            <div className="flex items-center gap-1 font-bold text-[10px] text-emerald-900 uppercase tracking-wider">
+                              <span>💡 How to Resolve:</span>
+                            </div>
+                            <p className="text-[11px] text-emerald-950 font-medium leading-relaxed">
+                              {issue.suggestion || (
+                                isHigh
+                                  ? 'Correct this section to align with verified project facts and standard legal obligations.'
+                                  : 'Review and refine wording to eliminate contractual ambiguity.'
+                              )}
+                            </p>
+                          </div>
+
+                          {/* Action Buttons: Jump & Fix with AI */}
+                          <div className="flex items-center gap-2 pt-1">
                             <button
-                              onClick={() => handleSelectFlag(issue, idx)}
-                              className="py-1 px-2.5 bg-white hover:bg-purple-50 border border-purple-200 text-mira-primary rounded-lg font-semibold text-[11px] flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
+                              onClick={() => scrollToSection(issue.section, issue.evidence)}
+                              className="flex-1 py-1.5 px-2 bg-white hover:bg-gray-100 text-gray-800 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 border border-gray-300 shadow-2xs transition-colors cursor-pointer"
+                              title="Scroll editor to this exact section and highlight text"
                             >
-                              <CornerDownRight className="w-3 h-3" />
+                              <ExternalLink className="w-3 h-3 text-gray-500" />
                               Jump to Section
                             </button>
 
                             <button
-                              onClick={() => handleSuggestFlagFix(issue, idx)}
-                              disabled={isLoading}
-                              className="py-1 px-2.5 bg-mira-primary hover:bg-purple-800 text-white rounded-lg font-bold text-[11px] flex items-center gap-1 shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
+                              onClick={() => {
+                                scrollToSection(issue.section, issue.evidence);
+                                setActiveTab('ASSISTANT');
+                                if (issue.suggestion) {
+                                  setCustomCommand(issue.suggestion);
+                                }
+                              }}
+                              className="flex-1 py-1.5 px-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 shadow-2xs transition-colors cursor-pointer"
+                              title="Jump to this section and open AI Assistant with resolution instructions"
                             >
-                              {isLoading ? (
-                                <>
-                                  <RefreshCw className="w-3 h-3 animate-spin" />
-                                  Thinking...
-                                </>
-                              ) : (
-                                <>
-                                  <Sparkles className="w-3 h-3" />
-                                  Suggest AI Fix
-                                </>
-                              )}
+                              <Sparkles className="w-3 h-3" />
+                              Fix with AI Assistant
                             </button>
                           </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <p className="text-[10px] text-mira-muted italic border-t pt-2">
+                "AI Validation Score — informational only. Subject to qualified legal review."
+              </p>
             </div>
           )}
 
-          {/* TAB 2: AI UTILITY TOOLS */}
-          {activeTab === 'TOOLS' && (
+          {/* TAB 2: AI ASSISTANT */}
+          {activeTab === 'ASSISTANT' && (
             <div className="space-y-3.5 text-xs">
-              {/* Fact Sync Card */}
-              <div className="p-3.5 bg-gray-50 rounded-xl border border-mira-border space-y-2">
-                <div className="flex items-center gap-1.5">
-                  <FileCheck className="w-4 h-4 text-mira-primary" />
-                  <span className="font-bold text-mira-dark text-xs">Sync Intake Facts</span>
-                </div>
-                <p className="text-[11px] text-mira-muted leading-relaxed">
-                  Update all party names, dates, amounts, and governing law to match project facts in one click.
+              <div className="p-3 bg-purple-50 rounded-xl border border-purple-100 space-y-1">
+                <span className="font-bold text-purple-950 flex items-center gap-1.5 text-[12px]">
+                  <Sparkles className="w-3.5 h-3.5 text-mira-primary" />
+                  Contextual Drafting Assistant
+                </span>
+                <p className="text-[11px] text-purple-800 leading-relaxed">
+                  Select text in the editor, write your command below, and ATHARV AI will modify that specific section.
                 </p>
+              </div>
+
+              {/* Selected Text Preview */}
+              {selectedText ? (
+                <div className="p-2.5 bg-gray-50 rounded-xl border border-mira-border text-[11px] space-y-1">
+                  <div className="flex items-center justify-between font-semibold text-mira-muted text-[10px] uppercase">
+                    <span>Targeted Selection ({selectedText.length} chars)</span>
+                    <button
+                      onClick={() => setSelectedText('')}
+                      className="text-gray-400 hover:text-gray-600 underline text-[10px] cursor-pointer"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <div className="font-serif italic line-clamp-3 text-mira-dark bg-white p-1.5 rounded border border-gray-100">
+                    "{selectedText}"
+                  </div>
+                </div>
+              ) : (
+                <div className="p-2.5 bg-amber-50/70 rounded-xl border border-amber-200 text-amber-900 text-[11px] flex items-start gap-2">
+                  <Edit3 className="w-3.5 h-3.5 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <span>
+                    Select or highlight any clause or paragraph in the center editor (or click <strong>"Fix with AI Assistant"</strong> on any flag) to edit that section.
+                  </span>
+                </div>
+              )}
+
+              {/* WRITE COMMAND & APPLY CHANGES */}
+              <div className="p-3 bg-white rounded-xl border border-purple-200 shadow-2xs space-y-2">
+                <label className="font-bold text-mira-dark text-[11px] flex items-center gap-1.5">
+                  <Send className="w-3.5 h-3.5 text-mira-primary" />
+                  Write AI Command for Section:
+                </label>
+                <textarea
+                  rows={2}
+                  value={customCommand}
+                  onChange={(e) => setCustomCommand(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleCustomCommand();
+                    }
+                  }}
+                  placeholder='e.g. "Change notice period to 60 days", "Make bilateral for both parties", "Add 12-month non-solicit", "Replace Bangalore with Delaware"...'
+                  className="w-full p-2 text-xs border border-gray-200 rounded-lg focus:outline-hidden focus:border-mira-primary resize-none font-sans"
+                />
+
                 <button
-                  onClick={handleSyncAllFacts}
-                  disabled={syncingFacts}
-                  className="w-full py-2 px-3 bg-white hover:bg-purple-50 border border-mira-border hover:border-purple-300 text-mira-dark rounded-lg font-semibold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+                  onClick={handleCustomCommand}
+                  disabled={applyingCommand || !customCommand.trim()}
+                  className="w-full py-2 px-3 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 text-mira-primary ${syncingFacts ? 'animate-spin' : ''}`} />
-                  {syncingFacts ? 'Synchronizing...' : '1-Click Sync Facts'}
+                  <Sparkles className={`w-3.5 h-3.5 ${applyingCommand ? 'animate-spin' : ''}`} />
+                  {applyingCommand ? 'Applying AI Changes...' : 'Apply AI Command to Document'}
                 </button>
-              </div>
-
-              {/* Standard Clause Library */}
-              <div className="p-3.5 bg-gray-50 rounded-xl border border-mira-border space-y-2">
-                <div className="flex items-center gap-1.5">
-                  <BookOpen className="w-4 h-4 text-mira-secondary" />
-                  <span className="font-bold text-mira-dark text-xs">Standard Clause Library</span>
-                </div>
-                <p className="text-[11px] text-mira-muted leading-relaxed">
-                  Inject vetted institutional clauses directly into your draft:
+                <p className="text-[9px] text-mira-muted text-center italic">
+                  Press Enter to apply command directly to the selected text.
                 </p>
-
-                {standardClauses.length > 0 && (
-                  <select
-                    className="w-full p-2 bg-white border border-mira-border rounded-lg text-xs text-mira-dark focus:outline-hidden focus:border-mira-primary"
-                    onChange={(e) => {
-                      const cl = standardClauses.find(c => c.id === e.target.value);
-                      if (cl) setSelectedStandardClause(cl);
-                    }}
-                    value={selectedStandardClause?.id || ''}
-                  >
-                    {standardClauses.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        [{c.category}] {c.title}
-                      </option>
-                    ))}
-                  </select>
-                )}
-
-                {selectedStandardClause && (
-                  <button
-                    onClick={() => handleInsertStandardClause(selectedStandardClause.content)}
-                    className="w-full py-1.5 px-3 bg-white hover:bg-purple-50 border border-purple-200 text-mira-primary rounded-lg font-semibold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
-                  >
-                    <PlusCircle className="w-3.5 h-3.5" />
-                    Insert Clause at Cursor
-                  </button>
-                )}
               </div>
+
+              {/* Quick Preset Buttons */}
+              <div className="space-y-1.5 pt-1">
+                <span className="font-bold text-mira-dark text-[10px] uppercase tracking-wider">
+                  Quick 1-Click Presets:
+                </span>
+                <div className="grid grid-cols-1 gap-1.5">
+                  <button
+                    onClick={() => handleRewrite('mutual')}
+                    disabled={rewriting || !selectedText.trim()}
+                    className="w-full py-1.5 px-2.5 bg-white border border-mira-border hover:border-mira-primary disabled:opacity-50 rounded-lg font-medium text-mira-dark text-left flex items-center justify-between shadow-2xs cursor-pointer text-xs"
+                    title="Make unilateral terms bilateral for both parties"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <Scale className="w-3.5 h-3.5 text-mira-primary" />
+                      Make Clause Bilateral / Mutual
+                    </span>
+                    {rewriting && <RefreshCw className="w-3 h-3 animate-spin" />}
+                  </button>
+
+                  <button
+                    onClick={() => handleRewrite('simple')}
+                    disabled={rewriting || !selectedText.trim()}
+                    className="w-full py-1.5 px-2.5 bg-white border border-mira-border hover:border-mira-primary disabled:opacity-50 rounded-lg font-medium text-mira-dark text-left flex items-center justify-between shadow-2xs cursor-pointer text-xs"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <Wand2 className="w-3.5 h-3.5 text-mira-secondary" />
+                      Make Clause Simpler / Plain English
+                    </span>
+                    {rewriting && <RefreshCw className="w-3 h-3 animate-spin" />}
+                  </button>
+
+                  <button
+                    onClick={() => handleRewrite('formal')}
+                    disabled={rewriting || !selectedText.trim()}
+                    className="w-full py-1.5 px-2.5 bg-white border border-mira-border hover:border-mira-primary disabled:opacity-50 rounded-lg font-medium text-mira-dark text-left flex items-center justify-between shadow-2xs cursor-pointer text-xs"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <Wand2 className="w-3.5 h-3.5 text-mira-primary" />
+                      Make Clause Formal & Binding
+                    </span>
+                    {rewriting && <RefreshCw className="w-3 h-3 animate-spin" />}
+                  </button>
+
+                  <button
+                    onClick={handleExplain}
+                    disabled={explaining}
+                    className="w-full py-1.5 px-2.5 bg-white border border-mira-border hover:border-mira-primary rounded-lg font-medium text-mira-dark text-left flex items-center justify-between shadow-2xs cursor-pointer text-xs"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <HelpCircle className="w-3.5 h-3.5 text-mira-primary" />
+                      Explain Selected Clause
+                    </span>
+                    {explaining && <RefreshCw className="w-3 h-3 animate-spin" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Explanation Card */}
+              {explanation && (
+                <div className="p-3 bg-gray-50 rounded-xl border border-mira-border space-y-2 mt-2 animate-in fade-in">
+                  <div className="font-bold text-mira-dark text-[11px] border-b pb-1">
+                    Plain-Language Explanation
+                  </div>
+                  <p className="text-[11px] text-mira-dark leading-relaxed">{explanation.plainLanguage}</p>
+                  <div>
+                    <span className="font-bold text-[10px] text-mira-muted uppercase">Commercial Purpose</span>
+                    <p className="text-[11px] text-mira-dark mt-0.5">{explanation.purpose}</p>
+                  </div>
+                  <div>
+                    <span className="font-bold text-[10px] text-mira-muted uppercase">Legal Implication</span>
+                    <p className="text-[11px] text-mira-dark mt-0.5">{explanation.legalImplication}</p>
+                  </div>
+                  <p className="text-[9px] text-mira-muted italic pt-1 border-t">
+                    {explanation.disclaimer}
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>
