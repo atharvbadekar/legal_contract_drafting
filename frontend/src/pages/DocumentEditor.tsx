@@ -257,6 +257,51 @@ export const DocumentEditor: React.FC = () => {
   };
 
   /**
+   * One-click direct fix for any flag
+   */
+  const handleDirectFix = async (issue: ValidationIssue, idx: number) => {
+    if (!id || !document) return;
+    setActiveIssueIndex(idx);
+    setApplyingFix(true);
+    try {
+      // 1. Locate and highlight in editor
+      const quotedMatch = issue.description.match(/'([^']+)'/);
+      const targetToken = quotedMatch ? quotedMatch[1] : '';
+      locateAndHighlight(targetToken, issue.section);
+
+      // 2. Fetch AI fix suggestion
+      const suggestion = await aiService.suggestFix({
+        documentType: document.documentType,
+        content,
+        issue,
+        structuredFacts: document.structuredFacts
+      });
+
+      if (suggestion && suggestion.fixedContent) {
+        // 3. Apply fix to content
+        const updatedContent = suggestion.fixedContent;
+        setContent(updatedContent);
+        setFixSuccessMsg('✓ AI Fix applied & validated!');
+        setTimeout(() => setFixSuccessMsg(''), 4000);
+
+        // 4. Save and auto-revalidate
+        await documentService.update(id, { content: updatedContent, saveAsVersion: false });
+        const valRes = await documentService.validate(id, {
+          content: updatedContent,
+          structuredFacts: document.structuredFacts
+        });
+        setDocument(valRes.document);
+        setActiveFix(null);
+        setActiveIssueIndex(null);
+      }
+    } catch (err: any) {
+      alert(`Auto-fix failed: ${err.message}`);
+    } finally {
+      setApplyingFix(false);
+    }
+  };
+
+  /**
    * Synchronize all structured facts in one pass
    */
   const handleSyncAllFacts = async () => {
@@ -590,168 +635,232 @@ export const DocumentEditor: React.FC = () => {
             />
           </div>
 
-          {/* Quick Status Footer */}
-          <div className="px-5 py-2.5 border-t border-mira-border bg-gray-50/50 flex items-center justify-between text-[11px] text-mira-muted">
-            <span>{content.split(/\s+/).filter(Boolean).length} Words • {content.length} Characters</span>
-            <span className="text-purple-700 font-medium">Click any flag on the right to navigate & auto-fix</span>
+          {/* Explanation Banner if requested */}
+          {explanation && (
+            <div className="mx-5 mb-3 p-3 bg-purple-50 rounded-xl border border-purple-200 space-y-1.5 animate-in fade-in relative">
+              <button
+                onClick={() => setExplanation(null)}
+                className="absolute top-2 right-2 text-purple-700 hover:text-purple-900 font-bold text-xs"
+                title="Dismiss"
+              >
+                ✕
+              </button>
+              <div className="font-bold text-purple-950 text-xs flex items-center gap-1">
+                <Lightbulb className="w-3.5 h-3.5 text-mira-primary" />
+                Plain English Explanation
+              </div>
+              <p className="text-xs text-purple-900 leading-relaxed">{explanation.plainLanguage}</p>
+              {explanation.legalImplication && (
+                <p className="text-[11px] text-purple-800">
+                  <span className="font-semibold">Legal Implication:</span> {explanation.legalImplication}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Quick Status / Selection Assistant Footer */}
+          <div className="px-5 py-2.5 border-t border-mira-border bg-gray-50/50 flex flex-wrap items-center justify-between gap-2 text-[11px] text-mira-muted">
+            {selectedText.trim().length > 0 ? (
+              <div className="flex items-center gap-2 flex-wrap animate-in fade-in">
+                <span className="font-semibold text-purple-900 bg-purple-100 px-2 py-0.5 rounded-md truncate max-w-xs">
+                  Selected: "{selectedText.trim().slice(0, 35)}..."
+                </span>
+                <button
+                  onClick={() => handleRewrite('simple')}
+                  disabled={rewriting}
+                  className="px-2 py-0.5 bg-white hover:bg-purple-50 border border-purple-200 text-mira-primary rounded-md font-semibold text-[10px] flex items-center gap-1 shadow-2xs"
+                >
+                  <Wand2 className="w-3 h-3" />
+                  {rewriting ? 'Rewriting...' : 'Rewrite in Plain English'}
+                </button>
+                <button
+                  onClick={handleExplain}
+                  disabled={explaining}
+                  className="px-2 py-0.5 bg-white hover:bg-purple-50 border border-purple-200 text-mira-primary rounded-md font-semibold text-[10px] flex items-center gap-1 shadow-2xs"
+                >
+                  <HelpCircle className="w-3 h-3" />
+                  {explaining ? 'Analyzing...' : 'Explain'}
+                </button>
+                <button
+                  onClick={() => setSelectedText('')}
+                  className="text-gray-400 hover:text-gray-600 text-[10px] px-1"
+                  title="Clear selection"
+                >
+                  ✕
+                </button>
+              </div>
+            ) : (
+              <span>{content.split(/\s+/).filter(Boolean).length} Words • {content.length} Characters</span>
+            )}
+            <span className="text-purple-700 font-medium">Click any flag to navigate & 1-click auto-fix</span>
           </div>
         </div>
 
-        {/* PANEL 3: Validation & AI Assistant Panel (Right, 3 cols) */}
+        {/* PANEL 3: Streamlined Validation & AI Copilot Panel (Right, 3 cols) */}
         <div className="lg:col-span-3 bg-white rounded-xl border border-mira-border shadow-xs p-4 space-y-4 sticky top-20">
-          {/* Tabs */}
+          {/* Top Tabs */}
           <div className="grid grid-cols-2 gap-1 p-1 bg-gray-100 rounded-lg text-xs font-semibold">
             <button
               onClick={() => setActiveTab('VALIDATION')}
-              className={`py-1.5 rounded-md transition-colors flex items-center justify-center gap-1 ${
-                activeTab === 'VALIDATION' ? 'bg-white text-mira-primary shadow-2xs font-bold' : 'text-mira-muted'
+              className={`py-1.5 rounded-md transition-colors flex items-center justify-center gap-1.5 ${
+                activeTab === 'VALIDATION' ? 'bg-white text-mira-primary shadow-2xs font-bold' : 'text-mira-muted hover:text-mira-dark'
               }`}
             >
-              <span>Validation ({validationScore}%)</span>
-              {issuesList.length > 0 && (
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+              <span>Flags</span>
+              {issuesList.length > 0 ? (
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800 font-bold">
+                  {issuesList.length}
+                </span>
+              ) : (
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 font-bold">
+                  100%
+                </span>
               )}
             </button>
             <button
               onClick={() => setActiveTab('ASSISTANT')}
-              className={`py-1.5 rounded-md transition-colors flex items-center justify-center gap-1 ${
-                activeTab === 'ASSISTANT' ? 'bg-white text-mira-primary shadow-2xs font-bold' : 'text-mira-muted'
+              className={`py-1.5 rounded-md transition-colors flex items-center justify-center gap-1.5 ${
+                activeTab === 'ASSISTANT' ? 'bg-white text-mira-primary shadow-2xs font-bold' : 'text-mira-muted hover:text-mira-dark'
               }`}
             >
-              <Sparkles className="w-3 h-3 text-mira-primary" />
+              <Sparkles className="w-3.5 h-3.5 text-mira-primary" />
               <span>AI Copilot</span>
             </button>
           </div>
 
-          {/* TAB 1: VALIDATION REPORT WITH INTERACTIVE FLAGS */}
+          {/* TAB 1: STREAMLINED VALIDATION FLAGS */}
           {activeTab === 'VALIDATION' && (
-            <div className="space-y-4">
-              {/* Validation Score Widget */}
-              <div className="p-4 rounded-xl bg-purple-50/60 border border-purple-100 text-center space-y-1.5">
-                <span className="text-[10px] font-bold text-mira-muted uppercase tracking-wider">
-                  AI Validation Score
-                </span>
-                <div className="text-3xl font-black text-mira-primary">
-                  {validationScore}%
+            <div className="space-y-3.5">
+              {/* Sleek Compact Status Bar */}
+              {issuesList.length === 0 ? (
+                <div className="p-3 bg-emerald-50/90 border border-emerald-200 rounded-xl flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-1 bg-emerald-100 rounded-lg text-emerald-700">
+                      <ShieldCheck className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-emerald-950">100% Verified Compliant</div>
+                      <div className="text-[11px] text-emerald-700">All terms, parties & clauses match</div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleRevalidate}
+                    disabled={validating}
+                    className="p-1.5 hover:bg-emerald-100 rounded-lg text-emerald-700"
+                    title="Re-run verification"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${validating ? 'animate-spin' : ''}`} />
+                  </button>
                 </div>
-                <div className="w-full bg-purple-200 rounded-full h-1.5 overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all duration-500 ${
-                      validationScore >= 90 ? 'bg-emerald-500' :
-                      validationScore >= 70 ? 'bg-blue-500' :
-                      validationScore >= 50 ? 'bg-amber-500' : 'bg-red-500'
-                    }`}
-                    style={{ width: `${validationScore}%` }}
-                  />
+              ) : (
+                <div className="p-3 bg-purple-50/70 border border-purple-200 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-mira-dark flex items-center gap-1.5">
+                      <span className="text-sm font-black text-mira-primary">{validationScore}%</span>
+                      <span>Compliance</span>
+                    </span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                      {issuesList.length} Flag{issuesList.length > 1 ? 's' : ''} to Resolve
+                    </span>
+                  </div>
+                  <div className="w-full bg-purple-200/80 rounded-full h-1.5 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        validationScore >= 90 ? 'bg-emerald-500' :
+                        validationScore >= 70 ? 'bg-blue-500' :
+                        validationScore >= 50 ? 'bg-amber-500' : 'bg-red-500'
+                      }`}
+                      style={{ width: `${validationScore}%` }}
+                    />
+                  </div>
                 </div>
-                <span className="inline-block text-[10px] text-purple-700 font-medium pt-1">
-                  {document.status === 'COMPLETED' ? '✓ Passed automated checks' : '⚠ Click any flag below to resolve'}
-                </span>
-              </div>
+              )}
 
-              {/* Detected Issues with Click-to-Jump & 1-Click AI Fix */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-mira-dark">
-                    Validation Flags ({issuesList.length}):
-                  </span>
-                  <span className="text-[10px] text-mira-primary font-medium">Click to navigate</span>
+              {/* Flag Cards */}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between text-xs text-mira-muted font-medium">
+                  <span>Detected Flags ({issuesList.length})</span>
+                  <span className="text-[10px] text-purple-700">Click card to jump • 1-Click Fix</span>
                 </div>
 
                 {issuesList.length === 0 ? (
-                  <div className="p-3 bg-emerald-50 text-emerald-800 text-xs rounded-lg flex items-center gap-2">
-                    <ShieldCheck className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                    <span>No fact mismatches or structural anomalies found.</span>
+                  <div className="py-6 px-4 bg-gray-50 rounded-xl border border-dashed border-gray-200 text-center space-y-1">
+                    <CheckCircle2 className="w-6 h-6 text-emerald-500 mx-auto" />
+                    <p className="text-xs font-semibold text-mira-dark">No Issues Found</p>
+                    <p className="text-[11px] text-mira-muted">Your draft is free of factual discrepancies or missing sections.</p>
                   </div>
                 ) : (
-                  <div className="space-y-2.5 max-h-[60vh] overflow-y-auto pr-1">
+                  <div className="space-y-2.5 max-h-[55vh] overflow-y-auto pr-1">
                     {issuesList.map((issue: ValidationIssue, idx: number) => {
                       const isActive = activeIssueIndex === idx;
 
                       return (
                         <div
                           key={idx}
-                          onClick={() => handleSelectIssue(issue, idx)}
-                          className={`p-3 rounded-xl text-xs border transition-all cursor-pointer ${
+                          className={`p-3 rounded-xl border text-xs transition-all ${
                             isActive
-                              ? 'border-purple-500 bg-purple-50/80 shadow-xs ring-1 ring-purple-400'
+                              ? 'border-purple-500 bg-purple-50/70 shadow-xs ring-1 ring-purple-400'
                               : issue.severity === 'HIGH'
-                              ? 'bg-red-50/80 border-red-200 text-red-900 hover:border-red-400 hover:bg-red-100/60'
-                              : issue.severity === 'MEDIUM'
-                              ? 'bg-amber-50/80 border-amber-200 text-amber-900 hover:border-amber-400 hover:bg-amber-100/60'
-                              : 'bg-blue-50/80 border-blue-200 text-blue-900 hover:border-blue-400 hover:bg-blue-100/60'
+                              ? 'border-red-200 bg-red-50/30 hover:border-red-300 hover:bg-red-50/60'
+                              : 'border-amber-200 bg-amber-50/30 hover:border-amber-300 hover:bg-amber-50/60'
                           }`}
                         >
-                          <div className="flex items-center justify-between font-bold text-[11px]">
-                            <span className="flex items-center gap-1.5">
-                              <AlertCircle className={`w-3.5 h-3.5 ${
-                                issue.severity === 'HIGH' ? 'text-red-600' :
-                                issue.severity === 'MEDIUM' ? 'text-amber-600' : 'text-blue-600'
-                              }`} />
-                              {issue.section}
-                            </span>
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-[9px] px-1.5 py-0.2 rounded font-bold uppercase tracking-wider bg-white/80 shadow-2xs">
+                          {/* Card Header & Description */}
+                          <div 
+                            onClick={() => handleSelectIssue(issue, idx)}
+                            className="cursor-pointer space-y-1"
+                            title="Click to jump to this section in text"
+                          >
+                            <div className="flex items-center justify-between font-bold text-[11px]">
+                              <span className="flex items-center gap-1.5 truncate">
+                                <AlertCircle className={`w-3.5 h-3.5 flex-shrink-0 ${
+                                  issue.severity === 'HIGH' ? 'text-red-600' : 'text-amber-600'
+                                }`} />
+                                <span className="truncate text-mira-dark">{issue.section}</span>
+                              </span>
+                              <span className={`text-[9px] px-1.5 py-0.2 rounded font-bold uppercase tracking-wider ${
+                                issue.severity === 'HIGH' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'
+                              }`}>
                                 {issue.severity}
                               </span>
-                              <CornerDownRight className="w-3 h-3 text-mira-muted opacity-60" />
                             </div>
+                            <p className="text-[11px] text-mira-dark/85 leading-snug">
+                              {issue.description}
+                            </p>
                           </div>
 
-                          <p className="text-[11px] mt-1 leading-snug">{issue.description}</p>
-
-                          {/* Accordion Fix Card when flag is clicked */}
-                          {isActive && (
-                            <div className="mt-2.5 pt-2.5 border-t border-purple-200 space-y-2 animate-in fade-in" onClick={(e) => e.stopPropagation()}>
-                              <div className="flex items-center justify-between text-[10px] font-bold text-purple-900">
-                                <span className="flex items-center gap-1">
-                                  <Sparkles className="w-3 h-3 text-mira-primary" />
-                                  AI Suggested Resolution:
-                                </span>
-                                {loadingFix && <RefreshCw className="w-3 h-3 animate-spin text-mira-primary" />}
-                              </div>
-
-                              {activeFix ? (
-                                <div className="space-y-1.5 text-[10px]">
-                                  <p className="text-purple-800 leading-snug">{activeFix.explanation}</p>
-                                  
-                                  {activeFix.replacementSnippet && (
-                                    <div className="p-1.5 bg-white rounded border border-purple-200 font-mono text-[10px] text-mira-dark max-h-24 overflow-y-auto">
-                                      <span className="text-emerald-700 font-bold block mb-0.5">+ Replace with:</span>
-                                      "{activeFix.replacementSnippet}"
-                                    </div>
-                                  )}
-
-                                  <div className="flex items-center gap-2 pt-1">
-                                    <button
-                                      onClick={() => handleApplyFix(activeFix)}
-                                      disabled={applyingFix}
-                                      className="flex-1 py-1.5 px-2.5 bg-mira-primary hover:bg-purple-800 text-white rounded-lg font-bold text-[11px] flex items-center justify-center gap-1 shadow-2xs transition-colors"
-                                    >
-                                      {applyingFix ? (
-                                        <RefreshCw className="w-3 h-3 animate-spin" />
-                                      ) : (
-                                        <Zap className="w-3 h-3 text-yellow-300" />
-                                      )}
-                                      <span>Apply Fix to Document</span>
-                                    </button>
-
-                                    <button
-                                      onClick={() => setActiveTab('ASSISTANT')}
-                                      className="py-1.5 px-2 bg-white hover:bg-purple-100 border border-purple-200 text-mira-primary rounded-lg font-semibold text-[10px]"
-                                      title="Open detailed tools in AI Copilot"
-                                    >
-                                      Open in Copilot
-                                    </button>
-                                  </div>
-                                </div>
+                          {/* Direct 1-Click Fix Action */}
+                          <div className="mt-2.5 pt-2 border-t border-gray-200/80 flex items-center gap-1.5">
+                            <button
+                              onClick={() => handleDirectFix(issue, idx)}
+                              disabled={applyingFix}
+                              className="flex-1 py-1.5 px-2.5 bg-mira-primary hover:bg-purple-800 text-white rounded-lg font-bold text-[11px] flex items-center justify-center gap-1.5 shadow-2xs transition-colors"
+                            >
+                              {applyingFix && activeIssueIndex === idx ? (
+                                <>
+                                  <RefreshCw className="w-3 h-3 animate-spin" />
+                                  <span>Applying Fix...</span>
+                                </>
                               ) : (
-                                !loadingFix && (
-                                  <p className="text-[10px] text-mira-muted italic">Click to generate automated fix.</p>
-                                )
+                                <>
+                                  <Zap className="w-3 h-3 text-yellow-300" />
+                                  <span>1-Click AI Fix</span>
+                                </>
                               )}
-                            </div>
-                          )}
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                const q = issue.description.match(/'([^']+)'/)?.[1] || '';
+                                locateAndHighlight(q, issue.section);
+                              }}
+                              className="py-1.5 px-2 bg-white hover:bg-gray-100 border border-mira-border text-mira-dark rounded-lg text-[10px] font-semibold flex items-center gap-1"
+                              title="Locate & highlight in editor"
+                            >
+                              <span>Locate</span>
+                              <CornerDownRight className="w-3 h-3 opacity-60" />
+                            </button>
+                          </div>
                         </div>
                       );
                     })}
@@ -759,114 +868,140 @@ export const DocumentEditor: React.FC = () => {
                 )}
               </div>
 
-              {/* Layer Breakdown */}
-              <div className="space-y-2 pt-2 border-t border-mira-border">
-                <span className="text-xs font-bold text-mira-dark">Layer Breakdown:</span>
-                
-                <div className="p-2.5 bg-gray-50 rounded-lg text-xs space-y-1 border border-gray-100">
+              {/* Collapsible Layer Breakdown */}
+              <details className="group pt-2 border-t border-mira-border text-xs">
+                <summary className="cursor-pointer text-[11px] font-semibold text-mira-muted hover:text-mira-dark flex items-center justify-between py-1">
+                  <span>Verification Layer Scores</span>
+                  <ChevronRight className="w-3.5 h-3.5 group-open:rotate-90 transition-transform text-mira-muted" />
+                </summary>
+                <div className="p-2.5 bg-gray-50 rounded-lg text-xs space-y-1.5 border border-gray-100 mt-2">
                   <div className="flex justify-between font-medium">
-                    <span>Factual Accuracy</span>
+                    <span className="text-mira-muted">Factual Accuracy</span>
                     <span className="font-bold text-mira-dark">{document.validationSummary?.layerScores?.factualAccuracy ?? 95}%</span>
                   </div>
                   <div className="flex justify-between font-medium">
-                    <span>Section Completeness</span>
+                    <span className="text-mira-muted">Section Completeness</span>
                     <span className="font-bold text-mira-dark">{document.validationSummary?.layerScores?.sectionCompleteness ?? 100}%</span>
                   </div>
                   <div className="flex justify-between font-medium">
-                    <span>Clause Coverage</span>
+                    <span className="text-mira-muted">Clause Coverage</span>
                     <span className="font-bold text-mira-dark">{document.validationSummary?.layerScores?.clauseCoverage ?? 92}%</span>
                   </div>
                   <div className="flex justify-between font-medium">
-                    <span>InLegalBERT Consistency</span>
+                    <span className="text-mira-muted">InLegalBERT Consistency</span>
                     <span className="font-bold text-mira-dark">{document.validationSummary?.layerScores?.semanticConsistency ?? 90}%</span>
                   </div>
                 </div>
-              </div>
+              </details>
 
-              <p className="text-[10px] text-mira-muted italic border-t pt-2">
-                "AI Validation Score — informational only. Subject to qualified legal review."
+              <p className="text-[10px] text-mira-muted italic">
+                Informational score. Subject to qualified legal review.
               </p>
             </div>
           )}
 
-          {/* TAB 2: ADVANCED AI COPILOT & EDITING ASSISTANT */}
+          {/* TAB 2: STREAMLINED AI COPILOT */}
           {activeTab === 'ASSISTANT' && (
-            <div className="space-y-4 text-xs">
-              {/* Copilot Header */}
-              <div className="p-3 bg-purple-50 rounded-xl border border-purple-100 space-y-1">
-                <span className="font-bold text-purple-950 flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-mira-primary" />
-                  Legal Drafting Copilot
-                </span>
-                <p className="text-[11px] text-purple-800">
-                  Select a feature below to resolve flags, align facts, or inject vetted clauses:
-                </p>
-              </div>
-
-              {/* 1. ACTIVE ISSUE RESOLVER (IF ANY ISSUE SELECTED) */}
-              {activeIssueIndex !== null && issuesList[activeIssueIndex] && (
-                <div className="p-3 bg-white rounded-xl border-2 border-purple-300 shadow-xs space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-purple-900 text-xs flex items-center gap-1">
-                      <Zap className="w-3.5 h-3.5 text-mira-primary" />
-                      Resolving: {issuesList[activeIssueIndex].section}
-                    </span>
-                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-800">
-                      {issuesList[activeIssueIndex].severity}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-mira-dark">{issuesList[activeIssueIndex].description}</p>
-
-                  {activeFix && (
-                    <div className="space-y-1.5 pt-2 border-t border-purple-100">
-                      <div className="text-[10px] text-purple-950 font-semibold">
-                        Legal Risk: <span className="font-normal text-purple-800">{activeFix.legalRisk}</span>
-                      </div>
-                      <div className="p-2 bg-gray-50 rounded border text-[10px] font-mono text-mira-dark max-h-28 overflow-y-auto">
-                        <span className="text-emerald-700 font-bold block mb-0.5">Proposed Change:</span>
-                        {activeFix.replacementSnippet}
-                      </div>
-
-                      <button
-                        onClick={() => handleApplyFix(activeFix)}
-                        disabled={applyingFix}
-                        className="w-full py-1.5 px-3 bg-mira-primary hover:bg-purple-800 text-white rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs"
-                      >
-                        {applyingFix ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                        Apply Solution & Revalidate
-                      </button>
-                    </div>
-                  )}
+            <div className="space-y-3.5 text-xs">
+              {/* 1. FACT SYNC CARD */}
+              <div className="p-3.5 bg-gray-50 rounded-xl border border-mira-border space-y-2">
+                <div className="flex items-center gap-1.5">
+                  <FileCheck className="w-4 h-4 text-mira-primary" />
+                  <span className="font-bold text-mira-dark text-xs">Sync Intake Facts</span>
                 </div>
-              )}
-
-              {/* 2. 1-CLICK FACT SYNC */}
-              <div className="p-3 bg-gray-50 rounded-xl border border-mira-border space-y-2">
-                <span className="font-bold text-mira-dark text-xs flex items-center gap-1.5">
-                  <FileCheck className="w-3.5 h-3.5 text-mira-primary" />
-                  Fact Consistency Sync
-                </span>
-                <p className="text-[11px] text-mira-muted leading-snug">
-                  Automatically synchronize all canonical party names, addresses, duration, and claim figures with your project facts.
+                <p className="text-[11px] text-mira-muted leading-relaxed">
+                  Update all party names, dates, amounts, and governing law to match project intake data.
                 </p>
                 <button
                   onClick={handleSyncAllFacts}
                   disabled={syncingFacts}
-                  className="w-full py-1.5 px-3 bg-white hover:bg-purple-50 border border-mira-border hover:border-purple-300 text-mira-dark rounded-lg font-semibold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-colors"
+                  className="w-full py-2 px-3 bg-white hover:bg-purple-50 border border-mira-border hover:border-purple-300 text-mira-dark rounded-lg font-semibold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-colors"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 text-mira-primary ${syncingFacts ? 'animate-spin' : ''}`} />
-                  {syncingFacts ? 'Synchronizing...' : 'Sync All Facts into Document'}
+                  {syncingFacts ? 'Synchronizing...' : '1-Click Sync Facts into Draft'}
                 </button>
               </div>
 
-              {/* 3. STANDARD APPROVED CLAUSES INJECTOR */}
-              <div className="p-3 bg-gray-50 rounded-xl border border-mira-border space-y-2">
-                <span className="font-bold text-mira-dark text-xs flex items-center gap-1.5">
-                  <BookOpen className="w-3.5 h-3.5 text-mira-secondary" />
-                  Approved Clause Library
-                </span>
-                <p className="text-[11px] text-mira-muted leading-snug">
-                  Inject institutional standard clauses directly into your draft:
+              {/* 2. AI REVISION & PROMPT */}
+              <div className="p-3.5 bg-gray-50 rounded-xl border border-mira-border space-y-2.5">
+                <div className="flex items-center gap-1.5">
+                  <Wand2 className="w-4 h-4 text-mira-primary" />
+                  <span className="font-bold text-mira-dark text-xs">AI Smart Revisions</span>
+                </div>
+                <p className="text-[11px] text-mira-muted leading-relaxed">
+                  Instruct AI to modify or append specific contractual terms:
+                </p>
+
+                <div className="flex gap-1.5">
+                  <input
+                    type="text"
+                    value={customInstruction}
+                    onChange={(e) => setCustomInstruction(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleRunCustomEdit()}
+                    placeholder="e.g. Change duration to 5 years, add fee recovery"
+                    className="flex-1 p-2 text-xs bg-white border border-mira-border rounded-lg focus:outline-hidden focus:border-mira-primary text-mira-dark placeholder:text-gray-400"
+                  />
+                  <button
+                    onClick={handleRunCustomEdit}
+                    disabled={runningCustomEdit || !customInstruction.trim()}
+                    className="px-3 bg-mira-primary hover:bg-purple-800 disabled:opacity-50 text-white rounded-lg flex items-center justify-center shadow-2xs transition-colors"
+                    title="Send instruction to AI"
+                  >
+                    {runningCustomEdit ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-1 flex-wrap">
+                  <button
+                    onClick={() => setCustomInstruction('Change duration to 5 years')}
+                    className="text-[10px] px-2 py-0.5 bg-white border border-gray-200 rounded-full hover:border-purple-300 text-mira-muted hover:text-mira-primary transition-colors"
+                  >
+                    + 5-Year Term
+                  </button>
+                  <button
+                    onClick={() => setCustomInstruction('Add permitted disclosures for legal and accounting advisors')}
+                    className="text-[10px] px-2 py-0.5 bg-white border border-gray-200 rounded-full hover:border-purple-300 text-mira-muted hover:text-mira-primary transition-colors"
+                  >
+                    + Advisor Exception
+                  </button>
+                  <button
+                    onClick={() => setCustomInstruction('Add emergency injunctive relief and attorney fees recovery')}
+                    className="text-[10px] px-2 py-0.5 bg-white border border-gray-200 rounded-full hover:border-purple-300 text-mira-muted hover:text-mira-primary transition-colors"
+                  >
+                    + Injunction & Fees
+                  </button>
+                  <button
+                    onClick={() => setCustomInstruction('Add mutual non-solicitation covenant for 12 months')}
+                    className="text-[10px] px-2 py-0.5 bg-white border border-gray-200 rounded-full hover:border-purple-300 text-mira-muted hover:text-mira-primary transition-colors"
+                  >
+                    + Non-Solicitation
+                  </button>
+                </div>
+
+                {customEditResult && (
+                  <div className="p-2.5 bg-purple-50 rounded-lg border border-purple-200 space-y-2 animate-in fade-in">
+                    <span className="text-[10px] font-bold text-purple-950 block">AI Proposal:</span>
+                    <p className="text-[11px] text-purple-900 leading-snug">{customEditResult.explanation}</p>
+                    <button
+                      onClick={handleApplyCustomEdit}
+                      disabled={applyingFix}
+                      className="w-full py-1.5 px-3 bg-mira-primary hover:bg-purple-800 text-white rounded-lg font-bold text-[11px] flex items-center justify-center gap-1 shadow-2xs transition-colors"
+                    >
+                      {applyingFix ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                      Apply Revision to Document
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* 3. STANDARD CLAUSES LIBRARY */}
+              <div className="p-3.5 bg-gray-50 rounded-xl border border-mira-border space-y-2">
+                <div className="flex items-center gap-1.5">
+                  <BookOpen className="w-4 h-4 text-mira-secondary" />
+                  <span className="font-bold text-mira-dark text-xs">Standard Clause Library</span>
+                </div>
+                <p className="text-[11px] text-mira-muted leading-relaxed">
+                  Inject vetted institutional clauses into your document:
                 </p>
 
                 {standardClauses.length > 0 && (
@@ -887,147 +1022,13 @@ export const DocumentEditor: React.FC = () => {
                 )}
 
                 {selectedStandardClause && (
-                  <div className="space-y-2">
-                    <div className="p-2 bg-white rounded border text-[10px] text-mira-dark font-serif max-h-24 overflow-y-auto leading-relaxed">
-                      {selectedStandardClause.content.slice(0, 200)}...
-                    </div>
-                    <button
-                      onClick={() => handleInsertStandardClause(selectedStandardClause.content)}
-                      className="w-full py-1.5 px-3 bg-white hover:bg-purple-50 border border-purple-200 text-mira-primary rounded-lg font-semibold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-colors"
-                    >
-                      <PlusCircle className="w-3.5 h-3.5" />
-                      Insert Clause into Document
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* 4. CUSTOM AI LEGAL PROMPT */}
-              <div className="p-3 bg-gray-50 rounded-xl border border-mira-border space-y-2">
-                <span className="font-bold text-mira-dark text-xs flex items-center gap-1.5">
-                  <Wand2 className="w-3.5 h-3.5 text-mira-primary" />
-                  Custom Legal Instruction
-                </span>
-                <p className="text-[11px] text-mira-muted leading-snug">
-                  Instruct the AI to modify or append specific contractual terms:
-                </p>
-
-                <div className="flex gap-1.5">
-                  <input
-                    type="text"
-                    value={customInstruction}
-                    onChange={(e) => setCustomInstruction(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleRunCustomEdit()}
-                    placeholder="e.g. Change duration to 5 years, add Delaware courts"
-                    className="flex-1 p-2 text-xs bg-white border border-mira-border rounded-lg focus:outline-hidden focus:border-mira-primary text-mira-dark"
-                  />
                   <button
-                    onClick={handleRunCustomEdit}
-                    disabled={runningCustomEdit || !customInstruction.trim()}
-                    className="px-3 bg-mira-primary hover:bg-purple-800 disabled:opacity-50 text-white rounded-lg flex items-center justify-center shadow-2xs"
+                    onClick={() => handleInsertStandardClause(selectedStandardClause.content)}
+                    className="w-full py-1.5 px-3 bg-white hover:bg-purple-50 border border-purple-200 text-mira-primary rounded-lg font-semibold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-colors"
                   >
-                    {runningCustomEdit ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                    <PlusCircle className="w-3.5 h-3.5" />
+                    Insert Clause at Cursor
                   </button>
-                </div>
-
-                {/* Quick Instruction Chips */}
-                <div className="flex items-center gap-1 flex-wrap pt-1">
-                  <button
-                    onClick={() => setCustomInstruction('Change duration to 5 years')}
-                    className="text-[10px] px-2 py-0.5 bg-white border border-gray-200 rounded-full hover:border-purple-300 text-mira-muted hover:text-mira-primary"
-                  >
-                    + 5-Year Term
-                  </button>
-                  <button
-                    onClick={() => setCustomInstruction('Add permitted disclosures for legal and accounting advisors')}
-                    className="text-[10px] px-2 py-0.5 bg-white border border-gray-200 rounded-full hover:border-purple-300 text-mira-muted hover:text-mira-primary"
-                  >
-                    + Advisor Exception
-                  </button>
-                  <button
-                    onClick={() => setCustomInstruction('Add emergency injunctive relief and attorney fees recovery')}
-                    className="text-[10px] px-2 py-0.5 bg-white border border-gray-200 rounded-full hover:border-purple-300 text-mira-muted hover:text-mira-primary"
-                  >
-                    + Injunction & Fees
-                  </button>
-                  <button
-                    onClick={() => setCustomInstruction('Add mutual non-solicitation covenant for 12 months')}
-                    className="text-[10px] px-2 py-0.5 bg-white border border-gray-200 rounded-full hover:border-purple-300 text-mira-muted hover:text-mira-primary"
-                  >
-                    + Non-Solicitation
-                  </button>
-                </div>
-
-                {customEditResult && (
-                  <div className="p-2.5 bg-purple-50/80 rounded-lg border border-purple-200 space-y-2 mt-2 animate-in fade-in">
-                    <span className="text-[10px] font-bold text-purple-950 block">AI Revision Proposal:</span>
-                    <p className="text-[11px] text-purple-900 leading-snug">{customEditResult.explanation}</p>
-                    <div className="p-1.5 bg-white rounded border border-purple-200 text-[10px] font-mono text-mira-dark max-h-24 overflow-y-auto">
-                      {customEditResult.revisedSnippet}
-                    </div>
-                    <button
-                      onClick={handleApplyCustomEdit}
-                      disabled={applyingFix}
-                      className="w-full py-1.5 px-3 bg-mira-primary hover:bg-purple-800 text-white rounded-lg font-bold text-[11px] flex items-center justify-center gap-1 shadow-2xs"
-                    >
-                      {applyingFix ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
-                      Apply Revision to Document
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* 5. CLAUSE EXPLAINER & REPHRASER */}
-              <div className="p-3 bg-gray-50 rounded-xl border border-mira-border space-y-2">
-                <span className="font-bold text-mira-dark text-xs flex items-center gap-1.5">
-                  <HelpCircle className="w-3.5 h-3.5 text-mira-primary" />
-                  Explain & Rephrase Highlighted Text
-                </span>
-
-                {selectedText && (
-                  <div className="p-2 bg-white rounded border text-[11px] font-serif italic line-clamp-3 text-mira-dark">
-                    Selected: "{selectedText}"
-                  </div>
-                )}
-
-                <div className="grid grid-cols-2 gap-1.5">
-                  <button
-                    onClick={handleExplain}
-                    disabled={explaining}
-                    className="py-1.5 px-2 bg-white border border-mira-border hover:border-mira-primary rounded-lg font-medium text-mira-dark text-center flex items-center justify-center gap-1 shadow-2xs"
-                  >
-                    <HelpCircle className="w-3 h-3 text-mira-primary" />
-                    Explain
-                    {explaining && <RefreshCw className="w-3 h-3 animate-spin" />}
-                  </button>
-
-                  <button
-                    onClick={() => handleRewrite('simple')}
-                    disabled={rewriting}
-                    className="py-1.5 px-2 bg-white border border-mira-border hover:border-mira-primary rounded-lg font-medium text-mira-dark text-center flex items-center justify-center gap-1 shadow-2xs"
-                  >
-                    <Wand2 className="w-3 h-3 text-mira-secondary" />
-                    Plain English
-                    {rewriting && <RefreshCw className="w-3 h-3 animate-spin" />}
-                  </button>
-                </div>
-
-                {/* Explanation Card */}
-                {explanation && (
-                  <div className="p-3 bg-white rounded-xl border border-purple-200 space-y-2 mt-2 animate-in fade-in">
-                    <div className="font-bold text-purple-950 text-[11px] border-b pb-1">
-                      Plain-Language Legal Explanation
-                    </div>
-                    <p className="text-[11px] text-mira-dark leading-relaxed">{explanation.plainLanguage}</p>
-                    <div>
-                      <span className="font-bold text-[10px] text-mira-muted uppercase">Commercial Purpose</span>
-                      <p className="text-[11px] text-mira-dark mt-0.5">{explanation.purpose}</p>
-                    </div>
-                    <div>
-                      <span className="font-bold text-[10px] text-mira-muted uppercase">Legal Implication</span>
-                      <p className="text-[11px] text-mira-dark mt-0.5">{explanation.legalImplication}</p>
-                    </div>
-                  </div>
                 )}
               </div>
             </div>

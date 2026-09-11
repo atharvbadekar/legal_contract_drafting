@@ -611,6 +611,66 @@ export class GenerationService {
       }
     }
 
+    // 6. Missing Canonical Section Fix
+    if (issue?.type === 'MISSING_SECTION' || desc.toLowerCase().includes('requires a') || desc.toLowerCase().includes('missing')) {
+      const secName = (issue?.section || '').toLowerCase();
+      let canonicalSection = '';
+      let explanation = '';
+
+      if (secName.includes('return') || secName.includes('destruction')) {
+        canonicalSection = `## 5. RETURN OR DESTRUCTION OF MATERIALS\n\nUpon written request by the Disclosing Party, or upon termination or expiration of this Agreement, the Receiving Party shall promptly, and in any event within seven (7) business days, return or destroy all tangible and electronic materials containing Confidential Information, and provide written certification of compliance signed by an authorized officer.`;
+        explanation = `Added standard institutional Return or Destruction of Materials covenant.`;
+      } else if (secName.includes('remed') || secName.includes('injunct')) {
+        canonicalSection = `## 6. REMEDIES AND INJUNCTIVE RELIEF\n\nThe Receiving Party acknowledges that any unauthorized disclosure or use of Confidential Information would cause irreparable harm for which monetary damages alone would be inadequate. Accordingly, the Disclosing Party shall be entitled to seek equitable relief, including temporary and permanent injunctive relief, in addition to all other remedies available at law.`;
+        explanation = `Added standard Remedies and Injunctive Relief clause.`;
+      } else if (secName.includes('dispute') || secName.includes('jurisdiction') || secName.includes('governing')) {
+        const govLaw = structuredFacts.jurisdiction || structuredFacts.governingLaw || 'the State of Delaware';
+        canonicalSection = `## 7. GOVERNING LAW AND DISPUTE RESOLUTION\n\nThis Agreement shall be governed by and construed in accordance with the laws of ${govLaw}. Any dispute, controversy, or claim arising under or relating to this Agreement shall be subject to the exclusive jurisdiction of the state and federal courts located in ${govLaw}.`;
+        explanation = `Added canonical Governing Law and Dispute Resolution clause.`;
+      } else if (secName.includes('term') || secName.includes('duration')) {
+        const duration = structuredFacts.duration || '3 years';
+        canonicalSection = `## 4. TERM AND DURATION\n\nThis Agreement and the obligations of confidentiality herein shall remain in full force and effect for a period of ${duration} from the Effective Date, after which the obligations shall expire except with respect to trade secrets which shall survive indefinitely.`;
+        explanation = `Added canonical Term and Duration clause aligned with your project facts (${duration}).`;
+      } else if (secName.includes('definition')) {
+        canonicalSection = `## 1. DEFINITION OF CONFIDENTIAL INFORMATION\n\n"Confidential Information" includes all non-public technical, operational, financial, and business information disclosed by the Disclosing Party to the Receiving Party, whether in writing, orally, or in digital format.`;
+        explanation = `Added canonical Definition of Confidential Information section.`;
+      } else if (secName.includes('exception')) {
+        canonicalSection = `## 3. EXCEPTIONS TO CONFIDENTIALITY\n\nConfidential Information shall not include information that: (a) becomes publicly known through no wrongful act of the Receiving Party; (b) was lawfully known prior to disclosure; (c) is rightfully received from a third party without breach; or (d) is independently developed without reference to the Disclosing Party's information.`;
+        explanation = `Added canonical Exceptions to Confidentiality section.`;
+      } else if (secName.includes('obligation') || secName.includes('confidentiality')) {
+        canonicalSection = `## 2. CONFIDENTIALITY OBLIGATIONS\n\nThe Receiving Party shall maintain all Confidential Information in strict confidence and shall exercise at least a reasonable degree of care. The Receiving Party shall use the Confidential Information solely for the authorized purpose and shall not disclose it to third parties without prior written consent.`;
+        explanation = `Added canonical Confidentiality Obligations section.`;
+      } else if (secName.includes('demand')) {
+        const amount = structuredFacts.amount || '$145,000 USD';
+        canonicalSection = `## FORMAL DEMAND FOR PAYMENT\n\nDemand is hereby made upon you to remit the outstanding sum of ${amount} within the statutory notice period, failing which immediate legal proceedings shall be initiated against you.`;
+        explanation = `Added canonical Demand section.`;
+      } else if (secName.includes('consequence')) {
+        canonicalSection = `## LEGAL CONSEQUENCES OF DEFAULT\n\nTake notice that if you fail to comply with the aforesaid demand, our client has issued peremptory instructions to institute civil and criminal proceedings against you before the competent court of jurisdiction, holding you liable for all legal costs, interest, and damages.`;
+        explanation = `Added canonical Legal Consequences section.`;
+      } else {
+        canonicalSection = `## ${issue?.section || 'STANDARD SECTION'}\n\nThe Parties hereby agree to adhere to standard industry terms and governing statutory covenants regarding ${issue?.section || 'this provision'}.`;
+        explanation = `Added standardized legal section for ${issue?.section || 'Section'}.`;
+      }
+
+      let fixedContent = content;
+      const sigMatch = content.search(/##\s*(?:EXECUTION|SIGNATURES|IN WITNESS WHEREOF)/i);
+      if (sigMatch !== -1) {
+        fixedContent = `${content.substring(0, sigMatch).trim()}\n\n---\n\n${canonicalSection}\n\n---\n\n${content.substring(sigMatch).trim()}`;
+      } else {
+        fixedContent = `${content.trim()}\n\n---\n\n${canonicalSection}\n`;
+      }
+
+      return {
+        issueType: issue.type,
+        explanation,
+        legalRisk: `Absence of this canonical section creates contractual incompleteness and leaves critical rights unenforced under applicable law.`,
+        targetSnippet: 'Missing Section',
+        replacementSnippet: canonicalSection,
+        actionType: 'INSERT',
+        fixedContent
+      };
+    }
+
     // Default: Generic Intelligent Heuristic Fix
     return {
       issueType: issue?.type || 'ADVISORY',

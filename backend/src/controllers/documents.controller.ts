@@ -273,6 +273,7 @@ export class DocumentsController {
       const updated = await prisma.document.update({
         where: { id },
         data: {
+          content: docContent,
           validationScore: validationResult.overallScore,
           status: validationResult.status === 'PASSED' ? 'COMPLETED' : 'NEEDS_REVIEW',
           validationSummary: {
