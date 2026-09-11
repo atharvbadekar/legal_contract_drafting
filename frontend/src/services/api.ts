@@ -1,17 +1,30 @@
 import axios from 'axios';
 import { DocumentRecord, ClauseRecord, KnowledgeDocumentRecord, TemplateRecord, User } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+export const getApiBaseUrl = (): string => {
+  if (typeof window !== 'undefined') {
+    const custom = localStorage.getItem('atharv_api_url');
+    if (custom && custom.trim().length > 0) {
+      return custom.trim().replace(/\/+$/, '');
+    }
+  }
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl && envUrl.trim().length > 0) {
+    return envUrl.trim().replace(/\/+$/, '');
+  }
+  return '/api';
+};
 
 export const api = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: getApiBaseUrl(),
   headers: {
     'Content-Type': 'application/json'
   }
 });
 
-// Attach token to outgoing requests
+// Attach token and dynamically resolve baseURL to outgoing requests
 api.interceptors.request.use((config) => {
+  config.baseURL = getApiBaseUrl();
   const token = localStorage.getItem('atharv_token') || localStorage.getItem('mira_token');
   if (token && config.headers) {
     config.headers.Authorization = `Bearer ${token}`;
