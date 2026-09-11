@@ -21,7 +21,11 @@ export const Login: React.FC = () => {
       login(data.token, data.user);
       navigate('/dashboard');
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Invalid email or password');
+      if (err.message === 'Network Error' || !err.response) {
+        setError('Cannot connect to backend API server. If deployed on Render free tier, please wait 30-45 seconds for the server to wake up from sleep.');
+      } else {
+        setError(err.response?.data?.error || 'Invalid email or password');
+      }
     } finally {
       setLoading(false);
     }
@@ -37,7 +41,11 @@ export const Login: React.FC = () => {
       login(data.token, data.user);
       navigate('/dashboard');
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed demo login');
+      if (err.message === 'Network Error' || !err.response) {
+        setError('Cannot connect to backend API server. If deployed on Render free tier, please wait 30-45 seconds for the server to wake up from sleep.');
+      } else {
+        setError(err.response?.data?.error || 'Failed demo login');
+      }
     } finally {
       setLoading(false);
     }

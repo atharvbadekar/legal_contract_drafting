@@ -69,14 +69,37 @@ export class AuthController {
       }
 
       const { email, password } = parsed.data;
-      const user = await prisma.user.findUnique({ where: { email } });
-      if (!user) {
-        return res.status(401).json({ error: 'Invalid email or password' });
-      }
+      let user = await prisma.user.findUnique({ where: { email } });
 
-      const isMatch = await bcrypt.compare(password, user.passwordHash);
-      if (!isMatch) {
-        return res.status(401).json({ error: 'Invalid email or password' });
+      // If user not found, auto-provision demo credentials so demo access never fails on fresh/unseeded databases
+      if (!user) {
+        const isDemoUser = (email === 'user@atharv.legal' || email === 'user@mira.legal') && password === 'user123';
+        const isDemoAdmin = (email === 'admin@atharv.legal' || email === 'admin@mira.legal') && password === 'admin123';
+
+        if (isDemoUser || isDemoAdmin) {
+          const role = isDemoAdmin ? 'ADMIN' : 'USER';
+          const name = isDemoAdmin ? 'Atharv Legal Admin (Legal Lead)' : 'Atharv Researcher';
+          const passwordHash = await bcrypt.hash(password, 10);
+          user = await prisma.user.create({
+            data: { email, passwordHash, name, role }
+          });
+        } else {
+          return res.status(401).json({ error: 'Invalid email or password' });
+        }
+      } else {
+        const isMatch = await bcrypt.compare(password, user.passwordHash);
+        if (!isMatch) {
+          // If demo user password mismatch, auto-sync to default demo password
+          if ((email === 'user@atharv.legal' && password === 'user123') || (email === 'admin@atharv.legal' && password === 'admin123')) {
+            const newHash = await bcrypt.hash(password, 10);
+            user = await prisma.user.update({
+              where: { id: user.id },
+              data: { passwordHash: newHash }
+            });
+          } else {
+            return res.status(401).json({ error: 'Invalid email or password' });
+          }
+        }
       }
 
       const token = jwt.sign(
