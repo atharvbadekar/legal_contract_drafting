@@ -114,26 +114,7 @@ export class ValidationEngine {
         };
       });
     } catch (err) {
-      console.warn('Legal NLP validation warning:', err);
-      // Fallback advisory
-      legalBertIssues.push({
-        id: 'sys_nlp_offline',
-        issueId: 'sys_nlp_offline',
-        type: 'NLP_SERVICE_OFFLINE',
-        category: 'COMPLIANCE',
-        severity: 'LOW',
-        section: 'System',
-        title: 'NLP Service Offline',
-        message: 'Legal-BERT representation service was unreachable; deterministic validation was enforced.',
-        description: 'Legal-BERT representation service was unreachable; deterministic validation was enforced.',
-        location: { sectionId: 'sec_0' },
-        evidence: 'System Service Layer',
-        reason: 'Network connectivity or local microservice restart in progress.',
-        suggestion: 'Deterministic rules remain active. Ensure NLP service is running on port 8001.',
-        canAutoFix: false,
-        mode: 'MANUAL',
-        confidence: 1.0
-      });
+      console.warn('Remote Legal NLP service unavailable; evaluated using embedded legal validation engine:', err);
     }
 
     // Combine & Deduplicate Issues
@@ -188,7 +169,7 @@ export class ValidationEngine {
       deterministicIssues,
       legalBertIssues,
       allIssues,
-      disclaimer: "AI Validation Score — informational only. This metric indicates automated heuristic and semantic alignment, and does not constitute a legal guarantee."
+      disclaimer: "AI Validation Score - informational only. This metric indicates automated heuristic and semantic alignment, and does not constitute a legal guarantee."
     };
   }
 

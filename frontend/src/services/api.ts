@@ -5,12 +5,14 @@ export const getApiBaseUrl = (): string => {
   if (typeof window !== 'undefined') {
     const custom = localStorage.getItem('atharv_api_url');
     if (custom && custom.trim().length > 0) {
-      return custom.trim().replace(/\/+$/, '');
+      const clean = custom.trim().replace(/\/+$/, '');
+      return clean.endsWith('/api') ? clean : `${clean}/api`;
     }
   }
   const envUrl = import.meta.env.VITE_API_URL;
   if (envUrl && envUrl.trim().length > 0) {
-    return envUrl.trim().replace(/\/+$/, '');
+    const clean = envUrl.trim().replace(/\/+$/, '');
+    return clean.endsWith('/api') ? clean : `${clean}/api`;
   }
   return '/api';
 };
