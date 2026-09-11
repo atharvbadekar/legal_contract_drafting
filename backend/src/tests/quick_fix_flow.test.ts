@@ -481,4 +481,141 @@ Content of section two.`;
     assert.ok(docAfter2.includes('## 2. Term'));
   });
 
+  // =========================================================================
+  // SCENARIO 13: Database E2E verifyAndApplyPatch verifies prisma.document works
+  // =========================================================================
+  it('Scenario 13: patchService.verifyAndApplyPatch executes cleanly with database document', async () => {
+    const { prisma } = await import('../utils/prisma.js');
+    
+    let isDbAvailable = false;
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      isDbAvailable = true;
+    } catch {
+      console.log('Database not reachable in test sandbox; skipping live DB scenario 13.');
+      return;
+    }
+
+    // Find or create a test user
+    let user = await prisma.user.findFirst();
+    if (!user) {
+      user = await prisma.user.create({
+        data: {
+          email: `test-${Date.now()}@example.com`,
+          passwordHash: 'dummyhash',
+          name: 'Test User'
+        }
+      });
+    }
+
+    // Create a test document
+    const initialContent = `## 1. Parties\nThis Agreement is between Acme Corp and Beta LLC.\n\n---\n\n## 2. Term & Termination\nEither party may terminate at any time upon notice.\n\n---\n\n## 3. Signatures\nSigned by Parties.`;
+    const facts = {
+      parties: { disclosingParty: 'Acme Corp', receivingParty: 'Beta LLC' },
+      noticePeriod: '30 days'
+    };
+
+    const doc = await prisma.document.create({
+      data: {
+        userId: user.id,
+        title: 'E2E Test NDA',
+        documentType: 'NDA',
+        content: initialContent,
+        structuredFacts: facts,
+        validationScore: 80.0
+      }
+    });
+
+    try {
+      // Validate to get the patch
+      const parsed = parseDocumentStructure(initialContent);
+      const sections = parsed.sections.map(s => ({
+        sectionType: s.title.toLowerCase().includes('parties') ? 'parties' : s.title.toLowerCase().includes('term') ? 'termination' : 'signatures',
+        title: s.title,
+        content: s.content
+      }));
+      const valResult = await validationEngine.validate('NDA', sections, facts, initialContent);
+      const noticeIssue = valResult.allIssues.find(i => i.type === 'MISSING_NOTICE_PERIOD');
+
+      assert.ok(noticeIssue?.proposedPatch, 'Must have proposed patch');
+
+      // Now verify and apply via patchService - this calls prisma.document and prisma.documentVersion
+      const result = await patchService.verifyAndApplyPatch({
+        documentId: doc.id,
+        patch: noticeIssue!.proposedPatch!,
+        currentContent: initialContent,
+        userId: user.id
+      });
+
+      assert.strictEqual(result.applied, true, 'Patch must be applied');
+      assert.ok(result.newContent.includes('30 days written notice'), 'New content must include notice period');
+
+      // Verify DB was updated
+      const updatedDoc = await prisma.document.findUnique({ where: { id: doc.id } });
+      assert.ok(updatedDoc?.content.includes('30 days written notice'), 'Database must be updated');
+
+      // Verify a version was created
+      const versions = await prisma.documentVersion.findMany({ where: { documentId: doc.id } });
+      assert.ok(versions.length >= 1, 'A version snapshot must be created');
+    } finally {
+      // Clean up
+      await prisma.document.delete({ where: { id: doc.id } }).catch(() => {});
+    }
+  });
+
+  // =========================================================================
+  // SCENARIO 14: Database E2E batchApplySafePatches executes cleanly
+  // =========================================================================
+  it('Scenario 14: patchService.batchApplySafePatches executes cleanly without undefined prisma', async () => {
+    const { prisma } = await import('../utils/prisma.js');
+    
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+    } catch {
+      console.log('Database not reachable in test sandbox; skipping live DB scenario 14.');
+      return;
+    }
+
+    let user = await prisma.user.findFirst();
+    if (!user) {
+      user = await prisma.user.create({
+        data: {
+          email: `test-batch-${Date.now()}@example.com`,
+          passwordHash: 'dummyhash',
+          name: 'Batch User'
+        }
+      });
+    }
+
+    const initialContent = `## 1. Parties\nThis Agreement is between Acme Corp and Beta LLC.\n\n---\n\n## 2. Term & Termination\nEither party may terminate at any time upon notice.\n\n---\n\n## 3. Signatures\nSigned by Parties.`;
+    const facts = {
+      parties: { disclosingParty: 'Acme Corp', receivingParty: 'Beta LLC' },
+      noticePeriod: '30 days'
+    };
+
+    const doc = await prisma.document.create({
+      data: {
+        userId: user.id,
+        title: 'Batch Safe Test NDA',
+        documentType: 'NDA',
+        content: initialContent,
+        structuredFacts: facts,
+        validationScore: 80.0
+      }
+    });
+
+    try {
+      const batchResult = await patchService.batchApplySafePatches(doc.id, user.id);
+      assert.strictEqual(batchResult.success, true);
+      assert.ok(batchResult.appliedCount >= 1, 'At least 1 safe patch applied');
+      assert.ok(batchResult.content.includes('30 days written notice'));
+
+      const updated = await prisma.document.findUnique({ where: { id: doc.id } });
+      assert.ok(updated?.content.includes('30 days written notice'));
+    } finally {
+      await prisma.document.delete({ where: { id: doc.id } }).catch(() => {});
+    }
+  });
+
 });
+

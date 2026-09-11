@@ -109,10 +109,22 @@ export class LegalNLPClient {
     approvedClauses: Array<{ clauseType: string; title?: string; content: string }> = []
   ): Promise<ValidateResponse> {
     try {
+      const sanitizedSections = Array.isArray(sections) ? sections.map(s => ({
+        sectionType: s.sectionType || 'general',
+        title: s.title || null,
+        content: s.content || ''
+      })) : [];
+
+      const sanitizedClauses = Array.isArray(approvedClauses) ? approvedClauses.map(c => ({
+        clauseType: c.clauseType || 'general',
+        title: c.title || null,
+        content: c.content || ''
+      })) : [];
+
       const res = await axios.post<ValidateResponse>(`${this.baseURL}/validate`, {
         documentType,
-        sections,
-        approvedClauses
+        sections: sanitizedSections,
+        approvedClauses: sanitizedClauses
       }, { timeout: 15000 });
       return res.data;
     } catch (err: any) {

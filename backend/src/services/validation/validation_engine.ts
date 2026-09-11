@@ -59,9 +59,19 @@ export class ValidationEngine {
     documentType: string,
     sections: Array<{ sectionType: string; title?: string; content: string }>,
     structuredFacts: Record<string, any>,
-    approvedClauses: Array<{ clauseType: string; title: string; content: string }> = []
+    approvedClausesOrFullText?: Array<{ clauseType: string; title?: string; content: string }> | string,
+    optionalFullText?: string
   ): Promise<ComprehensiveValidationResult> {
-    const fullText = sections.map(s => s.content).join('\n\n---\n\n');
+    let approvedClauses: Array<{ clauseType: string; title?: string; content: string }> = [];
+    let fullText: string;
+
+    if (typeof approvedClausesOrFullText === 'string') {
+      fullText = approvedClausesOrFullText;
+      approvedClauses = [];
+    } else {
+      approvedClauses = Array.isArray(approvedClausesOrFullText) ? approvedClausesOrFullText : [];
+      fullText = optionalFullText || sections.map(s => s.content).join('\n\n---\n\n');
+    }
 
     // Layer 1: Deterministic Validation
     const deterministicIssues: ValidationFinding[] = this.runDeterministicValidation(

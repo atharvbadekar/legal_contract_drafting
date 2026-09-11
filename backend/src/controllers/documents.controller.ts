@@ -418,6 +418,12 @@ export class DocumentsController {
         });
       }
 
+      if (targetPatch && !targetPatch.canAutoFix && targetPatch.mode === 'MANUAL') {
+        return res.status(400).json({
+          error: targetPatch.reason || 'This issue requires a manual business decision. ATHARV does not invent missing terms.'
+        });
+      }
+
       const result = await patchService.verifyAndApplyPatch({
         documentId: id,
         patch: targetPatch,

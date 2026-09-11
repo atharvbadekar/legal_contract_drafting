@@ -4,7 +4,7 @@
  * safety guarantees (preventing regressions), transactional batch fixes, and instant undo.
  */
 
-import prisma from '../../utils/prisma.js';
+import { prisma } from '../../utils/prisma.js';
 import {
   DocumentPatch,
   applyDocumentPatch,
@@ -262,9 +262,28 @@ export class PatchService {
     }
 
     const currentContent = doc.content;
-    const initialScore = doc.validationScore || 0;
     const initialSummary = (doc.validationSummary as any) || {};
-    const initialHighIssues = (initialSummary.issues || []).filter((i: any) => i.severity === 'HIGH').length;
+    let initialHighIssues = (initialSummary.issues || []).filter((i: any) => i.severity === 'HIGH').length;
+    let initialScore = doc.validationScore || 0;
+
+    // If initial summary has no recorded issues or baseline score is not recorded,
+    // establish true baseline by validating currentContent
+    if (!initialSummary.issues || initialSummary.issues.length === 0 || initialScore === 0) {
+      const currentParsed = parseDocumentStructure(currentContent);
+      const currentSections = currentParsed.sections.map(s => ({
+        sectionType: s.sectionType,
+        title: s.title,
+        content: s.content
+      }));
+      const currentVal = await validationEngine.validate(
+        doc.documentType,
+        currentSections,
+        doc.structuredFacts as any,
+        currentContent
+      );
+      initialHighIssues = currentVal.allIssues.filter(i => i.severity === 'HIGH').length;
+      initialScore = currentVal.overallScore;
+    }
 
     // 1. Dry run: Apply patch to candidate content in memory
     const { newContent } = applyDocumentPatch(currentContent, patch);
@@ -280,7 +299,8 @@ export class PatchService {
     const dryRunValidation = await validationEngine.validate(
       doc.documentType,
       candidateSections,
-      doc.structuredFacts as any
+      doc.structuredFacts as any,
+      newContent
     );
 
     // 3. Safety Guard: Check for regressions
@@ -299,6 +319,8 @@ export class PatchService {
 
     // 4. Create snapshot version before committing (for 1-click Undo)
     const nextVersionNum = (doc.versions[0]?.versionNumber || 0) + 1;
+    const effectiveUserId = (userId && userId !== 'system') ? userId : doc.userId;
+
     await prisma.documentVersion.create({
       data: {
         documentId: doc.id,
@@ -306,7 +328,7 @@ export class PatchService {
         structuredFacts: doc.structuredFacts as any,
         content: currentContent, // Save previous state
         validationResult: doc.validationSummary as any,
-        createdById: userId
+        createdById: effectiveUserId
       }
     });
 
@@ -330,7 +352,9 @@ export class PatchService {
 
     return {
       success: true,
+      applied: true,
       document: updatedDoc,
+      newContent: updatedDoc.content,
       validationResult: dryRunValidation,
       patch,
       versionCreated: nextVersionNum
@@ -340,17 +364,21 @@ export class PatchService {
   /**
    * Transactionally executes all safe auto-fixes in a single pass.
    */
-  async batchApplySafePatches(params: {
-    documentId: string;
-    userId: string;
-  }): Promise<{
+  async batchApplySafePatches(
+    paramsOrId: {
+      documentId: string;
+      userId?: string;
+    } | string,
+    optionalUserId?: string
+  ): Promise<{
     success: boolean;
     appliedCount: number;
     remainingIssuesCount: number;
     document: any;
     validationResult: any;
   }> {
-    const { documentId, userId } = params;
+    const documentId = typeof paramsOrId === 'string' ? paramsOrId : paramsOrId.documentId;
+    const userId = typeof paramsOrId === 'string' ? (optionalUserId || 'system') : (paramsOrId.userId || 'system');
 
     const doc = await prisma.document.findUnique({
       where: { id: documentId },
@@ -364,7 +392,7 @@ export class PatchService {
     // 1. Initial validation
     const parsed = parseDocumentStructure(doc.content);
     const sections = parsed.sections.map(s => ({ sectionType: s.sectionType, title: s.title, content: s.content }));
-    const initialVal = await validationEngine.validate(doc.documentType, sections, doc.structuredFacts as any);
+    const initialVal = await validationEngine.validate(doc.documentType, sections, doc.structuredFacts as any, doc.content);
 
     // 2. Identify safe issues
     const safeIssues = initialVal.allIssues.filter(i => i.canAutoFix && i.mode === 'SAFE_AUTO' && i.confidence >= 0.90);
@@ -381,6 +409,8 @@ export class PatchService {
 
     // 3. Create a single baseline version before batch execution
     const nextVersionNum = (doc.versions[0]?.versionNumber || 0) + 1;
+    const effectiveUserId = (userId && userId !== 'system') ? userId : doc.userId;
+
     await prisma.documentVersion.create({
       data: {
         documentId: doc.id,
@@ -388,7 +418,7 @@ export class PatchService {
         structuredFacts: doc.structuredFacts as any,
         content: doc.content,
         validationResult: doc.validationSummary as any,
-        createdById: userId
+        createdById: effectiveUserId
       }
     });
 
@@ -419,7 +449,7 @@ export class PatchService {
     // 5. Final validation of batch result
     const finalParsed = parseDocumentStructure(runningContent);
     const finalSections = finalParsed.sections.map(s => ({ sectionType: s.sectionType, title: s.title, content: s.content }));
-    const finalVal = await validationEngine.validate(doc.documentType, finalSections, doc.structuredFacts as any);
+    const finalVal = await validationEngine.validate(doc.documentType, finalSections, doc.structuredFacts as any, runningContent);
 
     // 6. Commit updated document
     const updatedDoc = await prisma.document.update({
@@ -444,6 +474,7 @@ export class PatchService {
       appliedCount,
       remainingIssuesCount: finalVal.allIssues.length,
       document: updatedDoc,
+      content: updatedDoc.content,
       validationResult: finalVal
     };
   }
@@ -451,15 +482,18 @@ export class PatchService {
   /**
    * Restores the document to its immediate previous snapshot (1-Click Undo).
    */
-  async undoLastFix(params: {
-    documentId: string;
-    userId: string;
-  }): Promise<{
+  async undoLastFix(
+    paramsOrId: {
+      documentId: string;
+      userId?: string;
+    } | string,
+    _optionalUserId?: string
+  ): Promise<{
     success: boolean;
     document: any;
     message: string;
   }> {
-    const { documentId } = params;
+    const documentId = typeof paramsOrId === 'string' ? paramsOrId : paramsOrId.documentId;
 
     const latestVersion = await prisma.documentVersion.findFirst({
       where: { documentId },
