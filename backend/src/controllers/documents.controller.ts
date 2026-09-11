@@ -5,6 +5,7 @@ import { agentPlanner } from '../services/agent/agent_planner.js';
 import { validationEngine } from '../services/validation/validation_engine.js';
 import { patchService } from '../services/validation/patch_service.js';
 import { exportService } from '../services/documents/export_service.js';
+import { parseDocumentStructure } from '../services/documents/document_structure.js';
 
 export class DocumentsController {
   async list(req: AuthRequest, res: Response) {
@@ -234,18 +235,13 @@ export class DocumentsController {
       const docContent = content || doc.content;
       const facts = structuredFacts || (doc.structuredFacts as any) || {};
 
-      // Parse sections from markdown
-      const sectionBlocks = docContent.split('---').map((block: string) => {
-        const lines = block.trim().split('\n');
-        const headingLine = lines.find((l: string) => l.startsWith('## ') || l.startsWith('# '));
-        const heading = headingLine ? headingLine.replace(/#+\s*/, '') : 'General Section';
-        const sectionType = heading.toLowerCase().replace(/[^a-z0-9]/g, '_');
-        return {
-          sectionType,
-          title: heading,
-          content: block.trim()
-        };
-      });
+      // Parse sections using unified document structure parser
+      const parsed = parseDocumentStructure(docContent);
+      const sectionBlocks = parsed.sections.map(s => ({
+        sectionType: s.sectionType,
+        title: s.title,
+        content: s.content
+      }));
 
       // Retrieve approved clauses for comparison
       const approvedClauses = await prisma.clause.findMany({
@@ -256,7 +252,8 @@ export class DocumentsController {
         doc.documentType,
         sectionBlocks,
         facts,
-        approvedClauses.map(c => ({ clauseType: c.clauseType, title: c.title, content: c.content }))
+        approvedClauses.map(c => ({ clauseType: c.clauseType, title: c.title, content: c.content })),
+        docContent
       );
 
       // Record result

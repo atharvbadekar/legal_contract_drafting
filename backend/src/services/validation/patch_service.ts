@@ -100,20 +100,22 @@ export class PatchService {
     // 3. MISSING TERMINATION NOTICE PERIOD (SAFE AUTO FIX)
     // ==========================================
     if (issueType === 'MISSING_NOTICE_PERIOD' || (desc.toLowerCase().includes('notice') && desc.toLowerCase().includes('period'))) {
-      const noticePeriod = structuredFacts.noticePeriod || structuredFacts.responsePeriod || 'thirty (30) days';
-      const located = locateTextInDocument(content, /written notice/i, 'Termination');
+      const rawPeriod = structuredFacts.noticePeriod || structuredFacts.responsePeriod || '30 days';
+      const noticePeriod = rawPeriod.includes('day') ? rawPeriod : `${rawPeriod} days`;
+      const located = locateTextInDocument(content, /(?:upon|by)?\s*(?:prior\s*)?(?:written\s*)?notice/i, 'Termination');
+      const targetOrig = located.evidence.match(/(?:upon|by)\s*(?:prior\s*)?(?:written\s*)?notice/i)?.[0] || 'upon notice';
 
       return {
         id: `patch_notice_${Date.now()}`,
         issueId: issue.id || issue.issueId || 'det_notice',
         action: 'REPLACE_TEXT',
         target: located.location,
-        originalText: 'by written notice',
-        replacementText: `by providing ${noticePeriod}' prior written notice`,
-        reason: `Specifies required ${noticePeriod} advance notice period before termination takes effect.`,
+        originalText: targetOrig,
+        replacementText: `upon ${noticePeriod} prior written notice`,
+        reason: `Specifies required ${noticePeriod} advance written notice period before termination takes effect.`,
         canAutoFix: true,
         mode: 'SAFE_AUTO',
-        confidence: 0.93,
+        confidence: 0.95,
         requiresUserInput: false
       };
     }
@@ -123,35 +125,77 @@ export class PatchService {
     // ==========================================
     if (issueType === 'MISSING_SECTION') {
       const secName = (issue.section || '').toLowerCase();
+      const parsed = parseDocumentStructure(content);
+      const govLaw = structuredFacts.jurisdiction || structuredFacts.governingLaw || 'the State of California';
+      const durationTerm = structuredFacts.duration || 'three (3) years';
+      
+      // Determine smartest insertion target (before signatures if exists, else after last section)
+      const sigSec = parsed.sections.find(s => 
+        s.sectionType.includes('signature') || 
+        /signature|execution|in witness/i.test(s.title)
+      );
+
+      let targetLocation: DocumentLocation;
+      let actionType: 'INSERT_BEFORE' | 'INSERT_AFTER' = 'INSERT_AFTER';
+
+      if (sigSec) {
+        targetLocation = { sectionId: sigSec.id };
+        actionType = 'INSERT_BEFORE';
+      } else {
+        const lastSec = parsed.sections[parsed.sections.length - 1];
+        targetLocation = { sectionId: lastSec?.id || 'sec_0' };
+        actionType = 'INSERT_AFTER';
+      }
+
       let canonicalSection = '';
       let explanation = '';
 
-      if (secName.includes('return') || secName.includes('destruct')) {
-        canonicalSection = `## 5. RETURN OR DESTRUCTION OF MATERIALS\n\nUpon written request by the Disclosing Party, or upon expiration or termination of this Agreement, the Receiving Party shall promptly, and in any event within seven (7) business days, return or destroy all tangible and electronic materials containing Confidential Information, and provide written certification of compliance signed by an authorized corporate officer.`;
+      if (secName.includes('definition') || secName.includes('scope')) {
+        canonicalSection = `## DEFINITION OF CONFIDENTIAL INFORMATION\n\nFor purposes of this Agreement, "Confidential Information" shall include all proprietary, non-public, technical, commercial, financial, operational, and other information disclosed directly or indirectly by the Disclosing Party to the Receiving Party, whether in oral, visual, written, electronic, or machine-readable format, including without limitation source code, specifications, algorithms, customer records, and trade secrets, which is marked as confidential or which by its nature should reasonably be understood to be confidential.`;
+        explanation = 'Adds comprehensive Definition of Confidential Information clause.';
+      } else if (secName.includes('confidential') || secName.includes('obligation')) {
+        canonicalSection = `## NON-DISCLOSURE AND CONFIDENTIALITY COVENANTS\n\nThe Receiving Party agrees to maintain all Confidential Information in strict confidence and shall exercise at least the same degree of care to protect the secrecy of the Confidential Information as it uses to protect its own confidential information of like nature, but in no event less than a reasonable degree of care. The Receiving Party shall not, without the prior express written consent of the Disclosing Party, disclose, publish, disseminate, or copy any Confidential Information to any third party, nor use the Confidential Information for any purpose other than the authorized Purpose stated herein.`;
+        explanation = 'Adds standard institutional Non-Disclosure and Confidentiality Obligations clause.';
+      } else if (secName.includes('exception') || secName.includes('exclusion')) {
+        canonicalSection = `## EXCLUSIONS FROM CONFIDENTIALITY\n\nThe obligations of confidentiality and non-use set forth herein shall not apply to any information that the Receiving Party can establish by documentary evidence: (a) is or becomes publicly available through no breach or fault of the Receiving Party; (b) was already in the rightful possession of the Receiving Party prior to disclosure by the Disclosing Party; (c) is independently developed by the Receiving Party without reference to or reliance upon any Confidential Information; or (d) is rightfully received by the Receiving Party from an independent third party having no confidentiality duty to the Disclosing Party.`;
+        explanation = 'Adds 4 canonical statutory exclusions from confidentiality.';
+      } else if (secName.includes('permitted') || secName.includes('compelled')) {
+        canonicalSection = `## PERMITTED DISCLOSURES AND COMPELLED PROCESS\n\nThe Receiving Party may disclose Confidential Information solely to its directors, officers, employees, and professional advisors who have a need to know such information for the authorized Purpose and who are bound by written non-disclosure obligations no less restrictive than those contained herein. If the Receiving Party is ordered by a court or administrative body of competent jurisdiction to disclose any Confidential Information, the Receiving Party shall provide prompt written notice to the Disclosing Party prior to disclosure, to allow the Disclosing Party a reasonable opportunity to seek a protective order.`;
+        explanation = 'Adds standard Permitted Disclosures and Legally Compelled Process provision.';
+      } else if (secName.includes('purpose') || secName.includes('recital') || secName.includes('background')) {
+        canonicalSection = `## PURPOSE AND RECITALS\n\nWHEREAS, the Disclosing Party and the Receiving Party desire to explore and evaluate a prospective commercial business relationship or potential strategic transaction (the "Purpose"); and\nWHEREAS, in connection with the Purpose, the Disclosing Party may find it necessary or desirable to disclose to the Receiving Party certain proprietary and confidential trade secrets and commercial information;\nNOW, THEREFORE, in consideration of the mutual covenants herein contained and other good and valuable consideration, the Parties agree to the terms set forth herein.`;
+        explanation = 'Adds preamble Recitals and commercial Purpose clause.';
+      } else if (secName.includes('return') || secName.includes('destruct')) {
+        canonicalSection = `## RETURN OR DESTRUCTION OF MATERIALS\n\nUpon written request by the Disclosing Party, or upon expiration or termination of this Agreement, the Receiving Party shall promptly, and in any event within seven (7) business days, return or destroy all tangible and electronic materials containing Confidential Information, and provide written certification of compliance signed by an authorized corporate officer.`;
         explanation = 'Adds standard institutional Return or Destruction of Materials clause with 7-day officer certification.';
+      } else if (secName.includes('duration') || secName.includes('term')) {
+        canonicalSection = `## TERM AND DURATION\n\nThis Agreement shall remain in full force and effect for a period of ${durationTerm} from the Effective Date. The Receiving Party's obligations of confidentiality, non-disclosure, and non-use under this Agreement shall survive any expiration or termination and remain binding upon the Receiving Party; provided, that with respect to any Confidential Information that constitutes a trade secret under applicable law, such obligations shall survive indefinitely.`;
+        explanation = `Adds operative Term and Survival clause aligned with intake facts (${durationTerm}).`;
       } else if (secName.includes('remed') || secName.includes('injunct')) {
-        canonicalSection = `## 6. REMEDIES AND INJUNCTIVE RELIEF\n\nThe Receiving Party acknowledges that any breach of this Agreement may cause irreparable harm for which monetary damages alone would be inadequate. Accordingly, the Disclosing Party shall be entitled to seek equitable relief, including temporary and permanent injunctive relief, without the requirement of posting a bond, in addition to all other remedies available at law.`;
+        canonicalSection = `## REMEDIES AND INJUNCTIVE RELIEF\n\nThe Receiving Party acknowledges that any breach of this Agreement may cause irreparable harm for which monetary damages alone would be inadequate. Accordingly, the Disclosing Party shall be entitled to seek equitable relief, including temporary and permanent injunctive relief, without the requirement of posting a bond, in addition to all other remedies available at law.`;
         explanation = 'Adds standard Remedies and Injunctive Relief covenant.';
       } else if (secName.includes('dispute') || secName.includes('governing') || secName.includes('jurisdiction')) {
-        const govLaw = structuredFacts.jurisdiction || structuredFacts.governingLaw || 'the State of Delaware';
-        canonicalSection = `## 7. GOVERNING LAW AND DISPUTE RESOLUTION\n\nThis Agreement shall be governed by, construed, and enforced in accordance with the laws of ${govLaw}, without regard to its conflict of law principles. The state and federal courts located in ${govLaw} shall have sole and exclusive jurisdiction over any disputes arising out of this Agreement.`;
+        canonicalSection = `## GOVERNING LAW AND DISPUTE RESOLUTION\n\nThis Agreement shall be governed by, construed, and enforced in accordance with the laws of ${govLaw}, without regard to its conflict of law principles. The competent state and federal courts located in ${govLaw} shall have sole and exclusive jurisdiction over any disputes arising out of this Agreement.`;
         explanation = `Adds canonical Governing Law and Dispute Resolution clause designating ${govLaw}.`;
+      } else if (secName.includes('misc') || secName.includes('general')) {
+        canonicalSection = `## MISCELLANEOUS PROVISIONS\n\n(a) Entire Agreement: This Agreement constitutes the entire agreement between the Parties concerning the subject matter hereof and supersedes all prior agreements. (b) Amendments: No amendment shall be effective unless executed in writing by both Parties. (c) Severability: If any provision is held invalid, the remainder of the Agreement shall remain in full effect. (d) Counterparts: This Agreement may be executed in counterparts, each of which shall be deemed an original.`;
+        explanation = 'Adds standard institutional Miscellaneous covenants.';
       } else {
-        canonicalSection = `## ${issue.section || 'ADDITIONAL COVENANTS'}\n\nThe Parties hereby agree to adhere to standard industry practices and governing statutory requirements regarding ${issue.section || 'this matter'}.`;
-        explanation = `Adds standardized legal section for ${issue.section}.`;
+        canonicalSection = `## ${issue.section.toUpperCase()}\n\nThe Parties hereby agree that all rights, obligations, and mutual covenants regarding ${issue.section} shall be governed in accordance with applicable statutory requirements and standard institutional practice in ${govLaw}.`;
+        explanation = `Adds formal legal section for ${issue.section}.`;
       }
 
       return {
         id: `patch_sec_${Date.now()}`,
         issueId: issue.id || issue.issueId || 'missing_sec',
-        action: 'INSERT_AFTER',
-        target: { sectionId: 'sec_0' },
+        action: actionType,
+        target: targetLocation,
         originalText: '',
         replacementText: canonicalSection,
         reason: explanation,
         canAutoFix: true,
         mode: 'REVIEW',
-        confidence: 0.88,
+        confidence: 0.90,
         requiresUserInput: false
       };
     }
@@ -160,8 +204,8 @@ export class PatchService {
     // 5. MISSING SIGNATURE BLOCK (SAFE AUTO FIX)
     // ==========================================
     if (issueType === 'MISSING_SIGNATURE_BLOCK' || section.toLowerCase().includes('signature')) {
-      const p1Name = structuredFacts.disclosingParty?.name || 'Disclosing Party';
-      const p2Name = structuredFacts.receivingParty?.name || 'Receiving Party';
+      const p1Name = structuredFacts.disclosingParty?.name || structuredFacts.disclosingParty || 'Disclosing Party';
+      const p2Name = structuredFacts.receivingParty?.name || structuredFacts.receivingParty || 'Receiving Party';
       const p1Sig = structuredFacts.disclosingParty?.signatory || 'Authorized Officer';
       const p2Sig = structuredFacts.receivingParty?.signatory || 'Authorized Officer';
 

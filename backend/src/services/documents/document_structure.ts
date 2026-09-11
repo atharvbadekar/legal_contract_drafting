@@ -79,7 +79,14 @@ export function parseDocumentStructure(content: string): StructuredDocument {
   const sections: DocumentSection[] = [];
 
   // Determine section blocks using markdown thematic dividers (---) or top-level headers (# / ##)
-  const rawBlocks = fullText.split(/\n\s*---\s*\n/);
+  let rawBlocks = fullText.split(/\n\s*---\s*\n/);
+  if (rawBlocks.length <= 1 && /(?:^|\n)#{1,3}\s+/m.test(fullText)) {
+    const headerSplit = fullText.split(/(?=\n#{1,3}\s+)/g).filter(b => b.trim().length > 0);
+    if (headerSplit.length > 1) {
+      rawBlocks = headerSplit;
+    }
+  }
+
   let globalOffset = 0;
 
   for (let sIdx = 0; sIdx < rawBlocks.length; sIdx++) {
@@ -249,14 +256,7 @@ export function applyDocumentPatch(
 
   const { originalText, replacementText, action, target } = patch;
 
-  // Stale patch protection: Ensure originalText exists in document
-  if (originalText && !currentContent.includes(originalText.trim())) {
-    throw new StalePatchError(
-      `Document has changed since this suggestion was created. The original text "${originalText.slice(0, 40)}..." is no longer present.`
-    );
-  }
-
-  // 1. If exact text range is supplied and still matches originalText
+  // 1. If exact text range is supplied and matches originalText
   if (target?.textRange && target.textRange.start >= 0 && target.textRange.end <= currentContent.length) {
     const rangeContent = currentContent.substring(target.textRange.start, target.textRange.end);
     if (rangeContent.trim() === originalText.trim()) {
@@ -275,19 +275,47 @@ export function applyDocumentPatch(
     }
   }
 
-  // 2. Locate exact unique occurrence of originalText
+  // 2. Locate exact or fuzzy whitespace occurrence of originalText
   if (action === 'REPLACE_TEXT' || action === 'DELETE') {
-    const cleanOrig = originalText.trim();
-    const idx = currentContent.indexOf(cleanOrig);
+    const cleanOrig = (originalText || '').trim();
+    if (!cleanOrig) {
+      throw new InvalidPatchError('Cannot perform text replacement without originalText.');
+    }
 
-    if (idx === -1) {
+    let matchIdx = -1;
+    let matchLen = cleanOrig.length;
+
+    const directIdx = currentContent.indexOf(cleanOrig);
+    if (directIdx !== -1) {
+      matchIdx = directIdx;
+      matchLen = cleanOrig.length;
+    } else {
+      // Try case-insensitive search
+      const lowerContent = currentContent.toLowerCase();
+      const lowerOrig = cleanOrig.toLowerCase();
+      const lowerIdx = lowerContent.indexOf(lowerOrig);
+      if (lowerIdx !== -1) {
+        matchIdx = lowerIdx;
+        matchLen = cleanOrig.length;
+      } else {
+        // Try regex with whitespace tolerance
+        const escaped = cleanOrig.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+        const regexMatch = currentContent.match(new RegExp(escaped, 'i'));
+        if (regexMatch && regexMatch.index !== undefined) {
+          matchIdx = regexMatch.index;
+          matchLen = regexMatch[0].length;
+        }
+      }
+    }
+
+    if (matchIdx === -1) {
       throw new StalePatchError(
-        'Document content has been modified. Could not safely locate the target passage to replace.'
+        `Document has changed since this suggestion was created. Target text "${cleanOrig.slice(0, 40)}..." was not found in the document.`
       );
     }
 
-    const before = currentContent.substring(0, idx);
-    const after = currentContent.substring(idx + cleanOrig.length);
+    const before = currentContent.substring(0, matchIdx);
+    const after = currentContent.substring(matchIdx + matchLen);
     const replaceWith = action === 'DELETE' ? '' : replacementText;
     const newContent = `${before}${replaceWith}${after}`;
 
@@ -295,8 +323,8 @@ export function applyDocumentPatch(
       newContent,
       content: newContent,
       appliedRange: {
-        start: idx,
-        end: idx + replaceWith.length
+        start: matchIdx,
+        end: matchIdx + replaceWith.length
       }
     };
   }
@@ -310,23 +338,35 @@ export function applyDocumentPatch(
       insertIndex = action === 'INSERT_AFTER' ? anchorIdx + originalText.trim().length : anchorIdx;
     } else if (target?.sectionId) {
       const doc = parseDocumentStructure(currentContent);
-      const sec = doc.sections.find(s => s.id === target.sectionId);
-      if (sec) {
-        insertIndex = action === 'INSERT_AFTER' ? sec.endIndex : sec.startIndex;
+      if (target.sectionId === 'sec_end') {
+        insertIndex = currentContent.length;
+      } else {
+        const sec = doc.sections.find(s => s.id === target.sectionId);
+        if (sec) {
+          insertIndex = action === 'INSERT_AFTER' ? sec.endIndex : sec.startIndex;
+        }
       }
     }
 
     // Insert with clean markdown separation
     const before = currentContent.substring(0, insertIndex).trimEnd();
     const after = currentContent.substring(insertIndex).trimStart();
-    const newContent = `${before}\n\n---\n\n${replacementText.trim()}\n\n---\n\n${after}`;
+    
+    let newContent: string;
+    if (!before) {
+      newContent = after ? `${replacementText.trim()}\n\n---\n\n${after}` : replacementText.trim();
+    } else if (!after) {
+      newContent = `${before}\n\n---\n\n${replacementText.trim()}`;
+    } else {
+      newContent = `${before}\n\n---\n\n${replacementText.trim()}\n\n---\n\n${after}`;
+    }
 
     return {
       newContent,
       content: newContent,
       appliedRange: {
-        start: before.length + 7,
-        end: before.length + 7 + replacementText.trim().length
+        start: before ? before.length + 7 : 0,
+        end: (before ? before.length + 7 : 0) + replacementText.trim().length
       }
     };
   }

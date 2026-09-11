@@ -65,6 +65,7 @@ export const DocumentEditor: React.FC = () => {
   const [loadingReviewPatch, setLoadingReviewPatch] = useState(false);
   const [applyingReviewPatch, setApplyingReviewPatch] = useState(false);
   const [expandedManualIssues, setExpandedManualIssues] = useState<Record<string, boolean>>({});
+  const [expandedDetails, setExpandedDetails] = useState<Record<string, boolean>>({});
 
   // AI Assistant advanced state
   const [explanation, setExplanation] = useState<any>(null);
@@ -907,55 +908,56 @@ export const DocumentEditor: React.FC = () => {
                       const isReview = issue.mode === 'REVIEW' || (issue.canAutoFix && !isSafe);
                       const isManual = issue.mode === 'MANUAL' || !issue.canAutoFix;
                       const issueKey = issue.id || issue.issueId || `iss_${idx}`;
+                      const isExpanded = !!expandedDetails[issueKey];
 
                       return (
                         <div
                           key={idx}
-                          className={`p-3.5 rounded-xl border text-xs transition-all space-y-2.5 ${
+                          className={`p-3 rounded-xl border text-xs transition-all space-y-2 ${
                             isActive
                               ? 'border-purple-500 bg-purple-50/70 shadow-xs ring-1 ring-purple-400'
                               : isManual
-                              ? 'border-rose-200 bg-rose-50/20 hover:border-rose-300 hover:bg-rose-50/40'
+                              ? 'border-rose-200/80 bg-rose-50/20 hover:border-rose-300'
                               : isReview
-                              ? 'border-amber-200 bg-amber-50/20 hover:border-amber-300 hover:bg-amber-50/40'
-                              : 'border-emerald-200 bg-emerald-50/20 hover:border-emerald-300 hover:bg-emerald-50/40'
+                              ? 'border-amber-200/80 bg-amber-50/20 hover:border-amber-300'
+                              : 'border-emerald-200/80 bg-emerald-50/20 hover:border-emerald-300'
                           }`}
                         >
-                          {/* Card Header */}
-                          <div 
+                          {/* Card Header & Problem Summary */}
+                          <div
                             onClick={() => handleSelectIssue(issue, idx)}
                             className="cursor-pointer space-y-1"
-                            title="Click to jump to this section in text"
+                            title="Click to jump to this clause in document"
                           >
-                            <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                            <div className="flex items-center justify-between gap-1.5">
                               <span className="flex items-center gap-1.5 font-bold text-[11px] text-mira-dark truncate">
-                                {isManual ? (
-                                  <ShieldAlert className="w-3.5 h-3.5 text-rose-600 flex-shrink-0" />
+                                {isSafe ? (
+                                  <Zap className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
                                 ) : isReview ? (
                                   <Eye className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
                                 ) : (
-                                  <Zap className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                                  <ShieldAlert className="w-3.5 h-3.5 text-rose-600 flex-shrink-0" />
                                 )}
                                 <span className="truncate">{issue.title || issue.section}</span>
                               </span>
 
-                              <div className="flex items-center gap-1">
+                              <div className="flex items-center gap-1 flex-shrink-0">
                                 {isSafe && (
-                                  <span className="text-[9px] px-1.5 py-0.2 rounded font-bold uppercase bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded font-bold uppercase bg-emerald-100 text-emerald-800 border border-emerald-200">
                                     Safe Auto
                                   </span>
                                 )}
                                 {isReview && (
-                                  <span className="text-[9px] px-1.5 py-0.2 rounded font-bold uppercase bg-amber-100 text-amber-800 border border-amber-200">
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded font-bold uppercase bg-amber-100 text-amber-800 border border-amber-200">
                                     Review
                                   </span>
                                 )}
                                 {isManual && (
-                                  <span className="text-[9px] px-1.5 py-0.2 rounded font-bold uppercase bg-rose-100 text-rose-800 border border-rose-200">
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded font-bold uppercase bg-rose-100 text-rose-800 border border-rose-200">
                                     Manual
                                   </span>
                                 )}
-                                <span className={`text-[9px] px-1.5 py-0.2 rounded font-bold uppercase tracking-wider ${
+                                <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase ${
                                   issue.severity === 'HIGH' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'
                                 }`}>
                                   {issue.severity}
@@ -963,59 +965,55 @@ export const DocumentEditor: React.FC = () => {
                               </div>
                             </div>
 
-                            {/* Problem Description */}
-                            <p className="text-[11px] text-mira-dark/90 leading-snug">
+                            <p className="text-[11px] text-mira-dark/85 leading-snug line-clamp-2">
                               {issue.message || issue.description}
                             </p>
                           </div>
 
-                          {/* Why Flagged Explanation */}
-                          {issue.reason && (
-                            <div className="p-2 bg-purple-50/70 rounded-lg border border-purple-100 text-[10px] text-purple-950 leading-snug">
-                              <span className="font-bold text-mira-primary">Why: </span>
-                              {issue.reason}
-                            </div>
-                          )}
-
-                          {/* Evidence Quote */}
+                          {/* Inline Evidence Snippet (if available) */}
                           {issue.evidence && (
-                            <div className="p-2 bg-gray-50 rounded-lg border border-gray-200 text-[10px] text-gray-700 flex items-start gap-1.5">
-                              <span className="font-bold text-gray-400 select-none">“</span>
-                              <span className="flex-1 italic truncate">{issue.evidence}</span>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  locateAndHighlight(issue.evidence, issue.section, issue.location);
-                                }}
-                                className="text-[10px] text-purple-700 hover:text-purple-900 font-bold flex items-center gap-0.5 flex-shrink-0"
-                                title="Locate quote in document"
-                              >
-                                <CornerDownRight className="w-3 h-3" />
-                                Locate
-                              </button>
+                            <div
+                              onClick={() => locateAndHighlight(issue.evidence, issue.section, issue.location)}
+                              className="px-2 py-1 bg-gray-50 hover:bg-gray-100 rounded-md border border-gray-200/80 text-[10px] text-gray-700 flex items-center justify-between gap-1.5 cursor-pointer"
+                              title="Click to locate this quote in the editor"
+                            >
+                              <span className="italic truncate text-gray-600">"{issue.evidence}"</span>
+                              <span className="text-purple-700 font-bold flex items-center gap-0.5 flex-shrink-0 text-[9px]">
+                                <CornerDownRight className="w-2.5 h-2.5" /> Jump
+                              </span>
                             </div>
                           )}
 
-                          {/* Suggestion / Guidance */}
-                          {issue.suggestion && (
-                            <div className="text-[10px] text-mira-muted leading-relaxed flex items-start gap-1.5">
-                              <Lightbulb className="w-3.5 h-3.5 text-amber-500 flex-shrink-0 mt-0.5" />
-                              <span>{issue.suggestion}</span>
+                          {/* Collapsible Deep Details (Why + Recommendations) */}
+                          {isExpanded && (
+                            <div className="pt-1 space-y-1.5 text-[10px] text-mira-dark border-t border-gray-100 animate-in fade-in">
+                              {issue.reason && (
+                                <div className="p-2 bg-purple-50/60 rounded-lg border border-purple-100/80 text-purple-950">
+                                  <span className="font-bold text-mira-primary">Why: </span>
+                                  {issue.reason}
+                                </div>
+                              )}
+                              {issue.suggestion && (
+                                <div className="p-2 bg-amber-50/50 rounded-lg border border-amber-100/80 text-amber-950">
+                                  <span className="font-bold text-amber-800">Recommendation: </span>
+                                  {issue.suggestion}
+                                </div>
+                              )}
                             </div>
                           )}
 
-                          {/* Action Button Strip by Mode */}
-                          {isSafe && (
-                            <div className="pt-2 border-t border-emerald-100 flex items-center gap-1.5">
+                          {/* Streamlined Action Row */}
+                          <div className="pt-1.5 flex items-center justify-between gap-1.5 border-t border-gray-100">
+                            {isSafe && (
                               <button
                                 onClick={() => handleApplySingleIssuePatch(issue, idx)}
                                 disabled={applyingFix}
-                                className="flex-1 py-1.5 px-2.5 bg-mira-primary hover:bg-purple-800 text-white rounded-lg font-bold text-[11px] flex items-center justify-center gap-1.5 shadow-2xs transition-colors"
+                                className="py-1.5 px-3 bg-mira-primary hover:bg-purple-800 text-white rounded-lg font-bold text-[11px] flex items-center gap-1.5 shadow-2xs transition-colors disabled:opacity-50"
                               >
                                 {applyingFix && activeIssueIndex === idx ? (
                                   <>
                                     <RefreshCw className="w-3 h-3 animate-spin" />
-                                    <span>Applying Patch...</span>
+                                    <span>Applying...</span>
                                   </>
                                 ) : (
                                   <>
@@ -1024,65 +1022,35 @@ export const DocumentEditor: React.FC = () => {
                                   </>
                                 )}
                               </button>
-                              <button
-                                onClick={() => locateAndHighlight(issue.evidence, issue.section, issue.location)}
-                                className="py-1.5 px-2 bg-white hover:bg-gray-100 border border-mira-border text-mira-dark rounded-lg text-[10px] font-semibold flex items-center gap-1"
-                                title="Locate in editor"
-                              >
-                                <span>Locate</span>
-                                <CornerDownRight className="w-3 h-3 opacity-60" />
-                              </button>
-                            </div>
-                          )}
+                            )}
 
-                          {isReview && (
-                            <div className="pt-2 border-t border-amber-100 flex items-center gap-1.5">
+                            {isReview && (
                               <button
                                 onClick={() => handleOpenReviewModal(issue, idx)}
-                                className="flex-1 py-1.5 px-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-[11px] flex items-center justify-center gap-1.5 shadow-2xs transition-colors"
+                                className="py-1.5 px-3 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-[11px] flex items-center gap-1.5 shadow-2xs transition-colors"
                               >
                                 <Eye className="w-3 h-3" />
                                 <span>Review AI Fix</span>
                               </button>
+                            )}
+
+                            {isManual && (
                               <button
                                 onClick={() => locateAndHighlight(issue.evidence, issue.section, issue.location)}
-                                className="py-1.5 px-2 bg-white hover:bg-gray-100 border border-mira-border text-mira-dark rounded-lg text-[10px] font-semibold flex items-center gap-1"
-                                title="Locate in editor"
+                                className="py-1.5 px-3 bg-white hover:bg-purple-50 border border-purple-200 text-mira-primary rounded-lg font-bold text-[11px] flex items-center gap-1.5 shadow-2xs transition-colors"
                               >
-                                <span>Locate</span>
-                                <CornerDownRight className="w-3 h-3 opacity-60" />
+                                <CornerDownRight className="w-3 h-3" />
+                                <span>Edit in Document</span>
                               </button>
-                            </div>
-                          )}
+                            )}
 
-                          {isManual && (
-                            <div className="pt-2 border-t border-rose-100 space-y-2">
-                              <div className="text-[10px] text-rose-800 bg-rose-50/80 p-2 rounded-lg border border-rose-200">
-                                ✋ <span className="font-semibold">Manual Action:</span> ATHARV does not invent missing terms or decide commercial terms.
-                              </div>
-                              <div className="flex items-center gap-1.5">
-                                <button
-                                  onClick={() => locateAndHighlight(issue.evidence, issue.section, issue.location)}
-                                  className="flex-1 py-1.5 px-2.5 bg-white hover:bg-purple-50 border border-purple-200 text-mira-primary rounded-lg font-bold text-[10px] flex items-center justify-center gap-1 shadow-2xs"
-                                >
-                                  <CornerDownRight className="w-3 h-3" />
-                                  <span>Edit in Document</span>
-                                </button>
-                                <button
-                                  onClick={() => toggleManualExpanded(issueKey)}
-                                  className="py-1.5 px-2 bg-white hover:bg-gray-50 border border-mira-border text-mira-muted hover:text-mira-dark rounded-lg text-[10px] font-medium"
-                                >
-                                  {expandedManualIssues[issueKey] ? 'Hide Guide' : 'What to Change?'}
-                                </button>
-                              </div>
-                              {expandedManualIssues[issueKey] && (
-                                <div className="p-2 bg-white rounded-lg border border-gray-200 text-[10px] text-gray-700 space-y-1 animate-in fade-in">
-                                  <div className="font-semibold text-gray-900">Recommended Steps:</div>
-                                  <p>{issue.suggestion || 'Review the highlighted clause in the editor and insert the agreed commercial terms directly.'}</p>
-                                </div>
-                              )}
-                            </div>
-                          )}
+                            <button
+                              onClick={() => setExpandedDetails(prev => ({ ...prev, [issueKey]: !prev[issueKey] }))}
+                              className="text-[10px] text-mira-muted hover:text-mira-dark font-medium px-2 py-1 rounded hover:bg-gray-100 transition-colors"
+                            >
+                              {isExpanded ? 'Less ▴' : 'Details ▾'}
+                            </button>
+                          </div>
                         </div>
                       );
                     })}
