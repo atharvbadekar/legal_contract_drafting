@@ -7,6 +7,7 @@
 import { prisma } from '../../utils/prisma.js';
 import {
   DocumentPatch,
+  DocumentLocation,
   applyDocumentPatch,
   locateTextInDocument,
   StalePatchError,
@@ -289,7 +290,9 @@ export class PatchService {
     userId: string;
   }): Promise<{
     success: boolean;
+    applied?: boolean;
     document: any;
+    newContent?: string;
     validationResult: any;
     patch: DocumentPatch;
     versionCreated: number;
@@ -419,6 +422,7 @@ export class PatchService {
     appliedCount: number;
     remainingIssuesCount: number;
     document: any;
+    content?: string;
     validationResult: any;
   }> {
     const documentId = typeof paramsOrId === 'string' ? paramsOrId : paramsOrId.documentId;

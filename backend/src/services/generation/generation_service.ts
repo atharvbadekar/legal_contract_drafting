@@ -383,18 +383,57 @@ export class GenerationService {
   }
 
   async rewriteSection(sectionContent: string, instruction: 'formal' | 'simple' | 'custom', customPrompt?: string): Promise<string> {
-    if (instruction === 'simple') {
+    const prompt = (customPrompt || '').toLowerCase();
+
+    if (instruction === 'simple' || prompt.includes('simple') || prompt.includes('plain')) {
       return sectionContent
         .replace(/hereinafter referred to as/gi, 'called')
         .replace(/by and between/gi, 'between')
         .replace(/in witness whereof/gi, 'signed by')
         .replace(/shall exercise the same degree of care/gi, 'must take reasonable care')
-        .replace(/promptly, and in any event within/gi, 'within');
+        .replace(/promptly, and in any event within/gi, 'within')
+        .replace(/notwithstanding anything to the contrary/gi, 'even so')
+        .replace(/heretofore/gi, 'before this')
+        .replace(/thereunder/gi, 'under it')
+        .replace(/shall not disclose/gi, 'will not share')
+        .replace(/covenants and agrees/gi, 'agrees');
     }
-    if (instruction === 'formal') {
-      return `Pursuant to the covenants established herein, ${sectionContent.trim()} It is expressly stipulated that time is of the essence in the performance of said obligations.`;
+
+    if (instruction === 'formal' || prompt.includes('formal') || prompt.includes('legal')) {
+      const trimmed = sectionContent.trim();
+      if (!trimmed.toLowerCase().startsWith('pursuant to') && !trimmed.toLowerCase().startsWith('the parties hereby')) {
+        return `Pursuant to the mutual covenants established herein, ${trimmed} It is expressly stipulated that time is of the essence in the strict performance of said obligations.`;
+      }
+      return `${trimmed}\n\nAll covenants and representations herein are binding upon the parties, their lawful successors, and permitted assigns.`;
     }
-    return `${sectionContent}\n\n[Revised per instruction: ${customPrompt || 'standard legal refinement'}]`;
+
+    if (prompt.includes('mutual') || prompt.includes('bilateral') || prompt.includes('balance')) {
+      return sectionContent
+        .replace(/\bthe Receiving Party shall\b/gi, 'Each Party shall')
+        .replace(/\bthe Disclosing Party\b/gi, 'the other Party')
+        .replace(/\bDisclosing Party's\b/gi, 'disclosing Party\'s')
+        .replace(/\bReceiving Party's\b/gi, 'receiving Party\'s');
+    }
+
+    if (prompt.includes('duration') || prompt.includes('term') || prompt.includes('year')) {
+      const numMatch = customPrompt?.match(/\d+\s*(?:years?|months?)/i);
+      const newDuration = numMatch ? numMatch[0] : '5 years';
+      return sectionContent.replace(/\b\d+\s*(?:years?|months?)\b/i, newDuration);
+    }
+
+    if (prompt.includes('fee') || prompt.includes('attorney') || prompt.includes('injunct')) {
+      return `${sectionContent.trim()}\n\nIn the event of any legal dispute or enforcement action, the prevailing party shall be entitled to recover its reasonable attorneys' fees and costs, and either party may seek emergency injunctive relief without posting bond.`;
+    }
+
+    if (prompt.includes('notice') || prompt.includes('period')) {
+      return sectionContent.replace(/(?:upon|by)?\s*(?:prior\s*)?(?:written\s*)?notice/i, 'upon thirty (30) days prior written notice');
+    }
+
+    if (customPrompt) {
+      return `${sectionContent.trim()} (Modified per instructions: ${customPrompt.trim()})`;
+    }
+
+    return sectionContent;
   }
 
   async explainClause(clauseContent: string): Promise<ClauseExplanation> {
@@ -471,6 +510,26 @@ export class GenerationService {
     const { documentType, content, issue, structuredFacts } = params;
     const desc = issue?.description || '';
     const section = issue?.section || '';
+
+    // 0. Use deterministic proposed patch if already available
+    if ((issue as any)?.proposedPatch?.replacementText) {
+      const patch = (issue as any).proposedPatch;
+      const targetSnippet = patch.originalText || (issue as any).evidence || '';
+      const replacementSnippet = patch.replacementText;
+      let fixedContent = content;
+      if (targetSnippet && content.includes(targetSnippet)) {
+        fixedContent = content.replace(targetSnippet, replacementSnippet);
+      }
+      return {
+        issueType: issue.type,
+        explanation: patch.reason || (issue as any).message || desc,
+        legalRisk: 'Deviation from approved terms or institutional standard.',
+        targetSnippet,
+        replacementSnippet,
+        actionType: 'REPLACE',
+        fixedContent
+      };
+    }
 
     // 1. Duration Mismatch Fix
     if (issue?.type === 'FACT_MISMATCH' && (section.toLowerCase().includes('duration') || desc.toLowerCase().includes('duration'))) {
@@ -671,12 +730,80 @@ export class GenerationService {
       };
     }
 
-    // Default: Generic Intelligent Heuristic Fix
+    // 7. Unlimited Liability Fix
+    if (issue?.type === 'UNLIMITED_LIABILITY' || desc.toLowerCase().includes('unlimited liability') || desc.toLowerCase().includes('liability cap')) {
+      const liabilityClause = `## LIMITATION OF LIABILITY\n\nExcept for breaches of confidentiality obligations or willful misconduct, neither party's total aggregate liability arising under or relating to this Agreement shall exceed fifty thousand dollars ($50,000 USD) or the total amounts paid hereunder in the twelve (12) months preceding the claim, whichever is greater. Neither party shall be liable for indirect, punitive, or consequential damages.`;
+      const targetSnippet = (issue as any).evidence || 'Liability provision';
+      let fixedContent = content;
+      if (/##\s*(?:\d+\.\s*)?(?:LIABILITY|LIMITATION OF LIABILITY)[\s\S]*?(?=##|---|$)/i.test(content)) {
+        fixedContent = content.replace(/##\s*(?:\d+\.\s*)?(?:LIABILITY|LIMITATION OF LIABILITY)[\s\S]*?(?=##|---|$)/i, `${liabilityClause}\n\n`);
+      } else {
+        fixedContent = `${content.trim()}\n\n---\n\n${liabilityClause}\n`;
+      }
+      return {
+        issueType: issue.type,
+        explanation: 'Inserted balanced institutional liability cap and exclusion of consequential damages.',
+        legalRisk: 'Unlimited liability exposes contracting entities to uncapped commercial exposure.',
+        targetSnippet,
+        replacementSnippet: liabilityClause,
+        actionType: 'REPLACE',
+        fixedContent
+      };
+    }
+
+    // 8. Conflicting Terms Fix
+    if (issue?.type === 'CONFLICTING_TERMS' || desc.toLowerCase().includes('conflict')) {
+      const canonicalDuration = structuredFacts.duration || '3 years';
+      const termClause = `## TERM AND TERMINATION\n\nThis Agreement shall remain in full force and effect for an agreed period of ${canonicalDuration} from the Effective Date, superseding any conflicting references herein.`;
+      return {
+        issueType: issue.type,
+        explanation: `Harmonized conflicting contractual timeframes to the canonical agreed duration (${canonicalDuration}).`,
+        legalRisk: 'Conflicting survival or notice terms produce judicial ambiguity and enforceability risks.',
+        targetSnippet: (issue as any).evidence || 'Conflicting terms',
+        replacementSnippet: termClause,
+        actionType: 'REPLACE',
+        fixedContent: content.replace(/##\s*(?:\d+\.\s*)?TERM[\s\S]*?(?=##|---|$)/i, `${termClause}\n\n`)
+      };
+    }
+
+    // 9. Missing IP Ownership Fix
+    if (issue?.type === 'MISSING_IP_OWNERSHIP' || desc.toLowerCase().includes('intellectual property') || desc.toLowerCase().includes('ip ownership')) {
+      const ipClause = `## INTELLECTUAL PROPERTY RIGHTS\n\nEach Party retains all right, title, and interest in and to its pre-existing Intellectual Property, patents, trademarks, and trade secrets. Nothing in this Agreement shall be construed as granting, by implication, estoppel, or otherwise, any license or ownership right to the other Party's intellectual property.`;
+      return {
+        issueType: issue.type,
+        explanation: 'Inserted standard mutual retention of pre-existing intellectual property rights.',
+        legalRisk: 'Absence of IP reservation risks inadvertent licensing or dispute over derivative assets.',
+        targetSnippet: 'IP Ownership',
+        replacementSnippet: ipClause,
+        actionType: 'INSERT',
+        fixedContent: `${content.trim()}\n\n---\n\n${ipClause}\n`
+      };
+    }
+
+    // 10. Intelligent Heuristic / Evidence-based Fix
+    const evidence = (issue as any)?.evidence;
+    const suggestionText = (issue as any)?.suggestion || (issue as any)?.reason;
+    if (evidence && content.includes(evidence)) {
+      const improvedText = `${evidence} (Clarified: conforming to statutory standard requirements)`;
+      return {
+        issueType: issue?.type || 'ADVISORY',
+        explanation: suggestionText || `AI-guided resolution for ${issue?.section || 'Section'}.`,
+        legalRisk: 'Non-standard drafting increases contractual ambiguity.',
+        targetSnippet: evidence,
+        replacementSnippet: improvedText,
+        actionType: 'REPLACE',
+        fixedContent: content.replace(evidence, improvedText)
+      };
+    }
+
+    // Default: Section Template
+    const defaultSection = `## ${issue?.section || 'SPECIAL COVENANTS'}\n\nThe Parties hereby agree that all rights, covenants, and obligations under this Section shall be performed strictly in accordance with applicable governing statutory rules and institutional standards.`;
     return {
       issueType: issue?.type || 'ADVISORY',
-      explanation: `AI-guided resolution for ${issue?.section || 'Section'}: aligns language with institutional standards.`,
+      explanation: suggestionText || `AI-guided standard clause for ${issue?.section || 'Section'}.`,
       legalRisk: `Deviation from vetted baseline clauses increases exposure to adverse judicial interpretation.`,
-      replacementSnippet: `[Standardized Clause for ${issue?.section || 'Section'}]`,
+      targetSnippet: issue?.section || 'Clause',
+      replacementSnippet: defaultSection,
       actionType: 'REPLACE',
       fixedContent: content
     };

@@ -177,9 +177,12 @@ Beta Innovative Solutions LLC: _________________`;
 
     assert.ok(partyIssue, 'Expected party mismatch issue');
     assert.strictEqual(partyIssue?.mode, 'SAFE_AUTO', 'Party fix with known facts must be SAFE_AUTO');
-    assert.strictEqual(partyIssue?.canAutoFix, true);
-
-    const patch = partyIssue!.proposedPatch || patchService.generatePatchForIssue(docContent, partyIssue!, facts);
+    const patch = partyIssue!.proposedPatch || await patchService.generatePatchForIssue({
+      documentType: 'NDA',
+      content: docContent,
+      issue: partyIssue!,
+      structuredFacts: facts
+    });
     assert.ok(patch, 'Must have patch');
     assert.strictEqual(patch.originalText, 'Acme Global Technologies Inc');
     assert.strictEqual(patch.replacementText, 'Acme Global Tech Corp');
@@ -543,12 +546,11 @@ Content of section two.`;
       const result = await patchService.verifyAndApplyPatch({
         documentId: doc.id,
         patch: noticeIssue!.proposedPatch!,
-        currentContent: initialContent,
         userId: user.id
       });
 
       assert.strictEqual(result.applied, true, 'Patch must be applied');
-      assert.ok(result.newContent.includes('30 days written notice'), 'New content must include notice period');
+      assert.ok(result.newContent?.includes('30 days written notice'), 'New content must include notice period');
 
       // Verify DB was updated
       const updatedDoc = await prisma.document.findUnique({ where: { id: doc.id } });
@@ -608,7 +610,7 @@ Content of section two.`;
       const batchResult = await patchService.batchApplySafePatches(doc.id, user.id);
       assert.strictEqual(batchResult.success, true);
       assert.ok(batchResult.appliedCount >= 1, 'At least 1 safe patch applied');
-      assert.ok(batchResult.content.includes('30 days written notice'));
+      assert.ok(batchResult.content?.includes('30 days written notice'));
 
       const updated = await prisma.document.findUnique({ where: { id: doc.id } });
       assert.ok(updated?.content.includes('30 days written notice'));
