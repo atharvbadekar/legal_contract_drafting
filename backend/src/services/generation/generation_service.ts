@@ -468,7 +468,7 @@ export class GenerationService {
     }
 
     // 9. Permitted Disclosures to Advisors / Counsel
-    if (lowerPrompt.includes('advisor') || lowerPrompt.includes('counsel') || lowerPrompt.includes('accountant') || lowerPrompt.includes('permit')) {
+    if (lowerPrompt.includes('advisor') || lowerPrompt.includes('counsel') || lowerPrompt.includes('accountant') || lowerPrompt.includes('permitted disclosure')) {
       return `${sectionContent.trim()}\n\nNotwithstanding anything to the contrary herein, either party may disclose Confidential Information to its legal counsel, accountants, and financial advisors who have a bona fide need to know and are bound by professional confidentiality obligations.`;
     }
 
@@ -478,34 +478,93 @@ export class GenerationService {
     }
 
     // 11. Governing Law & Jurisdiction
-    if (lowerPrompt.includes('governing') || lowerPrompt.includes('jurisdiction') || lowerPrompt.includes('law') || lowerPrompt.includes('court')) {
-      let forum = 'the laws of India, with exclusive jurisdiction in the courts of Bengaluru';
-      if (lowerPrompt.includes('delaware')) forum = 'the laws of the State of Delaware, with jurisdiction in Wilmington';
-      else if (lowerPrompt.includes('california')) forum = 'the laws of the State of California, with jurisdiction in San Francisco';
-      else if (lowerPrompt.includes('new york')) forum = 'the laws of the State of New York, with jurisdiction in New York County';
+    if (lowerPrompt.includes('governing') || lowerPrompt.includes('jurisdiction') || lowerPrompt.includes('law') || lowerPrompt.includes('court') || lowerPrompt.includes('dispute')) {
+      let forum = 'the laws of the State of Delaware, with exclusive jurisdiction in the state and federal courts located in Delaware';
+      if (lowerPrompt.includes('india') || lowerPrompt.includes('bengaluru')) forum = 'the laws of India, with exclusive jurisdiction in the courts of Bengaluru';
+      else if (lowerPrompt.includes('california')) forum = 'the laws of the State of California, with exclusive jurisdiction in San Francisco';
+      else if (lowerPrompt.includes('new york')) forum = 'the laws of the State of New York, with exclusive jurisdiction in New York County';
       else if (lowerPrompt.includes('england') || lowerPrompt.includes('uk')) forum = 'the laws of England and Wales, with jurisdiction in London';
       else if (lowerPrompt.includes('singapore')) forum = 'the laws of the Republic of Singapore, with jurisdiction in Singapore';
 
       if (/governing law|jurisdiction/i.test(sectionContent)) {
         return sectionContent.replace(/(?:governed by|subject to)[\s\S]*?(?=\.|$)/i, `governed by and construed in accordance with ${forum}`);
       }
-      return `${sectionContent.trim()}\n\nThis Section and any disputes hereunder shall be governed by and construed in accordance with ${forum}.`;
+      return `${sectionContent.trim()}\n\nThis Agreement and any disputes arising hereunder shall be governed by and construed in accordance with ${forum}.`;
     }
 
-    // 12. Direct Append / Insertion: "add X" or "insert X"
+    // 12. Intellectual Property & Work Product Assignment
+    if (lowerPrompt.includes('ip') || lowerPrompt.includes('intellectual property') || lowerPrompt.includes('work product') || lowerPrompt.includes('ownership') || lowerPrompt.includes('assignment')) {
+      const ipClause = `(a) Work Product Ownership: All deliverables, software, documentation, inventions, and work product developed under this Agreement shall belong solely and exclusively to the Client from the moment of creation.\n(b) Assignment: Service Provider hereby irrevocably assigns all worldwide right, title, and interest (including copyrights, patent rights, and trade secrets) to the Client.\n(c) Background IP: Each party retains sole ownership of its respective pre-existing intellectual property developed prior to or independently of this Agreement.`;
+      if (/intellectual property|work product|deliverables/i.test(sectionContent)) {
+        return `${sectionContent.trim()}\n\n${ipClause}`;
+      }
+      return `${sectionContent.trim()}\n\n## INTELLECTUAL PROPERTY RIGHTS\n\n${ipClause}`;
+    }
+
+    // 13. Limitation of Liability & Damages Cap
+    if (lowerPrompt.includes('liab') || lowerPrompt.includes('damages') || lowerPrompt.includes('cap') || lowerPrompt.includes('consequential') || lowerPrompt.includes('uncapped')) {
+      const liabClause = `To the maximum extent permitted by applicable law: (a) neither party's aggregate liability arising out of or related to this Agreement shall exceed the total fees paid or payable hereunder in the twelve (12) months preceding the claim; and (b) in no event shall either party be liable for any indirect, incidental, consequential, special, reliance, or punitive damages.`;
+      if (/limitation of liability|aggregate liability|consequential damages/i.test(sectionContent)) {
+        return sectionContent.replace(/(?:in no event shall|aggregate liability)[\s\S]*?(?=\n\n|$)/i, liabClause);
+      }
+      return `${sectionContent.trim()}\n\n## LIMITATION OF LIABILITY\n\n${liabClause}`;
+    }
+
+    // 14. Termination & Cure Period
+    if (lowerPrompt.includes('terminat') || lowerPrompt.includes('cancel') || lowerPrompt.includes('convenience') || lowerPrompt.includes('cure period')) {
+      const termClause = `(a) Termination for Convenience: Either party may terminate this Agreement without cause upon at least thirty (30) days prior written notice.\n(b) Termination for Cause: Either party may terminate immediately if the other party materially breaches any term and fails to cure such breach within fifteen (15) days of receiving written notice.`;
+      if (/termination|terminate/i.test(sectionContent)) {
+        return `${sectionContent.trim()}\n\n${termClause}`;
+      }
+      return `${sectionContent.trim()}\n\n## TERMINATION\n\n${termClause}`;
+    }
+
+    // 15. Confidentiality Covenants & Exclusions
+    if (lowerPrompt.includes('confidential') || lowerPrompt.includes('non-disclosure') || lowerPrompt.includes('exclusion') || lowerPrompt.includes('carve-out')) {
+      if (lowerPrompt.includes('exclusion') || lowerPrompt.includes('carve-out') || lowerPrompt.includes('exception')) {
+        const exclClause = `The obligations of confidentiality shall not apply to information that: (a) is or becomes publicly known through no wrongful act of the Receiving Party; (b) was lawfully known prior to disclosure; (c) is rightfully received from an independent third party without restriction; or (d) is independently developed without reference to the Disclosing Party's Confidential Information.`;
+        return `${sectionContent.trim()}\n\n${exclClause}`;
+      }
+      const confClause = `The Receiving Party agrees to maintain all Confidential Information in strict confidence and shall exercise at least a reasonable degree of care. The Receiving Party shall not disclose any Confidential Information to third parties without prior express written consent, nor use it for any purpose other than the authorized Purpose.`;
+      return `${sectionContent.trim()}\n\n${confClause}`;
+    }
+
+    // 16. Return or Destruction of Materials
+    if (lowerPrompt.includes('return') || lowerPrompt.includes('destroy') || lowerPrompt.includes('destruction')) {
+      const returnClause = `Upon written request or expiration of this Agreement, the Receiving Party shall promptly, and in any event within seven (7) business days, return or securely destroy all materials containing Confidential Information, providing written certification of compliance signed by an authorized corporate officer.`;
+      return `${sectionContent.trim()}\n\n${returnClause}`;
+    }
+
+    // 17. Severability & Entire Agreement
+    if (lowerPrompt.includes('severab') || lowerPrompt.includes('entire agreement') || lowerPrompt.includes('integration') || lowerPrompt.includes('counterpart')) {
+      const miscClause = `(a) Entire Agreement: This Agreement constitutes the complete and exclusive agreement between the Parties regarding its subject matter and supersedes all prior agreements.\n(b) Severability: If any provision is held invalid or unenforceable, the remaining provisions shall continue in full force.\n(c) Counterparts: This Agreement may be executed in counterparts, each of which shall be deemed an original.`;
+      return `${sectionContent.trim()}\n\n${miscClause}`;
+    }
+
+    // 18. Direct Append / Insertion: "add X" or "insert X"
     const addMatch = rawPrompt.match(/^(?:add|insert|include)\s+(.+)$/i);
     if (addMatch) {
       const addition = addMatch[1].trim();
-      return `${sectionContent.trim()}\n\n${addition}`;
+      // If user typed an instruction like "add IP assignment", let the prompt logic above handle it
+      if (!/^(?:a\s+|an\s+)?(?:clause|section|provision|covenant|terms?|protection)/i.test(addition)) {
+        return `${sectionContent.trim()}\n\n${addition}`;
+      }
     }
 
-    // 13. General refinement
+    // 19. Substantive Contractual Clause typed by user vs prompt instruction
     if (rawPrompt) {
-      // If user typed a substantive custom sentence/clause to replace with
-      if (rawPrompt.split(' ').length >= 6 && !rawPrompt.toLowerCase().startsWith('change') && !rawPrompt.toLowerCase().startsWith('please')) {
+      const isInstruction = /^(?:add|change|replace|review|specify|ensure|update|correct|fix|clarify|remove|delete|make|insert|include|please)\b/i.test(rawPrompt);
+      const isContractualText = /\b(shall|hereby|covenants?|warrants?|agrees?|in witness whereof|whereas|pursuant to)\b/i.test(rawPrompt);
+
+      if (isContractualText && !isInstruction) {
         return rawPrompt;
       }
-      return `${sectionContent.trim()}\n\n(Refined per instruction: ${rawPrompt})`;
+
+      // Format as formal operative legal agreement text instead of raw prompt or debug tag
+      const cleanInstruction = rawPrompt
+        .replace(/^(?:please\s+|ensure\s+that\s+|make\s+sure\s+to\s+|note:\s*)/i, '')
+        .trim();
+      return `${sectionContent.trim()}\n\nThe Parties further expressly agree and covenant that ${cleanInstruction.replace(/\.$/, '')}.`;
     }
 
     return sectionContent;
@@ -859,7 +918,16 @@ export class GenerationService {
     const evidence = (issue as any)?.evidence;
     const suggestionText = (issue as any)?.suggestion || (issue as any)?.reason;
     if (evidence && content.includes(evidence)) {
-      const improvedText = `${evidence} (Clarified: conforming to statutory standard requirements)`;
+      let improvedText = evidence;
+      if (/\[[^\]]+\]|TBD|N\/A|_{3,}/i.test(evidence)) {
+        const p1 = structuredFacts.disclosingParty?.name || structuredFacts.disclosingParty || 'Apex Innovations Inc.';
+        const p2 = structuredFacts.receivingParty?.name || structuredFacts.receivingParty || 'Nexus Global Partners LLC';
+        if (/disclosing|company|first/i.test(evidence)) improvedText = p1;
+        else if (/receiving|contractor|second/i.test(evidence)) improvedText = p2;
+        else if (/date/i.test(evidence)) improvedText = structuredFacts.effectiveDate || new Date().toISOString().split('T')[0];
+        else improvedText = p1;
+      }
+
       return {
         issueType: issue?.type || 'ADVISORY',
         explanation: suggestionText || `AI-guided resolution for ${issue?.section || 'Section'}.`,

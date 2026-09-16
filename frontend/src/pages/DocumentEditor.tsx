@@ -25,8 +25,76 @@ import {
   Eye,
   X,
   XCircle,
-  CheckSquare
+  CheckSquare,
+  Search,
+  RotateCcw,
+  Zap,
+  PlusCircle,
+  Bold,
+  Italic,
+  List,
+  Minus,
+  ChevronDown,
+  Tag
 } from 'lucide-react';
+
+const CLAUSE_LIBRARY: { title: string; category: string; text: string }[] = [
+  {
+    title: 'Confidentiality Obligations',
+    category: 'Core Covenants',
+    text: `## CONFIDENTIALITY OBLIGATIONS\n\nThe Receiving Party agrees to maintain all Confidential Information in strict confidence and shall exercise at least the same degree of care to protect the secrecy of the Confidential Information as it uses to protect its own confidential information of like nature, but in no event less than a reasonable degree of care. The Receiving Party shall not, without the prior express written consent of the Disclosing Party, disclose, publish, or disseminate any Confidential Information to any third party, nor use the Confidential Information for any purpose other than the authorized Purpose.`
+  },
+  {
+    title: 'Exclusions from Confidentiality (4 Standard Exceptions)',
+    category: 'Core Covenants',
+    text: `## EXCLUSIONS FROM CONFIDENTIALITY\n\nThe obligations of confidentiality and non-use set forth herein shall not apply to any information that the Receiving Party can establish by documentary evidence: (a) is or becomes publicly available through no breach or fault of the Receiving Party; (b) was already in the rightful possession of the Receiving Party prior to disclosure; (c) is independently developed by the Receiving Party without reference to or reliance upon any Confidential Information; or (d) is rightfully received from an independent third party having no confidentiality duty to the Disclosing Party.`
+  },
+  {
+    title: 'Permitted Disclosures & Compelled Process',
+    category: 'Core Covenants',
+    text: `## PERMITTED DISCLOSURES AND COMPELLED PROCESS\n\nThe Receiving Party may disclose Confidential Information solely to its directors, officers, employees, and professional advisors who have a need to know for the authorized Purpose and who are bound by written non-disclosure obligations no less restrictive than those contained herein. If legally compelled by a court or governmental body to disclose Confidential Information, the Receiving Party shall provide prompt written notice to allow the Disclosing Party a reasonable opportunity to seek a protective order.`
+  },
+  {
+    title: 'Limitation of Liability & Consequential Damages Waiver',
+    category: 'Risk Allocation',
+    text: `## LIMITATION OF LIABILITY\n\nTo the maximum extent permitted by applicable law: (a) neither party's total aggregate liability arising out of or related to this Agreement, whether in contract, tort (including negligence), statutory breach, or otherwise, shall exceed the total amounts paid or payable by either party under this Agreement during the twelve (12) months preceding the event giving rise to liability; and (b) in no event shall either party be liable to the other for any indirect, incidental, consequential, special, reliance, or punitive damages, including loss of profits, data, or business opportunities.`
+  },
+  {
+    title: 'Intellectual Property Rights & Work Product Assignment',
+    category: 'IP & Ownership',
+    text: `## INTELLECTUAL PROPERTY RIGHTS & WORK PRODUCT\n\n(a) Work Product Ownership: All deliverables, software, documentation, reports, inventions, and work product developed or produced under this Agreement shall belong solely and exclusively to the Client/Company from the moment of creation.\n(b) Assignment: To the extent any rights in such work product do not vest automatically, the Service Provider hereby irrevocably transfers and assigns all worldwide right, title, and interest (including copyrights, patent rights, and trade secrets) to the Client/Company.\n(c) Pre-Existing IP: Each party retains sole ownership of its respective background intellectual property developed prior to or independently of this Agreement.`
+  },
+  {
+    title: 'Term, Mutual Termination & Survival',
+    category: 'Term & Termination',
+    text: `## TERM AND TERMINATION\n\n(a) Term: This Agreement shall remain in full force and effect for a period of three (3) years from the Effective Date.\n(b) Termination for Convenience: Either party may terminate this Agreement without cause upon providing at least thirty (30) days prior written notice to the other party.\n(c) Termination for Material Breach: Either party may terminate immediately upon written notice if the other party materially breaches any provision of this Agreement and fails to cure such breach within fifteen (15) days of receiving written notice thereof.\n(d) Survival: Obligations of confidentiality shall survive termination for three (3) years; trade secret obligations shall survive indefinitely.`
+  },
+  {
+    title: 'Return or Destruction of Materials',
+    category: 'Covenants',
+    text: `## RETURN OR DESTRUCTION OF MATERIALS\n\nUpon written request by the Disclosing Party, or upon expiration or termination of this Agreement, the Receiving Party shall promptly, and in any event within seven (7) business days, return or securely destroy all tangible and electronic materials containing Confidential Information, and provide written certification of compliance signed by an authorized corporate officer.`
+  },
+  {
+    title: 'Non-Solicitation of Personnel (12 Months)',
+    category: 'Restrictive Covenants',
+    text: `## NON-SOLICITATION OF PERSONNEL\n\nDuring the term of this Agreement and for a period of twelve (12) months following any expiration or termination, neither party shall directly or indirectly solicit, recruit, or attempt to hire any employee, officer, or contractor of the other party who was introduced or with whom the party interacted pursuant to this Agreement, without prior written consent.`
+  },
+  {
+    title: 'Governing Law & Dispute Resolution',
+    category: 'Boilerplate',
+    text: `## GOVERNING LAW AND DISPUTE RESOLUTION\n\nThis Agreement shall be governed by, construed, and enforced in accordance with the laws of the State of Delaware, without regard to its conflict of law principles. The competent state and federal courts located in Delaware shall have sole and exclusive jurisdiction over any disputes arising out of or relating to this Agreement.`
+  },
+  {
+    title: 'Severability, Counterparts & Entire Agreement',
+    category: 'Boilerplate',
+    text: `## MISCELLANEOUS PROVISIONS\n\n(a) Entire Agreement: This Agreement constitutes the entire agreement between the Parties concerning the subject matter hereof and supersedes all prior agreements.\n(b) Amendments: No amendment shall be effective unless executed in writing by both Parties.\n(c) Severability: If any provision is held invalid or unenforceable, the remainder of the Agreement shall remain in full force and effect.\n(d) Counterparts: This Agreement may be executed in counterparts, each of which shall be deemed an original.`
+  },
+  {
+    title: 'Formal Execution & Signature Block',
+    category: 'Execution',
+    text: `## EXECUTION & SIGNATURES\n\nIN WITNESS WHEREOF, the Parties hereto have caused this Agreement to be executed by their respective duly authorized officers as of the Effective Date.\n\n| Disclosing Party | Receiving Party |\n| :--- | :--- |\n| By: ___________________________ | By: ___________________________ |\n| Name: Authorized Representative | Name: Authorized Representative |\n| Title: Executive Officer | Title: Executive Officer |\n| Date: _________________________ | Date: _________________________ |`
+  }
+];
 
 export const DocumentEditor: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -38,6 +106,35 @@ export const DocumentEditor: React.FC = () => {
   const [validating, setValidating] = useState(false);
   const [activeTab, setActiveTab] = useState<'VALIDATION' | 'COMPLETENESS' | 'ASSISTANT'>('VALIDATION');
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
+
+  // Fix Action States
+  const [fixingIssueId, setFixingIssueId] = useState<string | null>(null);
+  const [batchFixing, setBatchFixing] = useState(false);
+  const [undoing, setUndoing] = useState(false);
+
+  // Search & Replace state
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [replaceQuery, setReplaceQuery] = useState('');
+  const [matchCase, setMatchCase] = useState(false);
+  const [currentMatchIdx, setCurrentMatchIdx] = useState(0);
+  const [totalMatches, setTotalMatches] = useState(0);
+
+  // Clause Library menu
+  const [showClauseMenu, setShowClauseMenu] = useState(false);
+
+  // Placeholder Resolver Modal state
+  const [placeholderModal, setPlaceholderModal] = useState<{
+    isOpen: boolean;
+    placeholder: string;
+    issueId?: string;
+    targetSection?: string;
+    replacementValue: string;
+  }>({
+    isOpen: false,
+    placeholder: '',
+    replacementValue: ''
+  });
 
   // Diff Modal state
   const [showDiffModal, setShowDiffModal] = useState(false);
@@ -55,6 +152,18 @@ export const DocumentEditor: React.FC = () => {
   const [customCommand, setCustomCommand] = useState('');
   const [applyingCommand, setApplyingCommand] = useState(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState('');
+
+  // Keyboard shortcut Ctrl+F / Cmd+F to open Search & Replace
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        setShowSearch(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const scrollToSection = (sectionName?: string, evidence?: string, textRange?: { start: number; end: number }) => {
     if (!textareaRef.current) return;
@@ -194,6 +303,207 @@ export const DocumentEditor: React.FC = () => {
     }
   };
 
+  // 1-Click Quick Fix for any issue
+  const handleApplyQuickFix = async (issue: ValidationIssue) => {
+    if (!id || !document) return;
+    const issueId = issue.id || issue.issueId;
+    if (!issueId) return;
+
+    setFixingIssueId(issueId);
+    try {
+      const res = await documentService.applyIssuePatch(id, issueId);
+      if (res && res.document) {
+        setDocument(res.document);
+        setContent(res.document.content);
+        setSaveSuccessMsg(`⚡ Successfully resolved: ${issue.title || issue.section}`);
+        setTimeout(() => setSaveSuccessMsg(''), 4000);
+      }
+    } catch (err: any) {
+      alert(`Quick Fix failed: ${err.message}`);
+    } finally {
+      setFixingIssueId(null);
+    }
+  };
+
+  // Batch Auto-Fix all safe issues
+  const handleBatchFixSafe = async () => {
+    if (!id || !document) return;
+    setBatchFixing(true);
+    try {
+      const res = await documentService.fixAllSafe(id);
+      if (res && res.document) {
+        setDocument(res.document);
+        setContent(res.document.content);
+        setSaveSuccessMsg(`⚡ Auto-fixed ${res.appliedCount} safe issue${res.appliedCount === 1 ? '' : 's'}!`);
+        setTimeout(() => setSaveSuccessMsg(''), 4000);
+      }
+    } catch (err: any) {
+      alert(`Batch Auto-Fix failed: ${err.message}`);
+    } finally {
+      setBatchFixing(false);
+    }
+  };
+
+  // 1-Click Undo last fix
+  const handleUndoLastFix = async () => {
+    if (!id || !document) return;
+    setUndoing(true);
+    try {
+      const res = await documentService.undoLastFix(id);
+      if (res && res.document) {
+        setDocument(res.document);
+        setContent(res.document.content);
+        setSaveSuccessMsg(`⤾ ${res.message || 'Reverted to previous version'}`);
+        setTimeout(() => setSaveSuccessMsg(''), 4000);
+      }
+    } catch (err: any) {
+      alert(`Undo failed: ${err.message}`);
+    } finally {
+      setUndoing(false);
+    }
+  };
+
+  // Insert standard canonical clause at cursor
+  const insertTextAtCursor = (textToInsert: string) => {
+    if (!textareaRef.current) return;
+    const el = textareaRef.current;
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const current = el.value;
+
+    const before = current.substring(0, start);
+    const after = current.substring(end);
+    
+    const needsPrefixNewline = before.length > 0 && !before.endsWith('\n\n') ? (before.endsWith('\n') ? '\n' : '\n\n') : '';
+    const needsSuffixNewline = after.length > 0 && !after.startsWith('\n\n') ? (after.startsWith('\n') ? '\n' : '\n\n') : '';
+    
+    const newContent = `${before}${needsPrefixNewline}${textToInsert}${needsSuffixNewline}${after}`;
+    setContent(newContent);
+
+    setTimeout(() => {
+      el.focus();
+      const newCursorPos = start + needsPrefixNewline.length + textToInsert.length;
+      el.setSelectionRange(newCursorPos, newCursorPos);
+      const linesBefore = newContent.substring(0, newCursorPos).split('\n').length;
+      el.scrollTop = Math.max(0, (linesBefore - 3) * 24);
+    }, 50);
+
+    setSaveSuccessMsg('✓ Clause inserted into document');
+    setTimeout(() => setSaveSuccessMsg(''), 3000);
+  };
+
+  // Formatting helpers (bold, italic, list, divider)
+  const insertFormatting = (prefix: string, suffix: string = '') => {
+    if (!textareaRef.current) return;
+    const el = textareaRef.current;
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const current = el.value;
+
+    const selected = current.substring(start, end);
+    let newContent = '';
+    let newStart = start;
+    let newEnd = end;
+
+    if (selected) {
+      newContent = current.substring(0, start) + prefix + selected + suffix + current.substring(end);
+      newStart = start;
+      newEnd = end + prefix.length + suffix.length;
+    } else {
+      const placeholder = prefix === '## ' ? 'Section Title\n' : (prefix === '- ' ? 'List item\n' : 'text');
+      newContent = current.substring(0, start) + prefix + placeholder + suffix + current.substring(end);
+      newStart = start + prefix.length;
+      newEnd = newStart + placeholder.length;
+    }
+
+    setContent(newContent);
+    setTimeout(() => {
+      el.focus();
+      el.setSelectionRange(newStart, newEnd);
+    }, 50);
+  };
+
+  // Search & Replace logic
+  const handleFind = (direction: 'next' | 'prev' = 'next') => {
+    if (!searchQuery || !textareaRef.current) return;
+    const el = textareaRef.current;
+    const text = el.value;
+    const query = matchCase ? searchQuery : searchQuery.toLowerCase();
+    const sourceText = matchCase ? text : text.toLowerCase();
+
+    const indices: number[] = [];
+    let pos = 0;
+    while ((pos = sourceText.indexOf(query, pos)) !== -1) {
+      indices.push(pos);
+      pos += query.length;
+    }
+
+    if (indices.length === 0) {
+      setTotalMatches(0);
+      setCurrentMatchIdx(0);
+      return;
+    }
+
+    setTotalMatches(indices.length);
+
+    let targetIdx = 0;
+    const currentCursor = el.selectionStart;
+
+    if (direction === 'next') {
+      const found = indices.findIndex(idx => idx > currentCursor);
+      targetIdx = found !== -1 ? found : 0;
+    } else {
+      const found = [...indices].reverse().findIndex(idx => idx < currentCursor);
+      targetIdx = found !== -1 ? indices.length - 1 - found : indices.length - 1;
+    }
+
+    setCurrentMatchIdx(targetIdx + 1);
+    const startPos = indices[targetIdx];
+    const endPos = startPos + query.length;
+
+    el.focus();
+    el.setSelectionRange(startPos, endPos);
+    const linesBefore = text.substring(0, startPos).split('\n').length;
+    el.scrollTop = Math.max(0, (linesBefore - 4) * 24);
+  };
+
+  const handleReplaceCurrent = () => {
+    if (!searchQuery || !textareaRef.current) return;
+    const el = textareaRef.current;
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const selected = el.value.substring(start, end);
+
+    const matches = matchCase 
+      ? selected === searchQuery 
+      : selected.toLowerCase() === searchQuery.toLowerCase();
+
+    if (matches) {
+      const updated = content.substring(0, start) + replaceQuery + content.substring(end);
+      setContent(updated);
+      setTimeout(() => {
+        handleFind('next');
+      }, 50);
+    } else {
+      handleFind('next');
+    }
+  };
+
+  const handleReplaceAll = () => {
+    if (!searchQuery) return;
+    const flags = matchCase ? 'g' : 'gi';
+    const regex = new RegExp(searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags);
+    const count = (content.match(regex) || []).length;
+    if (count === 0) return;
+
+    const updated = content.replace(regex, replaceQuery);
+    setContent(updated);
+    setTotalMatches(0);
+    setCurrentMatchIdx(0);
+    setSaveSuccessMsg(`✓ Replaced ${count} occurrences of "${searchQuery}"`);
+    setTimeout(() => setSaveSuccessMsg(''), 3500);
+  };
+
   const handleExplain = async () => {
     const textToExplain = selectedText.trim() || content.slice(0, 300);
     setExplaining(true);
@@ -283,6 +593,15 @@ export const DocumentEditor: React.FC = () => {
   const issuesList = document.validationSummary?.issues || [];
   const validationScore = document.validationScore || 0;
 
+  const safeFixableCount = issuesList.filter((i: ValidationIssue) => 
+    i.canAutoFix || 
+    i.mode === 'SAFE_AUTO' || 
+    i.mode === 'REVIEW' || 
+    i.type === 'UNRESOLVED_PLACEHOLDER' ||
+    i.type === 'MISSING_NOTICE_PERIOD' ||
+    i.type === 'MISSING_SIGNATURE_BLOCK'
+  ).length;
+
   return (
     <div className="space-y-4">
       {/* Top Action Bar */}
@@ -321,7 +640,7 @@ export const DocumentEditor: React.FC = () => {
           <button
             onClick={() => handleSave(false)}
             disabled={saving}
-            className="px-3 py-1.5 bg-white border border-mira-border hover:border-mira-primary text-xs font-semibold rounded-lg text-mira-dark flex items-center gap-1.5 shadow-2xs"
+            className="px-3 py-1.5 bg-white border border-mira-border hover:border-mira-primary text-xs font-semibold rounded-lg text-mira-dark flex items-center gap-1.5 shadow-2xs cursor-pointer"
           >
             <Save className="w-3.5 h-3.5 text-mira-muted" />
             {saving ? 'Saving...' : 'Save Draft'}
@@ -330,10 +649,20 @@ export const DocumentEditor: React.FC = () => {
           <button
             onClick={() => handleSave(true)}
             disabled={saving}
-            className="px-3 py-1.5 bg-mira-light border border-purple-200 text-mira-primary hover:bg-purple-100 text-xs font-semibold rounded-lg flex items-center gap-1.5 shadow-2xs"
+            className="px-3 py-1.5 bg-mira-light border border-purple-200 text-mira-primary hover:bg-purple-100 text-xs font-semibold rounded-lg flex items-center gap-1.5 shadow-2xs cursor-pointer"
           >
             <History className="w-3.5 h-3.5" />
             Save as Version
+          </button>
+
+          <button
+            onClick={handleUndoLastFix}
+            disabled={undoing}
+            className="px-3 py-1.5 bg-white border border-mira-border hover:border-amber-400 hover:bg-amber-50/40 text-xs font-semibold rounded-lg text-mira-dark flex items-center gap-1.5 shadow-2xs cursor-pointer"
+            title="Undo last applied legal patch and revert to previous revision"
+          >
+            <RotateCcw className={`w-3.5 h-3.5 text-amber-600 ${undoing ? 'animate-spin' : ''}`} />
+            {undoing ? 'Reverting...' : 'Undo Fix'}
           </button>
 
           <button
@@ -420,13 +749,204 @@ export const DocumentEditor: React.FC = () => {
           </div>
         </div>
 
-        {/* PANEL 2: Editable Document (Center, 6 cols) */}
+        {/* PANEL 2: Editable Document & Professional Drafting Toolbar (Center, 6 cols) */}
         <div className="lg:col-span-6 bg-white rounded-xl border border-mira-border shadow-xs flex flex-col min-h-[75vh]">
-          <div className="px-5 py-3 border-b border-mira-border bg-gray-50/50 flex items-center justify-between text-xs text-mira-muted">
-            <span>Editable Legal Document (Markdown Formatted)</span>
+          {/* Top Bar */}
+          <div className="px-5 py-2.5 border-b border-mira-border bg-gray-50/50 flex items-center justify-between text-xs text-mira-muted">
+            <div className="flex items-center gap-2">
+              <FileText className="w-4 h-4 text-purple-600" />
+              <span className="font-semibold text-gray-700">Legal Document Editor</span>
+            </div>
             <span className="text-[11px] font-medium text-purple-700">AI never prevents manual editing</span>
           </div>
 
+          {/* Professional Drafting Toolbar */}
+          <div className="px-4 py-2 border-b border-mira-border bg-gray-50/80 flex items-center justify-between gap-2 flex-wrap">
+            {/* Formatting Tools */}
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => insertFormatting('## ', '\n')}
+                className="px-2 py-1 bg-white hover:bg-gray-100 text-gray-700 border border-gray-200 rounded text-xs font-bold shadow-2xs cursor-pointer"
+                title="Heading 2 (## Section Title)"
+              >
+                H2
+              </button>
+              <button
+                onClick={() => insertFormatting('**', '**')}
+                className="p-1.5 bg-white hover:bg-gray-100 text-gray-700 border border-gray-200 rounded shadow-2xs cursor-pointer"
+                title="Bold (**text**)"
+              >
+                <Bold className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => insertFormatting('*', '*')}
+                className="p-1.5 bg-white hover:bg-gray-100 text-gray-700 border border-gray-200 rounded shadow-2xs cursor-pointer"
+                title="Italic (*text*)"
+              >
+                <Italic className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => insertFormatting('- ', '\n')}
+                className="p-1.5 bg-white hover:bg-gray-100 text-gray-700 border border-gray-200 rounded shadow-2xs cursor-pointer"
+                title="Bullet List (- item)"
+              >
+                <List className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => insertFormatting('\n\n---\n\n')}
+                className="p-1.5 bg-white hover:bg-gray-100 text-gray-700 border border-gray-200 rounded shadow-2xs cursor-pointer"
+                title="Section Divider (---)"
+              >
+                <Minus className="w-3.5 h-3.5" />
+              </button>
+
+              <div className="h-4 w-px bg-gray-300 mx-1" />
+
+              {/* Search & Replace Toggle */}
+              <button
+                onClick={() => setShowSearch(!showSearch)}
+                className={`px-2 py-1 rounded text-xs font-semibold flex items-center gap-1 transition-colors border cursor-pointer ${
+                  showSearch 
+                    ? 'bg-purple-100 border-purple-300 text-purple-800' 
+                    : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-100'
+                }`}
+                title="Toggle Search & Replace (Ctrl+F)"
+              >
+                <Search className="w-3.5 h-3.5" />
+                <span>Find & Replace</span>
+              </button>
+            </div>
+
+            {/* Insert Approved Standard Clause Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setShowClauseMenu(!showClauseMenu)}
+                className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-800 text-xs font-bold rounded-lg flex items-center gap-1.5 shadow-2xs cursor-pointer"
+              >
+                <PlusCircle className="w-3.5 h-3.5 text-mira-primary" />
+                <span>+ Insert Standard Clause</span>
+                <ChevronDown className="w-3 h-3 text-purple-600" />
+              </button>
+
+              {showClauseMenu && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-20" 
+                    onClick={() => setShowClauseMenu(false)}
+                  />
+                  <div className="absolute right-0 mt-1 w-84 bg-white rounded-xl shadow-xl border border-gray-200 z-30 py-1 text-xs max-h-80 overflow-y-auto animate-in fade-in zoom-in-95">
+                    <div className="px-3 py-1.5 border-b border-gray-100 text-[10px] font-bold text-gray-500 uppercase tracking-wider bg-gray-50 flex items-center justify-between">
+                      <span>Approved Standard Legal Clauses</span>
+                      <button onClick={() => setShowClauseMenu(false)} className="text-gray-400 hover:text-gray-600">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    {CLAUSE_LIBRARY.map((c, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => {
+                          insertTextAtCursor(c.text);
+                          setShowClauseMenu(false);
+                        }}
+                        className="w-full text-left px-3 py-2 hover:bg-purple-50 border-b border-gray-50 flex items-start justify-between gap-2 cursor-pointer transition-colors"
+                      >
+                        <div>
+                          <div className="font-semibold text-gray-900 text-xs">{c.title}</div>
+                          <div className="text-[10px] text-gray-500 line-clamp-1">{c.text.replace(/#+\s*/g, '').slice(0, 65)}...</div>
+                        </div>
+                        <span className="text-[9px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-mono flex-shrink-0">
+                          {c.category}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Search & Replace Active Bar */}
+          {showSearch && (
+            <div className="px-4 py-2.5 bg-purple-50/60 border-b border-purple-100 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs animate-in fade-in">
+              <div className="flex items-center gap-2 flex-1 w-full">
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleFind(e.shiftKey ? 'prev' : 'next');
+                    }}
+                    placeholder="Find text in document..."
+                    className="w-full pl-7 pr-3 py-1 bg-white border border-gray-300 rounded text-xs focus:outline-hidden focus:border-purple-500"
+                  />
+                  <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2 top-2" />
+                </div>
+
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    value={replaceQuery}
+                    onChange={(e) => setReplaceQuery(e.target.value)}
+                    placeholder="Replace with..."
+                    className="w-full px-3 py-1 bg-white border border-gray-300 rounded text-xs focus:outline-hidden focus:border-purple-500"
+                  />
+                </div>
+
+                <label className="flex items-center gap-1 text-[11px] text-gray-600 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={matchCase}
+                    onChange={(e) => setMatchCase(e.target.checked)}
+                    className="rounded border-gray-300 text-purple-600 focus:ring-0"
+                  />
+                  <span>Aa</span>
+                </label>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                {totalMatches > 0 && (
+                  <span className="text-[11px] text-purple-700 font-mono font-medium px-2 py-0.5 bg-purple-100 rounded">
+                    {currentMatchIdx}/{totalMatches}
+                  </span>
+                )}
+                <button
+                  onClick={() => handleFind('prev')}
+                  className="px-2 py-1 bg-white hover:bg-gray-100 border border-gray-300 rounded text-xs font-semibold cursor-pointer"
+                >
+                  Prev
+                </button>
+                <button
+                  onClick={() => handleFind('next')}
+                  className="px-2 py-1 bg-white hover:bg-gray-100 border border-gray-300 rounded text-xs font-semibold cursor-pointer"
+                >
+                  Next
+                </button>
+                <button
+                  onClick={handleReplaceCurrent}
+                  disabled={!searchQuery}
+                  className="px-2 py-1 bg-white hover:bg-purple-50 text-purple-700 border border-purple-300 rounded text-xs font-semibold cursor-pointer disabled:opacity-50"
+                >
+                  Replace
+                </button>
+                <button
+                  onClick={handleReplaceAll}
+                  disabled={!searchQuery}
+                  className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs font-semibold shadow-2xs cursor-pointer disabled:opacity-50"
+                >
+                  Replace All
+                </button>
+                <button
+                  onClick={() => setShowSearch(false)}
+                  className="p-1 text-gray-400 hover:text-gray-600 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Textarea Editor */}
           <div className="p-5 flex-1 flex flex-col">
             <textarea
               ref={textareaRef}
@@ -436,9 +956,26 @@ export const DocumentEditor: React.FC = () => {
                 const sel = e.target.value.substring(e.target.selectionStart, e.target.selectionEnd);
                 if (sel) setSelectedText(sel);
               }}
-              className="w-full flex-1 min-h-[68vh] p-4 font-serif text-sm leading-relaxed text-mira-dark bg-transparent border-0 focus:outline-hidden resize-none selection:bg-purple-100"
+              className="w-full flex-1 min-h-[64vh] p-4 font-serif text-sm leading-relaxed text-mira-dark bg-transparent border-0 focus:outline-hidden resize-none selection:bg-purple-100"
               placeholder="Legal document text..."
             />
+          </div>
+
+          {/* Live Document Metrics Bar */}
+          <div className="px-5 py-2.5 border-t border-mira-border bg-gray-50/60 flex items-center justify-between text-[11px] text-gray-500">
+            <div className="flex items-center gap-4 flex-wrap">
+              <span>Words: <strong className="text-gray-700 font-mono">{content.trim().split(/\s+/).filter(Boolean).length}</strong></span>
+              <span>Characters: <strong className="text-gray-700 font-mono">{content.length}</strong></span>
+              <span>Sections: <strong className="text-gray-700 font-mono">{sections.length}</strong></span>
+              <span>Reading Time: <strong className="text-gray-700 font-mono">~{Math.max(1, Math.ceil(content.trim().split(/\s+/).filter(Boolean).length / 200))} min</strong></span>
+              {selectedText && (
+                <span className="text-purple-700 font-medium">Selected: <strong className="font-mono">{selectedText.length}</strong> chars</span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={`w-2 h-2 rounded-full ${validationScore >= 80 ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+              <span className="font-medium text-gray-700">Health: {validationScore}%</span>
+            </div>
           </div>
         </div>
 
@@ -497,6 +1034,37 @@ export const DocumentEditor: React.FC = () => {
                   {document.status === 'COMPLETED' ? '✓ Passed automated checks' : '⚠ Requires manual review'}
                 </span>
               </div>
+
+              {/* Auto-Fix All Safe Issues Banner */}
+              {safeFixableCount > 0 && (
+                <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 shadow-2xs flex items-center justify-between gap-2 animate-in fade-in">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-emerald-100 text-emerald-700 rounded-lg">
+                      <Zap className="w-4 h-4 text-emerald-700 fill-emerald-700" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-emerald-950">
+                        {safeFixableCount} Safe Fix{safeFixableCount === 1 ? '' : 'es'} Ready
+                      </div>
+                      <div className="text-[10px] text-emerald-800">
+                        Deterministic legal patches with safety guarantees
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleBatchFixSafe}
+                    disabled={batchFixing}
+                    className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
+                  >
+                    {batchFixing ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Zap className="w-3.5 h-3.5 fill-current" />
+                    )}
+                    {batchFixing ? 'Fixing...' : `Fix All (${safeFixableCount})`}
+                  </button>
+                </div>
+              )}
 
               {/* Multi-tier Layer Checks */}
               <div className="space-y-2">
@@ -570,6 +1138,17 @@ export const DocumentEditor: React.FC = () => {
                     {issuesList.map((issue: ValidationIssue, idx: number) => {
                       const isHigh = issue.severity === 'HIGH';
                       const isMed = issue.severity === 'MEDIUM';
+                      const issueKey = issue.id || issue.issueId || `iss_${idx}`;
+
+                      const canFix = issue.canAutoFix || 
+                        issue.mode === 'SAFE_AUTO' || 
+                        issue.mode === 'REVIEW' || 
+                        issue.type?.includes('MISSING') || 
+                        issue.type === 'UNCAPPED_LIABILITY' || 
+                        issue.type === 'UNLIMITED_LIABILITY' ||
+                        issue.type === 'ONE_SIDED_TERMINATION' || 
+                        issue.type === 'UNRESOLVED_PLACEHOLDER' || 
+                        issue.type === 'FACT_MISMATCH';
 
                       return (
                         <div
@@ -641,6 +1220,48 @@ export const DocumentEditor: React.FC = () => {
                             </p>
                           </div>
 
+                          {/* 1-CLICK QUICK FIX BUTTON */}
+                          {canFix && (
+                            <div className="pt-0.5">
+                              <button
+                                onClick={() => {
+                                  if (issue.type === 'UNRESOLVED_PLACEHOLDER') {
+                                    setPlaceholderModal({
+                                      isOpen: true,
+                                      placeholder: issue.evidence || '[Party Name]',
+                                      issueId: issueKey,
+                                      targetSection: issue.section,
+                                      replacementValue: document.structuredFacts?.disclosingParty?.name || ''
+                                    });
+                                  } else {
+                                    handleApplyQuickFix(issue);
+                                  }
+                                }}
+                                disabled={fixingIssueId === issueKey}
+                                className="w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                                title={issue.type === 'UNRESOLVED_PLACEHOLDER' ? 'Open interactive placeholder resolver' : 'Apply verified legal patch immediately to document'}
+                              >
+                                {fixingIssueId === issueKey ? (
+                                  <>
+                                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                    <span>Applying Legal Patch...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Zap className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
+                                    <span>
+                                      {issue.type === 'UNRESOLVED_PLACEHOLDER'
+                                        ? '⚡ Resolve Placeholder Token'
+                                        : issue.type?.includes('MISSING')
+                                        ? '⚡ Insert Canonical Clause'
+                                        : '⚡ 1-Click Quick Fix'}
+                                    </span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          )}
+
                           {/* Human Counsel Review Layer */}
                           <div className="p-2 bg-white/80 rounded-lg border border-black/5 flex items-center justify-between text-[10px]">
                             <span className="font-bold text-gray-600 uppercase tracking-wider">
@@ -648,7 +1269,7 @@ export const DocumentEditor: React.FC = () => {
                             </span>
                             <div className="flex items-center gap-1">
                               <button
-                                onClick={() => handleReviewIssue(issue.id || issue.issueId || `iss_${idx}`, 'ACCEPTED')}
+                                onClick={() => handleReviewIssue(issueKey, 'ACCEPTED')}
                                 className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${
                                   issue.reviewStatus === 'ACCEPTED'
                                     ? 'bg-emerald-600 text-white shadow-2xs'
@@ -659,7 +1280,7 @@ export const DocumentEditor: React.FC = () => {
                                 ✓ Accept
                               </button>
                               <button
-                                onClick={() => handleReviewIssue(issue.id || issue.issueId || `iss_${idx}`, 'DISMISSED')}
+                                onClick={() => handleReviewIssue(issueKey, 'DISMISSED')}
                                 className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${
                                   issue.reviewStatus === 'DISMISSED'
                                     ? 'bg-gray-600 text-white shadow-2xs'
@@ -670,7 +1291,7 @@ export const DocumentEditor: React.FC = () => {
                                 Dismiss
                               </button>
                               <button
-                                onClick={() => handleReviewIssue(issue.id || issue.issueId || `iss_${idx}`, 'NEEDS_REVIEW')}
+                                onClick={() => handleReviewIssue(issueKey, 'NEEDS_REVIEW')}
                                 className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${
                                   issue.reviewStatus === 'NEEDS_REVIEW'
                                     ? 'bg-amber-600 text-white shadow-2xs'
@@ -706,7 +1327,7 @@ export const DocumentEditor: React.FC = () => {
                               title="Jump to this section and open AI Assistant with resolution instructions"
                             >
                               <Sparkles className="w-3 h-3" />
-                              Fix with AI Assistant
+                              AI Assistant
                             </button>
                           </div>
                         </div>
@@ -941,6 +1562,106 @@ export const DocumentEditor: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* INTERACTIVE PLACEHOLDER RESOLVER MODAL */}
+      {placeholderModal.isOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-5 border border-gray-200 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-purple-100 text-purple-700 rounded-lg">
+                  <Tag className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900 text-sm">Resolve Document Placeholder</h3>
+                  <p className="text-xs text-gray-500">Replace bracketed tokens with authoritative parties or terms</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setPlaceholderModal({ ...placeholderModal, isOpen: false })}
+                className="text-gray-400 hover:text-gray-600 p-1 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-gray-700">Placeholder to Replace:</label>
+              <div className="p-2 bg-purple-50 border border-purple-100 rounded-lg font-mono text-xs text-purple-900 font-bold">
+                {placeholderModal.placeholder}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-gray-700">Select Canonical Suggestion:</label>
+              <div className="grid grid-cols-1 gap-1.5 max-h-40 overflow-y-auto">
+                {[
+                  { label: 'Disclosing Party', val: document.structuredFacts?.disclosingParty?.name || document.structuredFacts?.disclosingParty || 'Apex Innovations Inc.' },
+                  { label: 'Receiving Party', val: document.structuredFacts?.receivingParty?.name || document.structuredFacts?.receivingParty || 'Nexus Global Partners LLC' },
+                  { label: 'Effective Date', val: document.structuredFacts?.effectiveDate || new Date().toISOString().split('T')[0] },
+                  { label: 'Governing Law', val: document.structuredFacts?.jurisdiction || document.structuredFacts?.governingLaw || 'the State of Delaware' },
+                  { label: 'Duration / Term', val: document.structuredFacts?.duration || 'three (3) years' }
+                ].filter(item => Boolean(item.val)).map((item, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => setPlaceholderModal(prev => ({ ...prev, replacementValue: item.val }))}
+                    className={`p-2 rounded-lg text-xs text-left border flex items-center justify-between transition-colors cursor-pointer ${
+                      placeholderModal.replacementValue === item.val
+                        ? 'bg-purple-100 border-purple-400 font-bold text-purple-950'
+                        : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    <span>{item.val}</span>
+                    <span className="text-[10px] text-gray-400">{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-gray-700">Or Type Custom Value:</label>
+              <input
+                type="text"
+                value={placeholderModal.replacementValue}
+                onChange={(e) => setPlaceholderModal(prev => ({ ...prev, replacementValue: e.target.value }))}
+                placeholder="Type replacement text..."
+                className="w-full p-2 border border-gray-300 rounded-lg text-xs focus:outline-hidden focus:border-purple-600"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t">
+              <button
+                type="button"
+                onClick={() => setPlaceholderModal({ ...placeholderModal, isOpen: false })}
+                className="px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 rounded-lg cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!placeholderModal.replacementValue) return;
+                  const targetToken = placeholderModal.placeholder;
+                  const val = placeholderModal.replacementValue;
+                  const updated = content.split(targetToken).join(val);
+                  setContent(updated);
+                  setPlaceholderModal({ ...placeholderModal, isOpen: false });
+                  setSaveSuccessMsg(`✓ Replaced all "${targetToken}" with "${val}"`);
+                  setTimeout(() => setSaveSuccessMsg(''), 4000);
+                  if (placeholderModal.issueId) {
+                    handleReviewIssue(placeholderModal.issueId, 'ACCEPTED');
+                  }
+                }}
+                disabled={!placeholderModal.replacementValue}
+                className="px-4 py-1.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg shadow-2xs cursor-pointer"
+              >
+                Replace All in Document
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* VERSION DIFF MODAL */}
       {showDiffModal && (
