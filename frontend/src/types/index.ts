@@ -59,6 +59,10 @@ export interface ValidationIssue {
   confidence?: number;
   sources?: Array<{ title: string; source: string; relevance?: number }>;
   proposedPatch?: DocumentPatch;
+  reviewStatus?: 'ACCEPTED' | 'DISMISSED' | 'NEEDS_REVIEW';
+  reviewedBy?: string;
+  reviewedAt?: string;
+  reviewNote?: string;
 }
 
 export interface ValidationSummary {
@@ -197,3 +201,95 @@ export interface TemplateRecord {
     defaultContent?: string;
   }>;
 }
+
+export type ContractClauseStatus = 'PRESENT' | 'MISSING' | 'INCOMPLETE' | 'AMBIGUOUS';
+export type ContractRiskSeverity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+
+export interface ContractPartyInfo {
+  name: string;
+  role: string;
+  address?: string;
+  signatory?: string;
+}
+
+export interface ContractClauseMapItem {
+  id: string;
+  name: string;
+  category: string;
+  status: ContractClauseStatus;
+  isRequired: boolean;
+  detectedSnippet?: string;
+  explanation: string;
+}
+
+export interface ContractRiskArea {
+  id: string;
+  severity: ContractRiskSeverity;
+  category: string;
+  clause: string;
+  title: string;
+  description: string;
+  evidence: string;
+  location?: { line?: number; textRange?: { start: number; end: number } };
+  legalRationale: string;
+  suggestedResolution: string;
+}
+
+export interface ContractConsistencyCheck {
+  partiesMatch: boolean;
+  dateChronologyValid: boolean;
+  definedTermsConsistent: boolean;
+  findings: string[];
+}
+
+export interface ContractOverview {
+  title: string;
+  contractType: string;
+  parties: ContractPartyInfo[];
+  effectiveDate?: string;
+  duration?: string;
+  monetaryTerms: string;
+  governingLaw?: string;
+  jurisdiction?: string;
+  wordCount: number;
+  paragraphCount: number;
+}
+
+export interface ContractAnalysisResult {
+  overview: ContractOverview;
+  clauseMap: ContractClauseMapItem[];
+  riskAreas: ContractRiskArea[];
+  consistency: ContractConsistencyCheck;
+  health: {
+    score: number;
+    status: 'STRONG' | 'MODERATE' | 'NEEDS_REVISION' | 'CRITICAL_ATTENTION';
+    categoryScores: {
+      completeness: number;
+      riskAndCompliance: number;
+      consistency: number;
+      clarity: number;
+    };
+    scoreBreakdown: string[];
+    disclaimer: string;
+  };
+  extractedText: string;
+}
+
+export interface DiffLine {
+  type: 'added' | 'removed' | 'unchanged';
+  lineA?: number;
+  lineB?: number;
+  text: string;
+}
+
+export interface DocumentDiffResult {
+  lines: DiffLine[];
+  summary: {
+    addedCount: number;
+    removedCount: number;
+    unchangedCount: number;
+    totalLinesA: number;
+    totalLinesB: number;
+  };
+}
+

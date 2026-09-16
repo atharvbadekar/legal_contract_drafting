@@ -11,7 +11,8 @@ import {
   LogOut, 
   User as UserIcon, 
   ChevronDown,
-  Layers
+  Layers,
+  Search
 } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
@@ -69,6 +70,18 @@ export const Navbar: React.FC = () => {
                 >
                   <PlusCircle className="w-4 h-4 text-mira-primary" />
                   Create Document
+                </Link>
+
+                <Link
+                  to="/analyzer"
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
+                    isActive('/analyzer')
+                      ? 'bg-mira-light text-mira-primary font-semibold'
+                      : 'text-mira-dark hover:bg-gray-50'
+                  }`}
+                >
+                  <Search className="w-4 h-4 text-purple-600" />
+                  Contract Analyzer
                 </Link>
 
                 <Link

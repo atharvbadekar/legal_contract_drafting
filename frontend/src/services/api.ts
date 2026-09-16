@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { DocumentRecord, ClauseRecord, KnowledgeDocumentRecord, TemplateRecord, User } from '../types';
+import { DocumentRecord, ClauseRecord, KnowledgeDocumentRecord, TemplateRecord, User, ContractAnalysisResult, DocumentDiffResult } from '../types';
 
 export const getApiBaseUrl = (): string => {
   if (typeof window !== 'undefined') {
@@ -153,6 +153,49 @@ export const documentService = {
     document.body.appendChild(link);
     link.click();
     link.remove();
+  },
+  reviewIssue: async (id: string, issueId: string, reviewStatus: 'ACCEPTED' | 'DISMISSED' | 'NEEDS_REVIEW', note?: string) => {
+    const res = await api.post<{ success: boolean; validationSummary: any; document: DocumentRecord }>(
+      `/documents/${id}/issues/${issueId}/review`,
+      { reviewStatus, note }
+    );
+    return res.data;
+  },
+  getDiff: async (id: string, versionA?: string | number, versionB?: string | number) => {
+    const params: any = {};
+    if (versionA) params.versionA = versionA;
+    if (versionB) params.versionB = versionB;
+    const res = await api.get<{ diff: DocumentDiffResult; docTitle: string; comparedVersions: any }>(
+      `/documents/${id}/diff`,
+      { params }
+    );
+    return res.data;
+  }
+};
+
+// Contract Analyzer Service
+export const contractAnalyzerService = {
+  analyzeText: async (text: string, filename?: string) => {
+    const res = await api.post<{ result: ContractAnalysisResult }>('/documents/analyze', { text, filename });
+    return res.data.result;
+  },
+  analyzeFile: async (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await api.post<{ result: ContractAnalysisResult }>('/documents/analyze', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return res.data.result;
+  },
+  importAnalyzed: async (data: {
+    title: string;
+    documentType: string;
+    content: string;
+    structuredFacts?: any;
+    health?: any;
+  }) => {
+    const res = await api.post<{ document: DocumentRecord }>('/documents/import-analyzed', data);
+    return res.data.document;
   }
 };
 

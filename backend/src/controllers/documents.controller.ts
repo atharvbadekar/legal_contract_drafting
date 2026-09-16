@@ -6,6 +6,8 @@ import { validationEngine } from '../services/validation/validation_engine.js';
 import { patchService } from '../services/validation/patch_service.js';
 import { exportService } from '../services/documents/export_service.js';
 import { parseDocumentStructure } from '../services/documents/document_structure.js';
+import { contractAnalyzer } from '../services/analyzer/contract_analyzer.js';
+import { diffService } from '../utils/diff_service.js';
 
 export class DocumentsController {
   async list(req: AuthRequest, res: Response) {
@@ -523,6 +525,231 @@ export class DocumentsController {
       return res.json(result);
     } catch (err: any) {
       return res.status(400).json({ error: err.message });
+    }
+  }
+
+  async analyzeContract(req: AuthRequest, res: Response) {
+    try {
+      let text = '';
+      let filename = req.body?.filename || 'Uploaded Contract';
+
+      if (req.file) {
+        filename = req.file.originalname || filename;
+        text = await contractAnalyzer.extractTextFromBuffer(
+          req.file.buffer,
+          req.file.mimetype,
+          filename
+        );
+      } else if (req.body?.text) {
+        text = req.body.text;
+      } else {
+        return res.status(400).json({ error: 'No contract file or text provided for analysis.' });
+      }
+
+      if (!text || text.trim().length === 0) {
+        return res.status(400).json({ error: 'Extracted contract content is empty.' });
+      }
+
+      const result = await contractAnalyzer.analyzeContract(text, filename);
+      return res.json({ result });
+    } catch (err: any) {
+      console.error('Contract analysis error:', err);
+      return res.status(500).json({ error: `Contract analysis failed: ${err.message}` });
+    }
+  }
+
+  async importAnalyzed(req: AuthRequest, res: Response) {
+    try {
+      const userId = req.user!.id;
+      const { title, documentType, content, structuredFacts, health } = req.body;
+
+      if (!content) {
+        return res.status(400).json({ error: 'Document content is required to import.' });
+      }
+
+      const docType = documentType === 'LEGAL_NOTICE' ? 'LEGAL_NOTICE' : 'NDA';
+
+      const doc = await prisma.document.create({
+        data: {
+          userId,
+          title: title || `Analyzed ${docType}`,
+          documentType: docType,
+          generationMode: 'MIRA',
+          structuredFacts: structuredFacts || {},
+          content,
+          status: 'NEEDS_REVIEW',
+          validationScore: health?.score || 50,
+          validationSummary: health ? {
+            status: health.status === 'STRONG' ? 'PASSED' : 'NEEDS_REVIEW',
+            score: health.score,
+            layerScores: health.categoryScores,
+            issues: [],
+            disclaimer: health.disclaimer
+          } : {}
+        }
+      });
+
+      // Create initial version
+      await prisma.documentVersion.create({
+        data: {
+          documentId: doc.id,
+          versionNumber: 1,
+          structuredFacts: doc.structuredFacts as any,
+          content: doc.content,
+          validationResult: doc.validationSummary as any,
+          createdById: userId
+        }
+      });
+
+      // Re-run validation to establish formal multi-tier audit record
+      const parsed = parseDocumentStructure(content);
+      const sectionBlocks = parsed.sections.map(s => ({
+        sectionType: s.sectionType,
+        title: s.title,
+        content: s.content
+      }));
+
+      const approvedClauses = await prisma.clause.findMany({
+        where: { documentType: docType, status: 'APPROVED' }
+      });
+
+      const validationResult = await validationEngine.validate(
+        docType,
+        sectionBlocks,
+        structuredFacts || {},
+        approvedClauses.map(c => ({ clauseType: c.clauseType, title: c.title, content: c.content })),
+        content
+      );
+
+      const refreshed = await prisma.document.update({
+        where: { id: doc.id },
+        data: {
+          validationScore: validationResult.overallScore,
+          status: validationResult.status === 'PASSED' ? 'COMPLETED' : 'NEEDS_REVIEW',
+          validationSummary: {
+            status: validationResult.status,
+            score: validationResult.overallScore,
+            layerScores: validationResult.layerScores,
+            issues: validationResult.allIssues,
+            summaryCounts: validationResult.summaryCounts,
+            semanticStatus: validationResult.semanticStatus,
+            disclaimer: validationResult.disclaimer
+          } as any
+        }
+      });
+
+      return res.status(201).json({ document: refreshed });
+    } catch (err: any) {
+      console.error('Import analyzed contract error:', err);
+      return res.status(500).json({ error: `Import failed: ${err.message}` });
+    }
+  }
+
+  async reviewIssue(req: AuthRequest, res: Response) {
+    try {
+      const { id, issueId } = req.params;
+      const { reviewStatus, note } = req.body;
+      const userId = req.user!.id;
+
+      if (!['ACCEPTED', 'DISMISSED', 'NEEDS_REVIEW'].includes(reviewStatus)) {
+        return res.status(400).json({ error: 'Invalid review status. Must be ACCEPTED, DISMISSED, or NEEDS_REVIEW.' });
+      }
+
+      const doc = await prisma.document.findUnique({ where: { id } });
+      if (!doc) return res.status(404).json({ error: 'Document not found' });
+
+      const summary = (doc.validationSummary as any) || {};
+      const issues = (summary.issues || []).map((iss: any) => {
+        if (iss.id === issueId || iss.issueId === issueId) {
+          return {
+            ...iss,
+            reviewStatus,
+            reviewedBy: userId,
+            reviewedAt: new Date().toISOString(),
+            reviewNote: note || undefined
+          };
+        }
+        return iss;
+      });
+
+      const updatedSummary = {
+        ...summary,
+        issues
+      };
+
+      const updatedDoc = await prisma.document.update({
+        where: { id },
+        data: {
+          validationSummary: updatedSummary as any
+        }
+      });
+
+      // Record in AuditLog table
+      try {
+        await prisma.auditLog.create({
+          data: {
+            userId,
+            action: `ISSUE_${reviewStatus}`,
+            resourceType: 'DOCUMENT_ISSUE',
+            resourceId: `${id}:${issueId}`,
+            details: {
+              documentId: id,
+              issueId,
+              reviewStatus,
+              note: note || null,
+              timestamp: new Date().toISOString()
+            }
+          }
+        });
+      } catch (auditErr) {
+        console.warn('Failed to record audit log:', auditErr);
+      }
+
+      return res.json({ success: true, validationSummary: updatedSummary, document: updatedDoc });
+    } catch (err: any) {
+      console.error('Review issue error:', err);
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  async getDiff(req: AuthRequest, res: Response) {
+    try {
+      const { id } = req.params;
+      const { versionA, versionB } = req.query;
+
+      const doc = await prisma.document.findUnique({
+        where: { id },
+        include: { versions: { orderBy: { versionNumber: 'asc' } } }
+      });
+      if (!doc) return res.status(404).json({ error: 'Document not found' });
+
+      let textA = '';
+      let textB = doc.content;
+
+      if (versionA) {
+        const vA = doc.versions.find(v => v.versionNumber === Number(versionA) || v.id === versionA);
+        if (vA) textA = vA.content;
+      } else if (doc.versions.length > 1) {
+        textA = doc.versions[0].content;
+      }
+
+      if (versionB) {
+        const vB = doc.versions.find(v => v.versionNumber === Number(versionB) || v.id === versionB);
+        if (vB) textB = vB.content;
+      }
+
+      const diff = diffService.computeDiff(textA, textB);
+      return res.json({
+        diff,
+        docTitle: doc.title,
+        comparedVersions: {
+          original: versionA ? `Version ${versionA}` : 'Initial Version (v1)',
+          modified: versionB ? `Version ${versionB}` : 'Current Draft'
+        }
+      });
+    } catch (err: any) {
+      console.error('Diff computation error:', err);
+      return res.status(500).json({ error: `Failed to compute diff: ${err.message}` });
     }
   }
 }

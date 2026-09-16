@@ -10,6 +10,7 @@ import { DocumentsList } from './pages/DocumentsList';
 import { DocumentEditor } from './pages/DocumentEditor';
 import { DocumentVersions } from './pages/DocumentVersions';
 import { ResearchDashboard } from './pages/ResearchDashboard';
+import { ContractAnalyzer } from './pages/ContractAnalyzer';
 import { AdminTemplates } from './pages/admin/AdminTemplates';
 import { AdminClauses } from './pages/admin/AdminClauses';
 import { AdminKnowledge } from './pages/admin/AdminKnowledge';
@@ -50,6 +51,7 @@ export function App() {
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="create" element={<CreateDocument />} />
             <Route path="documents" element={<DocumentsList />} />
+            <Route path="analyzer" element={<ContractAnalyzer />} />
             <Route path="documents/:id/edit" element={<DocumentEditor />} />
             <Route path="documents/:id/versions" element={<DocumentVersions />} />
             <Route path="research" element={<ResearchDashboard />} />

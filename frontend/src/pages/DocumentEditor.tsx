@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { documentService, aiService } from '../services/api';
-import { DocumentRecord, ValidationIssue } from '../types';
+import { DocumentRecord, ValidationIssue, DocumentDiffResult } from '../types';
 import { 
   FileText, 
   CheckCircle2, 
@@ -21,7 +21,11 @@ import {
   Check,
   Send,
   Edit3,
-  Scale
+  Scale,
+  Eye,
+  X,
+  XCircle,
+  CheckSquare
 } from 'lucide-react';
 
 export const DocumentEditor: React.FC = () => {
@@ -32,8 +36,14 @@ export const DocumentEditor: React.FC = () => {
   const [content, setContent] = useState('');
   const [saving, setSaving] = useState(false);
   const [validating, setValidating] = useState(false);
-  const [activeTab, setActiveTab] = useState<'VALIDATION' | 'ASSISTANT'>('VALIDATION');
+  const [activeTab, setActiveTab] = useState<'VALIDATION' | 'COMPLETENESS' | 'ASSISTANT'>('VALIDATION');
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
+
+  // Diff Modal state
+  const [showDiffModal, setShowDiffModal] = useState(false);
+  const [diffResult, setDiffResult] = useState<DocumentDiffResult | null>(null);
+  const [diffLoading, setDiffLoading] = useState(false);
+  const [diffLabels, setDiffLabels] = useState({ original: '', modified: '' });
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -153,6 +163,34 @@ export const DocumentEditor: React.FC = () => {
       alert(`Validation failed: ${err.message}`);
     } finally {
       setValidating(false);
+    }
+  };
+
+  const handleOpenDiff = async () => {
+    if (!id) return;
+    setDiffLoading(true);
+    setShowDiffModal(true);
+    try {
+      const res = await documentService.getDiff(id);
+      setDiffResult(res.diff);
+      setDiffLabels(res.comparedVersions || { original: 'Initial Draft (v1)', modified: 'Current Draft' });
+    } catch (err: any) {
+      alert(`Failed to load version diff: ${err.message}`);
+      setShowDiffModal(false);
+    } finally {
+      setDiffLoading(false);
+    }
+  };
+
+  const handleReviewIssue = async (issueId: string, status: 'ACCEPTED' | 'DISMISSED' | 'NEEDS_REVIEW') => {
+    if (!id || !document) return;
+    try {
+      const res = await documentService.reviewIssue(id, issueId, status);
+      setDocument(res.document);
+      setSaveSuccessMsg(`✓ Flag marked as ${status.replace(/_/g, ' ')}`);
+      setTimeout(() => setSaveSuccessMsg(''), 3000);
+    } catch (err: any) {
+      alert(`Review action failed: ${err.message}`);
     }
   };
 
@@ -299,6 +337,15 @@ export const DocumentEditor: React.FC = () => {
           </button>
 
           <button
+            onClick={handleOpenDiff}
+            className="px-3 py-1.5 bg-white border border-mira-border hover:border-mira-primary text-xs font-semibold rounded-lg text-mira-dark flex items-center gap-1.5 shadow-2xs cursor-pointer"
+            title="Compare current draft against initial version or previous revisions"
+          >
+            <Eye className="w-3.5 h-3.5 text-purple-600" />
+            Version Diff
+          </button>
+
+          <button
             onClick={handleRevalidate}
             disabled={validating}
             className="px-3 py-1.5 bg-white border border-mira-border hover:border-mira-primary text-xs font-semibold rounded-lg text-mira-dark flex items-center gap-1.5 shadow-2xs"
@@ -398,22 +445,30 @@ export const DocumentEditor: React.FC = () => {
         {/* PANEL 3: Validation & AI Assistant Panel (Right, 3 cols) */}
         <div className="lg:col-span-3 bg-white rounded-xl border border-mira-border shadow-xs p-4 space-y-4 sticky top-20">
           {/* Tabs */}
-          <div className="grid grid-cols-2 gap-1 p-1 bg-gray-100 rounded-lg text-xs font-semibold">
+          <div className="grid grid-cols-3 gap-1 p-1 bg-gray-100 rounded-lg text-[11px] font-semibold">
             <button
               onClick={() => setActiveTab('VALIDATION')}
-              className={`py-1.5 rounded-md transition-colors ${
+              className={`py-1.5 rounded-md transition-colors cursor-pointer ${
                 activeTab === 'VALIDATION' ? 'bg-white text-mira-primary shadow-2xs font-bold' : 'text-mira-muted'
               }`}
             >
               Validation ({validationScore}%)
             </button>
             <button
+              onClick={() => setActiveTab('COMPLETENESS')}
+              className={`py-1.5 rounded-md transition-colors cursor-pointer ${
+                activeTab === 'COMPLETENESS' ? 'bg-white text-mira-primary shadow-2xs font-bold' : 'text-mira-muted'
+              }`}
+            >
+              Completeness
+            </button>
+            <button
               onClick={() => setActiveTab('ASSISTANT')}
-              className={`py-1.5 rounded-md transition-colors ${
+              className={`py-1.5 rounded-md transition-colors cursor-pointer ${
                 activeTab === 'ASSISTANT' ? 'bg-white text-mira-primary shadow-2xs font-bold' : 'text-mira-muted'
               }`}
             >
-              AI Assistant
+              Assistant
             </button>
           </div>
 
@@ -461,7 +516,7 @@ export const DocumentEditor: React.FC = () => {
                     <span className="font-bold text-mira-dark">{document.validationSummary?.layerScores?.clauseCoverage || 92}%</span>
                   </div>
                   <div className="flex justify-between font-medium">
-                    <span>InLegalBERT Consistency</span>
+                    <span>NLP Semantic Consistency</span>
                     <span className="font-bold text-mira-dark">{document.validationSummary?.layerScores?.semanticConsistency || 90}%</span>
                   </div>
                 </div>
@@ -571,6 +626,48 @@ export const DocumentEditor: React.FC = () => {
                             </p>
                           </div>
 
+                          {/* Human Counsel Review Layer */}
+                          <div className="p-2 bg-white/80 rounded-lg border border-black/5 flex items-center justify-between text-[10px]">
+                            <span className="font-bold text-gray-600 uppercase tracking-wider">
+                              Counsel Review {issue.reviewStatus ? `[${issue.reviewStatus}]` : ''}:
+                            </span>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => handleReviewIssue(issue.id || issue.issueId || `iss_${idx}`, 'ACCEPTED')}
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${
+                                  issue.reviewStatus === 'ACCEPTED'
+                                    ? 'bg-emerald-600 text-white shadow-2xs'
+                                    : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200'
+                                }`}
+                                title="Accept this finding"
+                              >
+                                ✓ Accept
+                              </button>
+                              <button
+                                onClick={() => handleReviewIssue(issue.id || issue.issueId || `iss_${idx}`, 'DISMISSED')}
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${
+                                  issue.reviewStatus === 'DISMISSED'
+                                    ? 'bg-gray-600 text-white shadow-2xs'
+                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300'
+                                }`}
+                                title="Dismiss as non-blocking / intentional"
+                              >
+                                Dismiss
+                              </button>
+                              <button
+                                onClick={() => handleReviewIssue(issue.id || issue.issueId || `iss_${idx}`, 'NEEDS_REVIEW')}
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${
+                                  issue.reviewStatus === 'NEEDS_REVIEW'
+                                    ? 'bg-amber-600 text-white shadow-2xs'
+                                    : 'bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200'
+                                }`}
+                                title="Mark for formal counsel review"
+                              >
+                                Review
+                              </button>
+                            </div>
+                          </div>
+
                           {/* Action Buttons: Jump & Fix with AI */}
                           <div className="flex items-center gap-2 pt-1">
                             <button
@@ -606,6 +703,73 @@ export const DocumentEditor: React.FC = () => {
 
               <p className="text-[10px] text-mira-muted italic border-t pt-2">
                 "AI Validation Score — informational only. Subject to qualified legal review."
+              </p>
+            </div>
+          )}
+
+          {/* TAB 2: CONTRACT COMPLETENESS MAP */}
+          {activeTab === 'COMPLETENESS' && (
+            <div className="space-y-3.5 text-xs">
+              <div className="p-3 bg-purple-50 rounded-xl border border-purple-100 space-y-1">
+                <span className="font-bold text-purple-950 flex items-center gap-1.5 text-[12px]">
+                  <CheckSquare className="w-3.5 h-3.5 text-mira-primary" />
+                  Clause Completeness Checklist
+                </span>
+                <p className="text-[11px] text-purple-800 leading-relaxed">
+                  Audit of canonical clauses expected in an institutional {document.documentType === 'NDA' ? 'NDA' : 'Legal Notice'}.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                {[
+                  { name: 'Preamble & Parties', key: 'parties' },
+                  { name: 'Definition of Scope', key: 'definition' },
+                  { name: document.documentType === 'NDA' ? 'Non-Disclosure Obligations' : 'Breach & Demands', key: 'obligations' },
+                  { name: 'Exceptions & Carve-Outs', key: 'exceptions' },
+                  { name: 'Term & Survival Duration', key: 'duration' },
+                  { name: 'Remedies & Relief', key: 'remedies' },
+                  { name: 'Governing Law & Jurisdiction', key: 'governing_law' },
+                  { name: 'Execution & Signatures', key: 'signatures' }
+                ].map((item, idx) => {
+                  const matchingSection = sections.find(s => 
+                    s.title.toLowerCase().includes(item.name.toLowerCase().slice(0, 7)) ||
+                    s.content.toLowerCase().includes(item.name.toLowerCase().slice(0, 7))
+                  );
+                  const isPresent = !!matchingSection;
+                  const hasIssues = matchingSection?.hasIssues;
+
+                  return (
+                    <div
+                      key={idx}
+                      onClick={() => matchingSection && scrollToSection(matchingSection.title)}
+                      className={`p-2.5 rounded-lg border flex items-center justify-between transition-all cursor-pointer ${
+                        isPresent && !hasIssues
+                          ? 'bg-emerald-50/50 border-emerald-200 text-emerald-950'
+                          : isPresent && hasIssues
+                          ? 'bg-amber-50/50 border-amber-200 text-amber-950'
+                          : 'bg-red-50/50 border-red-200 text-red-950'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        {isPresent && !hasIssues ? (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                        ) : isPresent && hasIssues ? (
+                          <AlertTriangle className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+                        ) : (
+                          <XCircle className="w-3.5 h-3.5 text-red-600 flex-shrink-0" />
+                        )}
+                        <span className="font-semibold text-[11px]">{item.name}</span>
+                      </div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider">
+                        {isPresent && !hasIssues ? 'Verified' : isPresent && hasIssues ? 'Review' : 'Missing'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <p className="text-[10px] text-mira-muted italic pt-1 border-t">
+                Click any present clause to scroll directly to that section in the editor.
               </p>
             </div>
           )}
@@ -762,6 +926,103 @@ export const DocumentEditor: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* VERSION DIFF MODAL */}
+      {showDiffModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[85vh] flex flex-col border border-gray-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/70">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-purple-100 text-purple-700 rounded-lg">
+                  <Eye className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900 text-base">Document Revision Diff</h3>
+                  <p className="text-xs text-gray-500">
+                    Comparing <span className="font-semibold text-gray-700">{diffLabels.original || 'Initial Draft'}</span> vs <span className="font-semibold text-purple-700">{diffLabels.modified || 'Current Draft'}</span>
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowDiffModal(false)}
+                className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded-lg transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Diff Stats Banner */}
+            {diffResult && (
+              <div className="px-5 py-2.5 bg-gray-100/70 border-b border-gray-200 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-4">
+                  <span className="flex items-center gap-1.5 font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200">
+                    <span className="font-mono">+{diffResult.summary.addedCount}</span> Added
+                  </span>
+                  <span className="flex items-center gap-1.5 font-semibold text-red-700 bg-red-50 px-2.5 py-1 rounded-md border border-red-200">
+                    <span className="font-mono">-{diffResult.summary.removedCount}</span> Removed
+                  </span>
+                  <span className="flex items-center gap-1.5 text-gray-600">
+                    <span className="font-mono font-semibold text-gray-800">{diffResult.summary.unchangedCount}</span> Unchanged lines
+                  </span>
+                </div>
+                <span className="text-[11px] text-gray-500 italic">
+                  Deterministic line-by-line legal comparison
+                </span>
+              </div>
+            )}
+
+            {/* Modal Body: Diff Content */}
+            <div className="flex-1 overflow-y-auto p-4 font-mono text-xs leading-relaxed bg-slate-950 text-slate-100">
+              {diffLoading ? (
+                <div className="py-16 text-center space-y-3">
+                  <RefreshCw className="w-8 h-8 text-purple-400 animate-spin mx-auto" />
+                  <p className="text-sm text-slate-400 font-sans">Computing exact version differences...</p>
+                </div>
+              ) : diffResult && diffResult.lines.length > 0 ? (
+                <div className="space-y-0.5">
+                  {diffResult.lines.map((dl, i) => (
+                    <div
+                      key={i}
+                      className={`flex items-start px-2 py-0.5 rounded-xs transition-colors ${
+                        dl.type === 'added'
+                          ? 'bg-emerald-950/60 text-emerald-300 border-l-2 border-emerald-500'
+                          : dl.type === 'removed'
+                          ? 'bg-red-950/60 text-red-300 border-l-2 border-red-500 line-through opacity-80'
+                          : 'text-slate-400 hover:bg-slate-900'
+                      }`}
+                    >
+                      <span className="w-10 select-none text-right pr-3 text-[10px] text-slate-600 font-mono">
+                        {dl.lineA || dl.lineB || ''}
+                      </span>
+                      <span className="w-4 select-none text-center font-bold font-mono">
+                        {dl.type === 'added' ? '+' : dl.type === 'removed' ? '-' : ' '}
+                      </span>
+                      <span className="flex-1 whitespace-pre-wrap break-words font-mono">
+                        {dl.text || ' '}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-16 text-center text-slate-400 font-sans">
+                  No differences found between the compared versions.
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-3.5 bg-gray-50 border-t border-gray-200 flex items-center justify-end">
+              <button
+                onClick={() => setShowDiffModal(false)}
+                className="px-4 py-2 bg-gray-900 hover:bg-black text-white text-xs font-semibold rounded-lg shadow-2xs transition-colors cursor-pointer"
+              >
+                Close Diff
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

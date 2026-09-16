@@ -16,7 +16,8 @@ import {
   Layers,
   Sparkles,
   ShieldAlert,
-  BarChart2
+  BarChart2,
+  Search
 } from 'lucide-react';
 
 export const Dashboard: React.FC = () => {
@@ -80,6 +81,13 @@ export const Dashboard: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
+          <Link
+            to="/analyzer"
+            className="px-4 py-2 bg-purple-50 border border-purple-200 hover:border-mira-primary text-mira-primary hover:text-purple-800 text-sm font-semibold rounded-lg shadow-2xs transition-all flex items-center gap-2"
+          >
+            <Search className="w-4 h-4 text-purple-600" />
+            Analyze Contract
+          </Link>
           <Link
             to="/research"
             className="px-4 py-2 bg-white border border-mira-border hover:border-mira-primary text-mira-dark hover:text-mira-primary text-sm font-medium rounded-lg shadow-2xs transition-all flex items-center gap-2"
@@ -152,46 +160,73 @@ export const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Document Creation CTA Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-gradient-to-br from-purple-900 to-indigo-950 rounded-2xl p-6 text-white relative overflow-hidden shadow-sm">
+      {/* Document Creation & Analysis CTA Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-gradient-to-br from-purple-900 to-indigo-950 rounded-2xl p-6 text-white relative overflow-hidden shadow-sm flex flex-col justify-between">
           <div className="absolute right-0 top-0 translate-x-8 -translate-y-8 w-44 h-44 bg-purple-500/20 rounded-full blur-2xl" />
-          <div className="relative z-10 space-y-4">
+          <div className="relative z-10 space-y-3">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-purple-200 text-xs font-medium backdrop-blur-xs">
               <Sparkles className="w-3.5 h-3.5 text-purple-300" />
-              Bilateral Commercial Protection
+              Bilateral Protection
             </div>
-            <h3 className="text-xl font-bold">Non-Disclosure Agreement (NDA)</h3>
-            <p className="text-sm text-purple-200/90 leading-relaxed">
-              Synthesize a controlled 14-section Non-Disclosure Agreement anchored in structured facts, approved legal clause retrieval, and Indian Contract Act statutory references.
+            <h3 className="text-lg font-bold">Non-Disclosure Agreement</h3>
+            <p className="text-xs text-purple-200/90 leading-relaxed">
+              Synthesize a controlled 14-section NDA anchored in structured facts, approved legal clauses, and statutory citations.
             </p>
+          </div>
+          <div className="pt-4 relative z-10">
             <button
               onClick={() => navigate('/create?type=NDA')}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-white text-mira-primary hover:bg-purple-50 text-sm font-semibold rounded-lg shadow-sm transition-all"
+              className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-white text-mira-primary hover:bg-purple-50 text-xs font-semibold rounded-lg shadow-sm transition-all cursor-pointer"
             >
-              Draft NDA via Atharv Legal AI Pipeline
-              <ArrowRight className="w-4 h-4" />
+              Draft NDA
+              <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-slate-900 to-gray-900 rounded-2xl p-6 text-white relative overflow-hidden shadow-sm">
+        <div className="bg-gradient-to-br from-slate-900 to-gray-900 rounded-2xl p-6 text-white relative overflow-hidden shadow-sm flex flex-col justify-between">
           <div className="absolute right-0 top-0 translate-x-8 -translate-y-8 w-44 h-44 bg-blue-500/15 rounded-full blur-2xl" />
-          <div className="relative z-10 space-y-4">
+          <div className="relative z-10 space-y-3">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-gray-300 text-xs font-medium backdrop-blur-xs">
               <Cpu className="w-3.5 h-3.5 text-blue-300" />
-              Statutory Demand & Default
+              Demand & Default
             </div>
-            <h3 className="text-xl font-bold">Formal Legal Notice</h3>
-            <p className="text-sm text-gray-300/90 leading-relaxed">
-              Generate an advocate-calibrated 12-section demand notice with strict fact verification (amounts, breach narrative, response periods) and zero fabricated citations.
+            <h3 className="text-lg font-bold">Formal Legal Notice</h3>
+            <p className="text-xs text-gray-300/90 leading-relaxed">
+              Generate an advocate-calibrated 12-section demand notice with strict fact verification and zero fabricated citations.
             </p>
+          </div>
+          <div className="pt-4 relative z-10">
             <button
               onClick={() => navigate('/create?type=LEGAL_NOTICE')}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-white text-gray-900 hover:bg-gray-100 text-sm font-semibold rounded-lg shadow-sm transition-all"
+              className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-white text-gray-900 hover:bg-gray-100 text-xs font-semibold rounded-lg shadow-sm transition-all cursor-pointer"
             >
               Draft Legal Notice
-              <ArrowRight className="w-4 h-4" />
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+
+        <div className="bg-gradient-to-br from-indigo-950 via-slate-900 to-purple-950 rounded-2xl p-6 text-white relative overflow-hidden shadow-sm flex flex-col justify-between border border-purple-500/20">
+          <div className="absolute right-0 top-0 translate-x-8 -translate-y-8 w-44 h-44 bg-emerald-500/15 rounded-full blur-2xl" />
+          <div className="relative z-10 space-y-3">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-emerald-300 text-xs font-medium backdrop-blur-xs">
+              <Search className="w-3.5 h-3.5 text-emerald-400" />
+              Multi-Format Audit
+            </div>
+            <h3 className="text-lg font-bold">Contract Analyzer</h3>
+            <p className="text-xs text-purple-200/90 leading-relaxed">
+              Upload PDF, DOCX, or raw text. Audits clause completeness, uncovers high-risk liabilities, and scores contract health.
+            </p>
+          </div>
+          <div className="pt-4 relative z-10">
+            <button
+              onClick={() => navigate('/analyzer')}
+              className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-semibold rounded-lg shadow-sm transition-all cursor-pointer"
+            >
+              Launch Analyzer
+              <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>

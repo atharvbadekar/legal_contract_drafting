@@ -35,6 +35,8 @@ class ModelManager:
 
         # Disable gradients globally for inference to conserve RAM
         torch.set_grad_enabled(False)
+        if self.device == "cpu":
+            torch.set_num_threads(1)
 
         logger.info(f"Loading Legal NLP model: {self.model_name} on device: {self.device}...")
         try:

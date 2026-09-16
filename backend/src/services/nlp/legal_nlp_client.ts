@@ -59,7 +59,7 @@ export class LegalNLPClient {
       return {
         status: 'healthy',
         mode: 'embedded_engine',
-        model_name: 'InLegalBERT Heuristic Adapter',
+        model_name: 'sentence-transformers/all-MiniLM-L6-v2 Heuristic Adapter',
         device: 'cpu',
         loaded: true
       };
