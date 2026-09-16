@@ -30,7 +30,7 @@ validation_service = LegalValidationSupportService(model_manager, embedding_serv
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Initializing Atharv Legal AI NLP Service (InLegalBERT)...")
+    logger.info(f"Initializing Atharv Legal AI NLP Service ({model_manager.model_name})...")
     # Load model once at startup into memory
     model_manager.load_model()
     yield
@@ -121,4 +121,5 @@ async def validate_sections(req: ValidateRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    port = int(os.getenv("PORT", "8001"))
+    uvicorn.run(app, host="0.0.0.0", port=port)

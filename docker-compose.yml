@@ -19,7 +19,7 @@ services:
     container_name: mira-legal-nlp
     restart: always
     environment:
-      - LEGAL_MODEL_NAME=law-ai/InLegalBERT
+      - LEGAL_MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
       - LEGAL_MODEL_DEVICE=cpu
       - LEGAL_MAX_LENGTH=512
     ports:

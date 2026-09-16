@@ -22,7 +22,8 @@ class TestLegalNLP(unittest.TestCase):
         text = "Confidential information shall be kept strictly secret."
         embs = self.embedder.embed_texts([text])
         self.assertEqual(len(embs), 1)
-        self.assertEqual(len(embs[0]), 768)
+        self.assertEqual(len(embs[0]), self.mgr.embedding_dim)
+        self.assertEqual(self.mgr.embedding_dim, 384)
 
     def test_similarity_consistency(self):
         text_a = "The receiving party shall preserve confidentiality."

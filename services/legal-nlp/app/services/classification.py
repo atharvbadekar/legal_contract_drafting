@@ -50,9 +50,36 @@ class LegalClassificationService:
             "demand": "demand call upon you to pay sum within days along with interest fail not",
             "response_period": "response period within 15 days 30 days from receipt of this legal notice",
             "consequences": "consequences failing which our client will initiate legal proceedings civil criminal at your risk cost",
-            "closing": "closing yours sincerely advocate for client copy retained for record",
             "signatures": "signature of advocate advocate code bar council enrollment stamp"
         }
+
+        self._doc_proto_cache = None
+        self._nda_clause_proto_cache = None
+        self._notice_clause_proto_cache = None
+
+    def _get_doc_proto_embeddings(self):
+        if self._doc_proto_cache is None:
+            self._doc_proto_cache = {
+                "NDA": self.embedder.embed_texts(self.doc_prototypes["NDA"]),
+                "LEGAL_NOTICE": self.embedder.embed_texts(self.doc_prototypes["LEGAL_NOTICE"])
+            }
+        return self._doc_proto_cache
+
+    def _get_clause_proto_embeddings(self, document_type: str = "NDA"):
+        if document_type == "NDA":
+            if self._nda_clause_proto_cache is None:
+                keys = list(self.nda_clause_prototypes.keys())
+                texts = [self.nda_clause_prototypes[k] for k in keys]
+                embs = self.embedder.embed_texts(texts)
+                self._nda_clause_proto_cache = dict(zip(keys, embs))
+            return self._nda_clause_proto_cache
+        else:
+            if self._notice_clause_proto_cache is None:
+                keys = list(self.notice_clause_prototypes.keys())
+                texts = [self.notice_clause_prototypes[k] for k in keys]
+                embs = self.embedder.embed_texts(texts)
+                self._notice_clause_proto_cache = dict(zip(keys, embs))
+            return self._notice_clause_proto_cache
 
     def classify_document(self, text: str) -> Tuple[str, float, Dict[str, float]]:
         text_lower = text.lower()
@@ -67,8 +94,9 @@ class LegalClassificationService:
         # Semantic embedding similarity
         text_emb = self.embedder.embed_texts([text])[0]
         
-        nda_proto_embs = self.embedder.embed_texts(self.doc_prototypes["NDA"])
-        notice_proto_embs = self.embedder.embed_texts(self.doc_prototypes["LEGAL_NOTICE"])
+        proto_cache = self._get_doc_proto_embeddings()
+        nda_proto_embs = proto_cache["NDA"]
+        notice_proto_embs = proto_cache["LEGAL_NOTICE"]
 
         sim_nda = max(self.embedder.compute_similarity(text_emb, p) for p in nda_proto_embs)
         sim_notice = max(self.embedder.compute_similarity(text_emb, p) for p in notice_proto_embs)
@@ -92,15 +120,14 @@ class LegalClassificationService:
             return "UNKNOWN", 0.50, scores
 
     def classify_clause(self, text: str, document_type: str = "NDA") -> Tuple[str, float, Dict[str, float]]:
-        prototypes = self.nda_clause_prototypes if document_type == "NDA" else self.notice_clause_prototypes
+        proto_embs_map = self._get_clause_proto_embeddings(document_type)
         text_emb = self.embedder.embed_texts([text])[0]
 
         scores = {}
-        best_type = list(prototypes.keys())[0]
+        best_type = list(proto_embs_map.keys())[0]
         best_sim = -1.0
 
-        for clause_type, proto_text in prototypes.items():
-            proto_emb = self.embedder.embed_texts([proto_text])[0]
+        for clause_type, proto_emb in proto_embs_map.items():
             sim = self.embedder.compute_similarity(text_emb, proto_emb)
             scores[clause_type] = round(sim, 3)
             if sim > best_sim:

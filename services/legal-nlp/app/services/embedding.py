@@ -35,32 +35,41 @@ class LegalEmbeddingService:
         # If transformer model is loaded
         if self.mgr.is_loaded and self.mgr.model is not None and self.mgr.tokenizer is not None:
             try:
-                encoded_input = self.mgr.tokenizer(
-                    texts,
-                    padding=True,
-                    truncation=True,
-                    max_length=self.mgr.max_length,
-                    return_tensors='pt'
-                ).to(self.mgr.device)
+                # Process in small batches (max 16) to conserve RAM on Render Free
+                batch_size = 16
+                all_embeddings = []
+                for i in range(0, len(texts), batch_size):
+                    batch_texts = texts[i:i + batch_size]
+                    encoded_input = self.mgr.tokenizer(
+                        batch_texts,
+                        padding=True,
+                        truncation=True,
+                        max_length=self.mgr.max_length,
+                        return_tensors='pt'
+                    ).to(self.mgr.device)
 
-                with torch.no_grad():
-                    model_output = self.mgr.model(**encoded_input)
-                    sentence_embeddings = self.mean_pooling(model_output, encoded_input['attention_mask'])
-                    # L2 Normalize
-                    normalized_embeddings = F.normalize(sentence_embeddings, p=2, dim=1)
-                    return normalized_embeddings.cpu().tolist()
+                    with torch.no_grad():
+                        model_output = self.mgr.model(**encoded_input)
+                        sentence_embeddings = self.mean_pooling(model_output, encoded_input['attention_mask'])
+                        # L2 Normalize
+                        normalized_embeddings = F.normalize(sentence_embeddings, p=2, dim=1)
+                        all_embeddings.extend(normalized_embeddings.cpu().tolist())
+                return all_embeddings
             except Exception as e:
                 logger.error(f"Error computing transformer embeddings: {e}")
 
         # Fallback deterministic legal domain embedding (hash-seeded n-gram semantic projector)
-        # Guarantees consistent 768-dimensional normalized dense vectors
-        return [self._deterministic_legal_embed(text) for text in texts]
+        # Guarantees consistent normalized dense vectors matching self.mgr.embedding_dim
+        dim = self.mgr.embedding_dim
+        return [self._deterministic_legal_embed(text, dim=dim) for text in texts]
 
-    def _deterministic_legal_embed(self, text: str, dim: int = 768) -> List[float]:
+    def _deterministic_legal_embed(self, text: str, dim: int = None) -> List[float]:
         """
-        High-fidelity legal vocabulary projection producing unit-normalized 768-dim embeddings.
+        High-fidelity legal vocabulary projection producing unit-normalized dense embeddings.
         Preserves cosine similarity between semantically related legal phrases.
         """
+        if dim is None:
+            dim = self.mgr.embedding_dim
         import hashlib
         import math
 

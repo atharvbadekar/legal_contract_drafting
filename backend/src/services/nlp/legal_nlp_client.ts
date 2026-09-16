@@ -143,9 +143,9 @@ export class LegalNLPClient {
       const res = await axios.post<EmbedResponse>(`${this.baseURL}/embed`, { texts }, { timeout: 3000 });
       return res.data.embeddings;
     } catch {
-      // Deterministic 768-dimensional normalized embedding generator for pgvector
+      // Deterministic 384-dimensional normalized embedding generator for pgvector
       return (texts || []).map(text => {
-        const vec = new Array(768).fill(0);
+        const vec = new Array(384).fill(0);
         if (!text || text.trim().length === 0) return vec;
         const tokens = text.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
         for (let i = 0; i < tokens.length; i++) {
@@ -154,7 +154,7 @@ export class LegalNLPClient {
           for (let j = 0; j < t.length; j++) {
             hash = (hash * 31 + t.charCodeAt(j)) >>> 0;
           }
-          const idx = hash % 768;
+          const idx = hash % 384;
           vec[idx] += 1.0;
         }
         const norm = Math.sqrt(vec.reduce((sum, v) => sum + v * v, 0)) || 1;
