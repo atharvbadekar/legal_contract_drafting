@@ -46,7 +46,7 @@ export const DocumentEditor: React.FC = () => {
   const [applyingCommand, setApplyingCommand] = useState(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState('');
 
-  const scrollToSection = (sectionName?: string, evidence?: string) => {
+  const scrollToSection = (sectionName?: string, evidence?: string, textRange?: { start: number; end: number }) => {
     if (!textareaRef.current) return;
     const el = textareaRef.current;
     const text = el.value;
@@ -54,12 +54,22 @@ export const DocumentEditor: React.FC = () => {
     let idx = -1;
     let matchLen = 0;
 
-    if (evidence && evidence.trim().length > 1) {
+    // 1. Precise character range if provided
+    if (textRange && typeof textRange.start === 'number' && typeof textRange.end === 'number' && textRange.end > textRange.start) {
+      if (textRange.start >= 0 && textRange.end <= text.length) {
+        idx = textRange.start;
+        matchLen = textRange.end - textRange.start;
+      }
+    }
+
+    // 2. Exact evidence quote search
+    if (idx === -1 && evidence && evidence.trim().length > 1) {
       const evClean = evidence.trim().toLowerCase();
       idx = text.toLowerCase().indexOf(evClean);
       if (idx !== -1) matchLen = evidence.trim().length;
     }
 
+    // 3. Section header search fallback
     if (idx === -1 && sectionName) {
       const cleanSec = sectionName.toLowerCase().replace(/^(?:section|\d+\.?)\s*/i, '').trim();
       idx = text.toLowerCase().indexOf(cleanSec);
@@ -75,8 +85,8 @@ export const DocumentEditor: React.FC = () => {
       let startSel = idx;
       let endSel = idx + matchLen;
 
-      // If we matched a section header, select the full section block for convenient AI editing
-      if (sectionName && text.substring(idx, idx + matchLen).toLowerCase().includes(sectionName.toLowerCase().slice(0, 8))) {
+      // If we matched a section header without specific textRange or evidence, select the full section block
+      if (!textRange && (!evidence || evidence.trim().length <= 1) && sectionName && text.substring(idx, idx + matchLen).toLowerCase().includes(sectionName.toLowerCase().slice(0, 8))) {
         const nextHeader = text.indexOf('\n## ', idx + matchLen);
         const nextDivider = text.indexOf('---', idx + matchLen);
         let endOfBlock = text.length;
@@ -457,6 +467,16 @@ export const DocumentEditor: React.FC = () => {
                 </div>
               </div>
 
+              {/* Technical Semantic Status (if semantic analysis offline / unavailable) */}
+              {document.validationSummary?.semanticStatus && !document.validationSummary.semanticStatus.available && (
+                <div className="p-2.5 bg-gray-50 rounded-lg text-xs text-gray-600 border border-gray-200 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-gray-400 flex-shrink-0" />
+                  <span className="text-[11px] leading-tight">
+                    {document.validationSummary.semanticStatus.message || 'Semantic analysis unavailable — deterministic validation completed.'}
+                  </span>
+                </div>
+              )}
+
               {/* Detected Issues */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -554,7 +574,7 @@ export const DocumentEditor: React.FC = () => {
                           {/* Action Buttons: Jump & Fix with AI */}
                           <div className="flex items-center gap-2 pt-1">
                             <button
-                              onClick={() => scrollToSection(issue.section, issue.evidence)}
+                              onClick={() => scrollToSection(issue.section, issue.evidence, issue.location?.textRange)}
                               className="flex-1 py-1.5 px-2 bg-white hover:bg-gray-100 text-gray-800 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 border border-gray-300 shadow-2xs transition-colors cursor-pointer"
                               title="Scroll editor to this exact section and highlight text"
                             >
@@ -564,7 +584,7 @@ export const DocumentEditor: React.FC = () => {
 
                             <button
                               onClick={() => {
-                                scrollToSection(issue.section, issue.evidence);
+                                scrollToSection(issue.section, issue.evidence, issue.location?.textRange);
                                 setActiveTab('ASSISTANT');
                                 if (issue.suggestion) {
                                   setCustomCommand(issue.suggestion);

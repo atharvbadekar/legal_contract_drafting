@@ -280,6 +280,7 @@ export class DocumentsController {
             layerScores: validationResult.layerScores,
             issues: validationResult.allIssues,
             summaryCounts: validationResult.summaryCounts,
+            semanticStatus: validationResult.semanticStatus,
             disclaimer: validationResult.disclaimer
           } as any
         }

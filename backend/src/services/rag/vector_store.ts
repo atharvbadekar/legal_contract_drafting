@@ -158,19 +158,19 @@ export class VectorStore {
       console.warn('Vector search fallback for knowledge chunks:', err);
       const chunks = await prisma.knowledgeChunk.findMany({
         where: documentType ? {
-          knowledgeDoc: {
+          document: {
             documentType: { in: [documentType, 'GENERAL'] }
           }
         } : {},
-        include: { knowledgeDoc: true },
+        include: { document: true },
         take: limit
       });
       return chunks.map(kc => ({
         id: kc.id,
         knowledgeDocId: kc.knowledgeDocId,
-        title: kc.knowledgeDoc.title,
-        source: kc.knowledgeDoc.source,
-        jurisdiction: kc.knowledgeDoc.jurisdiction,
+        title: kc.document.title,
+        source: kc.document.source,
+        jurisdiction: kc.document.jurisdiction,
         chunkIndex: kc.chunkIndex,
         content: kc.content,
         metadata: kc.metadata,

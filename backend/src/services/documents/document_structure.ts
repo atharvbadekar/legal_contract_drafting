@@ -403,3 +403,45 @@ function extractSentenceOrLine(text: string, matchStart: number, matchEnd: numbe
   const snippet = text.substring(lineStart, lineEnd).trim();
   return snippet || text.substring(Math.max(0, matchStart - 40), Math.min(text.length, matchEnd + 40)).trim();
 }
+
+/**
+ * Strips out template instruction prompts, guidance lines, markdown callouts,
+ * HTML/code comments, and bracketed placeholder prompts from text.
+ * Leaves genuine contract text intact for legal obligation analysis.
+ */
+export function stripTemplateInstructions(text: string): string {
+  if (!text) return '';
+
+  return text
+    // Remove HTML comments: <!-- ... -->
+    .replace(/<!--[\s\S]*?-->/g, '')
+    // Remove C-style block comments: /* ... */
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    // Remove blockquote instructions / callouts: e.g. "> Note:", "> Instructions:", "> Prompt Guide:", "> Guidance:"
+    .replace(/^\s*>\s*(?:note|instructions?|guidance|prompt(?:\s*guide)?|tip|important|warning|caution):?.*$/gim, '')
+    // Remove standalone instruction lines: e.g. "Prompt Guide: ...", "Instructions: ...", "Guidance: ..."
+    .replace(/^\s*(?:prompt(?:\s*guide)?|instructions?|guidance|drafting\s*notes?):?.*$/gim, '')
+    // Remove bracketed instructions: e.g. "[Specify the exact consideration...]", "[Insert payment schedule...]", "[Describe ...]"
+    .replace(/\[\s*(?:specify|insert|enter|define|describe|select|choose|optional|note|tbd|to be determined|e\.g\.)\b[^\]]*\]/gi, '')
+    // Remove angle bracket placeholders: e.g. "<insert ...>", "<specify ...>"
+    .replace(/<\s*(?:specify|insert|enter|define|describe)\b[^>]*>/gi, '')
+    // Remove curly brace placeholders: e.g. "{insert ...}"
+    .replace(/\{\s*(?:specify|insert|enter|define|describe)\b[^}]*\}/gi, '')
+    // Clean multiple consecutive blank lines
+    .replace(/\n\s*\n\s*\n/g, '\n\n')
+    .trim();
+}
+
+/**
+ * Checks whether a given string is merely a template instruction or placeholder prompt.
+ */
+export function isInstructionOrPlaceholder(text: string): boolean {
+  if (!text || text.trim().length === 0) return true;
+  const t = text.trim();
+  if (/^#{1,4}\s+/.test(t)) return false;
+  if (/^\[\s*(?:specify|insert|enter|define|describe|select|optional|note|tbd|to be determined|e\.g\.)\b/i.test(t)) return true;
+  if (/^>\s*(?:note|instructions?|guidance|prompt|tip|important|warning):?/i.test(t)) return true;
+  if (/^(?:prompt(?:\s*guide)?|instructions?|guidance|drafting\s*notes?):?/i.test(t)) return true;
+  if (/^<!--[\s\S]*?-->$/.test(t)) return true;
+  return false;
+}

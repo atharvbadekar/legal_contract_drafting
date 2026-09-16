@@ -444,6 +444,7 @@ export class AgentPlanner {
             score: validationResult.overallScore,
             layerScores: validationResult.layerScores,
             issues: validationResult.allIssues,
+            semanticStatus: validationResult.semanticStatus,
             sourcesUsed: retrievedSources.map(s => ({ title: s.title, relevance: s.relevanceScore })),
             approvedClausesUsed: approvedClauses.map(c => ({ title: c.title, similarity: c.similarity })),
             disclaimer: validationResult.disclaimer

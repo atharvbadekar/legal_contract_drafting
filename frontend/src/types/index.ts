@@ -78,6 +78,11 @@ export interface ValidationSummary {
     semanticConsistency: number;
   };
   issues?: ValidationIssue[];
+  semanticStatus?: {
+    available: boolean;
+    service: string;
+    message?: string;
+  };
   sourcesUsed?: Array<{ title: string; relevance: number }>;
   approvedClausesUsed?: Array<{ title: string; similarity: number }>;
   disclaimer?: string;

@@ -40,6 +40,8 @@ export interface ValidateResponse {
   valid: boolean;
   score: number;
   issues: ValidationIssue[];
+  remoteServiceUsed?: boolean;
+  serviceName?: string;
 }
 
 export class LegalNLPClient {
@@ -226,8 +228,12 @@ export class LegalNLPClient {
         documentType,
         sections: sanitizedSections,
         approvedClauses: sanitizedClauses
-      }, { timeout: 3000 });
-      return res.data;
+      }, { timeout: 6000 });
+      return {
+        ...res.data,
+        remoteServiceUsed: true,
+        serviceName: 'all-MiniLM-L6-v2'
+      };
     } catch {
       // Embedded canonical legal section verification
       const issues: ValidationIssue[] = [];
@@ -235,14 +241,15 @@ export class LegalNLPClient {
 
       const expectedNdaSections = [
         { key: 'parties', label: 'Parties', patterns: ['party', 'parties', 'between', 'disclosing', 'receiving'] },
-        { key: 'definition', label: 'Definition of Confidential Information', patterns: ['definition', 'confidential information', 'scope'] },
-        { key: 'obligations', label: 'Non-Disclosure Obligations', patterns: ['obligation', 'maintain', 'duty of care', 'strict confidence', 'shall not disclose'] },
-        { key: 'exceptions', label: 'Exceptions & Exclusions', patterns: ['exception', 'exclusion', 'shall not apply', 'public domain', 'prior knowledge'] },
+        { key: 'definition', label: 'Definition of Confidential Information', patterns: ['definition', 'confidential information', 'scope', 'proprietary information'] },
+        { key: 'obligations', label: 'Non-Disclosure Obligations', patterns: ['obligation', 'maintain', 'duty of care', 'strict confidence', 'shall not disclose', 'confidentiality'] },
+        { key: 'exceptions', label: 'Exceptions & Exclusions', patterns: ['exception', 'exclusion', 'shall not apply', 'public domain', 'prior knowledge', 'prior possession'] },
+        { key: 'permitted_disclosure', label: 'Permitted Disclosures', patterns: ['permitted disclosure', 'need to know', 'permitted', 'advisor', 'counsel'] },
         { key: 'return_destruction', label: 'Return or Destruction of Information', patterns: ['return', 'destruct', 'destroy', 'certif'] },
-        { key: 'duration', label: 'Term and Survival', patterns: ['term', 'duration', 'survival', 'survive', 'years'] },
-        { key: 'remedies', label: 'Remedies & Injunctive Relief', patterns: ['remed', 'injunct', 'irreparable harm', 'damages'] },
-        { key: 'governing_law', label: 'Governing Law and Dispute Resolution', patterns: ['governing law', 'jurisdiction', 'courts of', 'laws of'] },
-        { key: 'signatures', label: 'Execution & Signatures', patterns: ['in witness whereof', 'authorized signatory', 'signature', 'executed'] }
+        { key: 'duration', label: 'Term and Survival', patterns: ['term', 'duration', 'survival', 'survive', 'years', 'effective date'] },
+        { key: 'remedies', label: 'Remedies & Injunctive Relief', patterns: ['remed', 'injunct', 'irreparable harm', 'damages', 'relief'] },
+        { key: 'governing_law', label: 'Governing Law and Dispute Resolution', patterns: ['governing law', 'jurisdiction', 'courts of', 'laws of', 'dispute', 'arbitrat'] },
+        { key: 'signatures', label: 'Execution & Signatures', patterns: ['in witness whereof', 'authorized signatory', 'signature', 'executed', 'by:'] }
       ];
 
       if (documentType === 'NDA') {
@@ -263,7 +270,9 @@ export class LegalNLPClient {
       return {
         valid: issues.length === 0,
         score,
-        issues
+        issues,
+        remoteServiceUsed: false,
+        serviceName: 'embedded'
       };
     }
   }

@@ -44,46 +44,46 @@ class LegalValidationSupportService:
                 combo = f"{title} {content}"
 
                 if exp == "title":
-                    if "agreement" in title or "non-disclosure" in title or "nda" in title or "# " in content:
+                    if "agreement" in combo or "non-disclosure" in combo or "nda" in combo or "title" in combo or "preamble" in combo or "#" in combo:
                         return True
                 elif exp == "parties":
-                    if "part" in title or "between" in title or "disclosing" in combo or "receiving" in combo:
+                    if "part" in combo or "between" in combo or "disclosing" in combo or "receiving" in combo:
                         return True
                 elif exp == "purpose":
-                    if "purpose" in combo or "recital" in title or "whereas" in combo or "background" in title:
+                    if "purpose" in combo or "recital" in combo or "whereas" in combo or "background" in combo:
                         return True
                 elif exp == "definition":
-                    if "definition" in title or "confidential information" in combo or "scope" in title:
+                    if "definition" in combo or "confidential information" in combo or "scope" in combo or "proprietary information" in combo:
                         return True
                 elif exp == "confidentiality":
-                    if "confidential" in title or "obligation" in title or "duty of" in combo or "shall maintain" in combo:
+                    if "confidential" in combo or "obligation" in combo or "duty of" in combo or "shall maintain" in combo or "covenant" in combo:
                         return True
                 elif exp == "exceptions":
-                    if "exception" in title or "exclusion" in title or "shall not apply to" in combo or "public domain" in combo:
+                    if "exception" in combo or "exclusion" in combo or "shall not apply to" in combo or "public domain" in combo or "prior possession" in combo or "prior knowledge" in combo:
                         return True
                 elif exp == "permitted_disclosure":
-                    if "permitted" in title or "advisor" in combo or "counsel" in combo or "exception" in title:
+                    if "permitted" in combo or "advisor" in combo or "counsel" in combo or "need to know" in combo:
                         return True
                 elif exp == "return_destruction":
-                    if "return" in title or "destruct" in title or "return or" in combo or "destroy" in combo:
+                    if "return" in combo or "destruct" in combo or "destroy" in combo or "certif" in combo:
                         return True
                 elif exp == "duration":
-                    if "term" in title or "duration" in title or "period of" in combo or "year" in combo:
+                    if "term" in combo or "duration" in combo or "period of" in combo or "year" in combo or "survival" in combo or "effective date" in combo:
                         return True
                 elif exp == "remedies":
-                    if "remed" in title or "injunct" in combo or "damages" in title or "relief" in combo:
+                    if "remed" in combo or "injunct" in combo or "damages" in combo or "relief" in combo or "irreparable" in combo:
                         return True
                 elif exp == "governing_law":
-                    if "governing" in title or "law" in title or "jurisdiction" in combo or "courts" in combo:
+                    if "governing" in combo or "law" in combo or "jurisdiction" in combo or "courts" in combo:
                         return True
                 elif exp == "dispute_resolution":
-                    if "dispute" in title or "arbitrat" in combo or "jurisdiction" in combo or "governing law" in title:
+                    if "dispute" in combo or "arbitrat" in combo or "jurisdiction" in combo or "governing law" in combo or "courts" in combo:
                         return True
                 elif exp == "miscellaneous":
-                    if "misc" in title or "general" in title or "severab" in combo or "entire agreement" in combo:
+                    if "misc" in combo or "general" in combo or "severab" in combo or "entire agreement" in combo or "counterpart" in combo or "notices" in combo:
                         return True
                 elif exp == "signatures":
-                    if "sign" in title or "execution" in title or "in witness whereof" in combo or "by: ____" in combo:
+                    if "sign" in combo or "execution" in combo or "in witness whereof" in combo or "by: ____" in combo or "by:" in combo or "authorized" in combo:
                         return True
             return False
 
