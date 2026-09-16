@@ -84,7 +84,7 @@ export const AdminClauses: React.FC = () => {
         <div>
           <h1 className="text-xl font-bold text-mira-dark">Approved Clause Library</h1>
           <p className="text-xs text-mira-muted mt-0.5">
-            Admin repository of institutional legal clauses indexed via InLegalBERT embeddings for pgvector retrieval.
+            Admin repository of institutional legal clauses indexed via Legal NLP embeddings (384-dim) for pgvector retrieval.
           </p>
         </div>
         <button
@@ -173,7 +173,7 @@ export const AdminClauses: React.FC = () => {
                   <span>Version: <strong>v{clause.version}</strong></span>
                   <span>•</span>
                   <span className="text-emerald-700 font-medium flex items-center gap-1">
-                    <ShieldCheck className="w-3.5 h-3.5" /> InLegalBERT Vector Synchronized
+                    <ShieldCheck className="w-3.5 h-3.5" /> Legal NLP Vector Synchronized
                   </span>
                 </div>
               </div>

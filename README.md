@@ -1,7 +1,7 @@
-# Atharv Legal AI: Controlled Legal Document Generation & Multi-Tier Validation System
+# Atharv Legal AI: Controlled Legal Document Generation, Contract Analyzer & Multi-Tier Validation System
 
-> **A Production-Grade Research Legal Tech Platform**  
-> Investigating whether combining structured legal information extraction, legal-domain language model encoders (`InLegalBERT`), template-governed drafting, approved clause retrieval, PostgreSQL pgvector RAG, and multi-tier automated validation improves the reliability, consistency, and factual accuracy of AI-generated legal documents.
+> **A Production-Grade Research & Enterprise Legal Tech Platform**  
+> An advanced legal intelligence web application combining structured fact extraction, domain-specific legal NLP embeddings (`sentence-transformers/all-MiniLM-L6-v2`), template-governed drafting, approved clause retrieval, PostgreSQL pgvector RAG, multi-format contract analysis, visual revision diffing, human counsel review triage, and multi-tier automated validation.
 
 ---
 
@@ -12,41 +12,81 @@ For the comprehensive technical specification, architecture diagrams, step-by-st
 
 ---
 
-## 1. Quick Start Guide
+## 1. System Architecture & Modern Tech Stack
 
-### 1.1 Microservice Architecture
-- **Frontend**: React 18, Vite, TypeScript, Tailwind CSS (`http://localhost:5173`)
-- **Backend**: Node.js Express, Prisma ORM, TypeScript (`http://localhost:5000`)
-- **Legal NLP**: Python 3.13, FastAPI, `law-ai/InLegalBERT` (`http://localhost:8001`)
-- **Database**: PostgreSQL 16 + `pgvector` container (Port `5433`, DB: `mira_db`)
+### 1.1 Decoupled Microservices
+- **Frontend**: React 18, Vite, TypeScript, Tailwind CSS, Lucide Icons (`http://localhost:5173`, deployed on **Vercel**)
+- **Backend API**: Node.js v22 Express, Prisma ORM, TypeScript, Multer, Mammoth, pdf-parse, PDFKit (`http://localhost:5000`, deployed on **Render Free Web Service**)
+- **Legal NLP Microservice**: Python 3.13, FastAPI, PyTorch CPU (`sentence-transformers/all-MiniLM-L6-v2`, 384-dim, 1 CPU thread, <250MB RAM footprint, deployed on **Render Free Web Service**)
+- **Database & Vector Store**: PostgreSQL 16 + `pgvector` (Neon Serverless PostgreSQL or local container on Port `5433`, DB: `mira_db`)
 
 ### 1.2 Default Login Credentials
-- **Researcher**: `user@atharv.legal` / `user123`
+- **Researcher / Associate**: `user@atharv.legal` / `user123`
 - **Administrator / Legal Lead**: `admin@atharv.legal` / `admin123`
 
 ---
 
-## 2. Key Features
+## 2. Core Capabilities & Latest Features
 
-1. **Exhaustive 5-Step Questionnaire**: Zero missing legal facts (Parties, Agreement Terms, Confidential Scope, Obligations & Remedies, Instructions).
-2. **10-Step Controlled Agent State Machine**: Atomic transitions from entity extraction to final versioning with full audit logging into `agent_steps`.
-3. **Multi-Tier Validation Engine**:
-   - **Layer 1**: Deterministic fact rules (exact names, durations, dates, monetary amounts).
-   - **Layer 2**: InLegalBERT semantic distance and clause-type anomaly detection.
-   - **Layer 3**: Composite AI Validation Score (0–100%).
-4. **Interactive 3-Panel Legal Editor**: Section outline with status badges, center manual editing workspace, and InLegalBERT validation inspector.
-5. **Court-Ready Export**: One-click generation of styled Microsoft Word (`.docx`) and Adobe PDF (`.pdf`) documents with dual signature blocks.
-6. **Empirical Research Benchmarking**: Live quantitative comparison matrix of Atharv AI vs Baseline Direct LLM.
+### 2.1 Multi-Format Contract Analyzer
+- **Ingestion**: Ingests legal documents via drag-and-drop file upload (`.pdf`, `.docx`, `.txt`) or raw text paste.
+- **Fail-Safe Extraction**: Zero-dependency PDF extraction and native Node `zlib` XML stream fallback for damaged or unusual DOCX files.
+- **Contract Overview**: Automatically extracts document type, contracting parties, roles, effective dates, duration, monetary consideration, and governing law.
+- **Clause Completeness Map**: Audits canonical contract clauses (`Verified`, `Review`, `Missing`) against institutional standards.
+- **Risk & Anomaly Detection**: Uncovers uncapped liabilities, missing IP assignments, unilateral termination rights, and unresolved placeholders (`[Party Name]`, `TBD`, `________`) with quoted evidence and legal rationale.
+- **Explainable Contract Health Score**: Computes a transparent 0–100% score backed by hard caps ($\le 50\%$ for critical defects).
+
+### 2.2 Interactive Document Editor & Revision Diff Engine
+- **Visual Version Diffing**: Accessible via the **"Version Diff"** button. Generates line-by-line diffs (`+ Added`, `- Removed`, `Unchanged`) comparing original contracts against AI-modified revisions.
+- **Contextual AI Assistant**: Surgically rewrite clauses (Make Bilateral, Simplify in Plain English, Formalize) or explain legal implications.
+- **Human Counsel Review Layer**: Triage detected flags directly with `Accept`, `Dismiss`, or `Needs Review`. Every decision is immutably logged to `AuditLog`.
+
+### 2.3 Controlled Document Generation Pipeline
+- **Exhaustive 5-Step Questionnaire**: Zero missing facts for Bilateral NDAs and Statutory Legal Notices.
+- **10-Step State Machine**: Atomic state transitions from fact normalization to clause assembly with RAG retrieval from `pgvector`.
+- **Court-Ready Export**: One-click download of professionally styled Microsoft Word (`.docx`) and Adobe PDF (`.pdf`) documents with dual signature blocks.
 
 ---
 
-## 3. Running Automated Tests
+## 3. Running the Stack Locally
 
-Run the full end-to-end integration test suite verifying the 5-step questionnaire, InLegalBERT pipeline, factual tamper detection, and DOCX/PDF export:
-
+### 3.1 Start Legal NLP Microservice
 ```bash
-cd backend
-npx tsx src/test_atharv.ts
+cd services/legal-nlp
+source venv/bin/activate
+uvicorn app.main:app --port 8001 --reload
 ```
 
-All 18 contractual parameters are verified in the draft with zero missing facts.
+### 3.2 Start Backend
+```bash
+cd backend
+npm install
+npm run dev
+```
+
+### 3.3 Start Frontend
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+---
+
+## 4. Automated Test Verification
+
+Execute the complete automated test suites:
+
+```bash
+# Backend test suite (32/32 tests pass)
+cd backend
+npm test
+
+# Legal NLP microservice tests (4/4 tests pass)
+cd ../services/legal-nlp
+./venv/bin/python -m unittest discover tests
+
+# Frontend production build
+cd ../frontend
+npm run build
+```

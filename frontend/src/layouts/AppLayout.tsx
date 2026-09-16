@@ -14,10 +14,10 @@ export const AppLayout: React.FC = () => {
       <footer className="border-t border-mira-border bg-white py-6 mt-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row justify-between items-center text-xs text-mira-muted gap-2">
           <div>
-            © {new Date().getFullYear()} Atharv Legal AI Research Platform. Architectural study on InLegalBERT + pgvector RAG.
+            © {new Date().getFullYear()} Atharv Legal AI Platform. Legal NLP + pgvector RAG Contract Intelligence.
           </div>
           <div className="flex items-center gap-4">
-            <span>Model: law-ai/InLegalBERT (768-dim)</span>
+            <span>Model: sentence-transformers/all-MiniLM-L6-v2 (384-dim)</span>
             <span>•</span>
             <span>pgvector Cosine Retrieval</span>
             <span>•</span>

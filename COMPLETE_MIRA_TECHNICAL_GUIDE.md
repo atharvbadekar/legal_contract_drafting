@@ -7,6 +7,10 @@
 > **Author & Developer**: Atharv  
 > **Target Audience**: Software Engineers, AI/ML Researchers, Legal Technologists, Faculty Examiners, and M.Tech Evaluators
 
+> [!IMPORTANT]
+> **Production Architecture Update (v2.0)**:
+> In the latest production release, the Legal NLP microservice transitioned from `law-ai/InLegalBERT` to `sentence-transformers/all-MiniLM-L6-v2` (384-dimensional dense vectors) to enable reliable deployment on Render Free hosting (<250MB RAM footprint vs >1.2GB for InLegalBERT, running on 1 pinned CPU thread). Additionally, the system now features a **Multi-Format Contract Analyzer** (`.pdf`, `.docx`, `.txt`), **Document Revision Diff Engine**, **Counsel Human Review Layer**, and **Explainable Health Scoring with Hard Caps**.
+
 ---
 
 # TABLE OF CONTENTS

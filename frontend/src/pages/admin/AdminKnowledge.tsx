@@ -148,7 +148,7 @@ export const AdminKnowledge: React.FC = () => {
                         <div className="flex items-center justify-between text-[11px] font-bold text-mira-primary">
                           <span>Chunk #{idx + 1}</span>
                           <span className="text-emerald-700 font-medium text-[10px] flex items-center gap-1">
-                            <ShieldCheck className="w-3 h-3" /> 768-dim Embedding Active
+                            <ShieldCheck className="w-3 h-3" /> 384-dim Vector Active (all-MiniLM-L6-v2)
                           </span>
                         </div>
                         <p className="text-mira-dark font-serif leading-relaxed text-[11px] whitespace-pre-wrap">

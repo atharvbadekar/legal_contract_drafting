@@ -250,7 +250,7 @@ export const Dashboard: React.FC = () => {
           <div className="p-12 text-center space-y-3">
             <FileText className="w-10 h-10 text-mira-muted mx-auto" />
             <p className="text-sm font-medium text-mira-dark">No documents created yet</p>
-            <p className="text-xs text-mira-muted">Begin by selecting a document type above to test the MIRA pipeline.</p>
+            <p className="text-xs text-mira-muted">Begin by selecting a document type above to test the Atharv Legal AI pipeline.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">

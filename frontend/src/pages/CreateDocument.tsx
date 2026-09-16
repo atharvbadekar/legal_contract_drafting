@@ -245,7 +245,7 @@ export const CreateDocument: React.FC = () => {
         generationMode
       });
 
-      setGenerationStepStatus('Executing Atharv Legal AI 10-step state machine with InLegalBERT & pgvector...');
+      setGenerationStepStatus('Executing Atharv Legal AI 10-step state machine with Legal NLP & pgvector...');
       const genRes = await documentService.generate(newDoc.id, {
         rawInput: `${disclosingName} and ${receivingName} agreement for ${duration}. ${purpose}`,
         documentType,
@@ -253,7 +253,7 @@ export const CreateDocument: React.FC = () => {
         generationMode
       });
 
-      setGenerationStepStatus('Validating draft with multi-tier fact rules & InLegalBERT...');
+      setGenerationStepStatus('Validating draft with multi-tier fact rules & NLP semantic checks...');
       setTimeout(() => {
         navigate(`/documents/${newDoc.id}/edit`);
       }, 800);
@@ -982,7 +982,7 @@ export const CreateDocument: React.FC = () => {
                   <div>
                     <span className="text-xs font-bold text-mira-dark">Atharv Legal AI Controlled Pipeline</span>
                     <p className="text-[10px] text-mira-muted mt-0.5">
-                      InLegalBERT + 14-section template + pgvector RAG + Multi-Tier validation.
+                      Legal NLP (all-MiniLM-L6-v2) + 14-section template + pgvector RAG + Multi-Tier validation.
                     </p>
                   </div>
                 </label>
@@ -1047,7 +1047,7 @@ export const CreateDocument: React.FC = () => {
                 <RefreshCw className="w-6 h-6 text-mira-primary animate-spin mx-auto" />
                 <div className="text-xs font-bold text-mira-dark">{generationStepStatus}</div>
                 <div className="text-[10px] text-mira-muted">
-                  Orchestrating state machine, pgvector RAG chunks, and InLegalBERT validation...
+                  Orchestrating state machine, pgvector RAG chunks, and Legal NLP validation...
                 </div>
               </div>
             )}

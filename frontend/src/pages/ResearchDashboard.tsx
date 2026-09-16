@@ -191,7 +191,7 @@ export const ResearchDashboard: React.FC = () => {
       <div className="p-4 bg-gray-50 rounded-xl border border-mira-border text-xs text-mira-muted space-y-1 leading-relaxed">
         <span className="font-bold text-mira-dark">Methodology & Research Integrity Note:</span>
         <p>
-          Metrics are collected automatically across all executed documents. Factual accuracy measures exact token and entity retention against normalized JSON inputs. Clause coverage measures semantic cosine distance to approved library clauses via InLegalBERT embeddings. Hallucination rate records instances where dates, amounts, or parties were synthesized without explicit declaration.
+          Metrics are collected automatically across all executed documents. Factual accuracy measures exact token and entity retention against normalized JSON inputs. Clause coverage measures semantic cosine distance to approved library clauses via Legal NLP (all-MiniLM-L6-v2) embeddings. Hallucination rate records instances where dates, amounts, or parties were synthesized without explicit declaration.
         </p>
       </div>
     </div>

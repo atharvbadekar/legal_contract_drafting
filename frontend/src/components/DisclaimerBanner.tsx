@@ -12,7 +12,7 @@ export const DisclaimerBanner: React.FC = () => {
       </div>
       <div className="hidden md:flex items-center gap-1 text-amber-700 font-medium">
         <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-        <span>InLegalBERT + pgvector RAG Active</span>
+        <span>Legal NLP (all-MiniLM-L6-v2) + pgvector RAG Active</span>
       </div>
     </div>
   );
