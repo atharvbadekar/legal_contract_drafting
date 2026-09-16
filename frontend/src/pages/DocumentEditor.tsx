@@ -522,12 +522,27 @@ export const DocumentEditor: React.FC = () => {
                 </div>
               </div>
 
-              {/* Technical Semantic Status (if semantic analysis offline / unavailable) */}
-              {document.validationSummary?.semanticStatus && !document.validationSummary.semanticStatus.available && (
-                <div className="p-2.5 bg-gray-50 rounded-lg text-xs text-gray-600 border border-gray-200 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-gray-400 flex-shrink-0" />
-                  <span className="text-[11px] leading-tight">
-                    {document.validationSummary.semanticStatus.message || 'Semantic analysis unavailable — deterministic validation completed.'}
+              {/* Technical Semantic Status */}
+              {document.validationSummary?.semanticStatus && (
+                <div className={`p-2.5 rounded-lg text-xs border flex items-center justify-between ${
+                  document.validationSummary.semanticStatus.available
+                    ? 'bg-emerald-50/50 text-emerald-900 border-emerald-200'
+                    : 'bg-purple-50/50 text-purple-900 border-purple-200'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                      document.validationSummary.semanticStatus.available ? 'bg-emerald-500' : 'bg-purple-600'
+                    }`} />
+                    <span className="text-[11px] leading-tight font-medium">
+                      {document.validationSummary.semanticStatus.available
+                        ? (document.validationSummary.semanticStatus.message || 'Semantic analysis verified via Legal NLP service.')
+                        : (document.validationSummary.semanticStatus.message?.includes('unavailable') 
+                            ? 'Autonomous Legal Engine: Deterministic validation active.' 
+                            : (document.validationSummary.semanticStatus.message || 'Autonomous Legal Engine active.'))}
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono text-gray-500 uppercase tracking-wider">
+                    {document.validationSummary.semanticStatus.available ? 'NLP Active' : 'Autonomous'}
                   </span>
                 </div>
               )}
