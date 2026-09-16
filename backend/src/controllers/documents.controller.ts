@@ -123,12 +123,72 @@ export class DocumentsController {
         return res.status(403).json({ error: 'Access denied' });
       }
 
+      let validationResult: any = null;
+      let newValidationScore = existing.validationScore;
+      let newStatus = existing.status;
+      let newValidationSummary = existing.validationSummary;
+
+      const newContent = content ?? existing.content;
+      const newFacts = structuredFacts ?? (existing.structuredFacts as any) ?? {};
+
+      // Re-run validation whenever content or structured facts are updated
+      if (content !== undefined || structuredFacts !== undefined) {
+        const parsed = parseDocumentStructure(newContent);
+        const sectionBlocks = parsed.sections.map(s => ({
+          sectionType: s.sectionType,
+          title: s.title,
+          content: s.content
+        }));
+
+        const approvedClauses = await prisma.clause.findMany({
+          where: { documentType: existing.documentType, status: 'APPROVED' }
+        });
+
+        validationResult = await validationEngine.validate(
+          existing.documentType,
+          sectionBlocks,
+          newFacts,
+          approvedClauses.map(c => ({ clauseType: c.clauseType, title: c.title, content: c.content })),
+          newContent
+        );
+
+        newValidationScore = validationResult.overallScore;
+        newStatus = validationResult.status === 'PASSED' ? 'COMPLETED' : 'NEEDS_REVIEW';
+        newValidationSummary = {
+          status: validationResult.status,
+          score: validationResult.overallScore,
+          layerScores: validationResult.layerScores,
+          issues: validationResult.allIssues,
+          summaryCounts: validationResult.summaryCounts,
+          semanticStatus: validationResult.semanticStatus,
+          disclaimer: validationResult.disclaimer
+        };
+
+        // Record validation result in database
+        try {
+          await prisma.validationResult.create({
+            data: {
+              documentId: id,
+              layer: 'DETERMINISTIC',
+              status: validationResult.status,
+              score: validationResult.overallScore,
+              issues: validationResult.allIssues as any
+            }
+          });
+        } catch (dbErr) {
+          console.warn('Failed to persist validation result record:', dbErr);
+        }
+      }
+
       const updated = await prisma.document.update({
         where: { id },
         data: {
           title: title ?? existing.title,
-          content: content ?? existing.content,
-          structuredFacts: structuredFacts ?? existing.structuredFacts
+          content: newContent,
+          structuredFacts: newFacts as any,
+          validationScore: newValidationScore,
+          status: newStatus,
+          validationSummary: newValidationSummary as any
         }
       });
 
@@ -151,7 +211,7 @@ export class DocumentsController {
         });
       }
 
-      return res.json({ document: updated });
+      return res.json({ document: updated, validationResult });
     } catch (err: any) {
       console.error('Update document error:', err);
       return res.status(500).json({ error: 'Failed to update document' });

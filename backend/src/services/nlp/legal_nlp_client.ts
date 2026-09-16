@@ -266,7 +266,7 @@ export class LegalNLPClient {
         }
       }
 
-      const score = Math.max(75, Math.min(100, 100 - issues.length * 4));
+      const score = Math.max(30, Math.min(100, 100 - issues.length * 7));
       return {
         valid: issues.length === 0,
         score,

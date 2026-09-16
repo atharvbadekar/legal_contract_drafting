@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import List, Dict, Any
 from .model_manager import ModelManager
 from .embedding import LegalEmbeddingService
@@ -37,53 +38,52 @@ class LegalValidationSupportService:
         full_text = " ".join([s.get("content", "") for s in sections]).lower()
 
         def matches_canonical_nda(exp: str) -> bool:
-            # Check full text and individual section titles
             for sec in sections:
                 title = (sec.get("title") or "").lower()
                 content = sec.get("content", "").lower()
                 combo = f"{title} {content}"
 
                 if exp == "title":
-                    if "agreement" in combo or "non-disclosure" in combo or "nda" in combo or "title" in combo or "preamble" in combo or "#" in combo:
+                    if re.search(r"\b(?:non-disclosure|confidentiality|agreement|nda|preamble)\b", title) or re.search(r"\b(?:non-disclosure\s+agreement|confidentiality\s+agreement)\b", content):
                         return True
                 elif exp == "parties":
-                    if "part" in combo or "between" in combo or "disclosing" in combo or "receiving" in combo:
+                    if re.search(r"\b(?:parties|by\s+and\s+between|entered\s+into\s+by|disclosing\s+party|receiving\s+party)\b", combo):
                         return True
                 elif exp == "purpose":
-                    if "purpose" in combo or "recital" in combo or "whereas" in combo or "background" in combo:
+                    if re.search(r"\b(?:purpose|recitals?|whereas|background|business\s+relationship)\b", combo):
                         return True
                 elif exp == "definition":
-                    if "definition" in combo or "confidential information" in combo or "scope" in combo or "proprietary information" in combo:
+                    if re.search(r"\b(?:definition\s+of|confidential\s+information|proprietary\s+information|scope\s+of\s+confidentiality)\b", combo):
                         return True
                 elif exp == "confidentiality":
-                    if "confidential" in combo or "obligation" in combo or "duty of" in combo or "shall maintain" in combo or "covenant" in combo:
+                    if re.search(r"\b(?:obligations?|maintain\s+in\s+confidence|strict\s+confidence|shall\s+not\s+disclose|duty\s+of\s+care|covenants?)\b", combo):
                         return True
                 elif exp == "exceptions":
-                    if "exception" in combo or "exclusion" in combo or "shall not apply to" in combo or "public domain" in combo or "prior possession" in combo or "prior knowledge" in combo:
+                    if re.search(r"\b(?:exceptions?|exclusions?|shall\s+not\s+apply|public\s*domain|prior\s*possession|prior\s*knowledge|independently\s*developed)\b", combo):
                         return True
                 elif exp == "permitted_disclosure":
-                    if "permitted" in combo or "advisor" in combo or "counsel" in combo or "need to know" in combo:
+                    if re.search(r"\b(?:permitted\s+disclosure|need\s+to\s+know|advisors?|counsel|directors|officers)\b", combo):
                         return True
                 elif exp == "return_destruction":
-                    if "return" in combo or "destruct" in combo or "destroy" in combo or "certif" in combo:
+                    if re.search(r"\b(?:return|destruct(?:ion)?|destroy|surrender)\b", combo):
                         return True
                 elif exp == "duration":
-                    if "term" in combo or "duration" in combo or "period of" in combo or "year" in combo or "survival" in combo or "effective date" in combo:
+                    if re.search(r"\b(?:term|duration|period\s+of|survival|survive|effective\s+date)\b", combo) and re.search(r"\b(?:\d+\s*(?:years?|months?)|effective|termination)\b", combo):
                         return True
                 elif exp == "remedies":
-                    if "remed" in combo or "injunct" in combo or "damages" in combo or "relief" in combo or "irreparable" in combo:
+                    if re.search(r"\b(?:remedies|injunct(?:ion|ive)|damages|irreparable\s+harm|relief)\b", combo):
                         return True
                 elif exp == "governing_law":
-                    if "governing" in combo or "law" in combo or "jurisdiction" in combo or "courts" in combo:
+                    if re.search(r"\b(?:governing\s+law|laws\s+of|jurisdiction\s+of|courts\s+of)\b", combo):
                         return True
                 elif exp == "dispute_resolution":
-                    if "dispute" in combo or "arbitrat" in combo or "jurisdiction" in combo or "governing law" in combo or "courts" in combo:
+                    if re.search(r"\b(?:dispute|arbitrat(?:ion)?|jurisdiction|governing\s+law|courts?)\b", combo):
                         return True
                 elif exp == "miscellaneous":
-                    if "misc" in combo or "general" in combo or "severab" in combo or "entire agreement" in combo or "counterpart" in combo or "notices" in combo:
+                    if re.search(r"\b(?:miscellaneous|general|severab(?:ility)?|entire\s+agreement|counterparts?|notices?)\b", combo):
                         return True
                 elif exp == "signatures":
-                    if "sign" in combo or "execution" in combo or "in witness whereof" in combo or "by: ____" in combo or "by:" in combo or "authorized" in combo:
+                    if re.search(r"\b(?:signatures?|execution|in\s+witness\s+whereof|authorized\s+signator(?:y|ies)|by:\s*_+)\b", combo):
                         return True
             return False
 
@@ -94,34 +94,34 @@ class LegalValidationSupportService:
                 combo = f"{title} {content}"
 
                 if exp == "sender":
-                    if "sender" in combo or "from" in combo or "on behalf of" in combo:
+                    if re.search(r"\b(?:from|sender|on\s+behalf\s+of|claimant)\b", combo):
                         return True
                 elif exp == "recipient":
-                    if "recipient" in combo or "to:" in combo or "addressed to" in combo:
+                    if re.search(r"\b(?:to:|recipient|addressed\s+to|addressee)\b", combo):
                         return True
                 elif exp == "subject":
-                    if "subject" in combo or "re:" in combo or "notice" in title:
+                    if re.search(r"\b(?:subject|re:|legal\s+notice)\b", combo) or "notice" in title:
                         return True
                 elif exp == "facts" or exp == "background":
-                    if "fact" in combo or "background" in combo or "transaction" in combo:
+                    if re.search(r"\b(?:facts?|background|transaction|agreement|relationship)\b", combo):
                         return True
                 elif exp == "breach":
-                    if "breach" in combo or "default" in combo or "failure" in combo or "non-payment" in combo:
+                    if re.search(r"\b(?:breach|default|failure|non-payment|unpaid|dishonou?r)\b", combo):
                         return True
                 elif exp == "legal_basis":
-                    if "section" in combo or "act" in combo or "law" in combo or "clause" in combo:
+                    if re.search(r"\b(?:section\s+\d+|under\s+section|pursuant\s+to|provisions\s+of|act\b)\b", combo):
                         return True
                 elif exp == "demand":
-                    if "demand" in combo or "pay" in combo or "call upon" in combo or "$" in combo:
+                    if re.search(r"\b(?:demand|call\s+upon|pay\s+the\s+sum|remit|cure)\b", combo) or "$" in combo:
                         return True
                 elif exp == "response_period":
-                    if "day" in combo or "period" in combo or "within" in combo:
+                    if re.search(r"\b\d+\s*days\b", combo) or re.search(r"\b(?:within|period\s+of)\s*\d+\s*days\b", combo):
                         return True
                 elif exp == "consequences":
-                    if "prosecut" in combo or "proceeding" in combo or "suit" in combo or "risk" in combo:
+                    if re.search(r"\b(?:prosecut(?:ion)?|proceedings?|lawsuit|legal\s+action|costs?\s+and\s+consequences)\b", combo):
                         return True
                 elif exp == "signatures" or exp == "closing":
-                    if "advocate" in combo or "counsel" in combo or "yours" in combo or "sign" in combo:
+                    if re.search(r"\b(?:advocate|counsel|yours\s+(?:faithfully|sincerely)|authorized\s+signatory|signature)\b", combo):
                         return True
             return False
 

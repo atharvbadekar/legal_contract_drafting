@@ -7,6 +7,8 @@ import {
   DocumentLocation,
   DocumentPatch
 } from '../documents/document_structure.js';
+import { validateRequiredFields } from './required_fields.js';
+import { validateRequiredClauses } from './required_clauses.js';
 
 export interface ValidationFinding extends ValidationIssue {
   id: string;
@@ -142,10 +144,35 @@ export class ValidationEngine {
 
     // Combine & Deduplicate Issues
     const seenIssueKeys = new Set<string>();
+    const seenMissingSections = new Set<string>();
     const allIssues: ValidationFinding[] = [];
 
-    for (const issue of [...deterministicIssues, ...legalBertIssues]) {
-      const key = `${issue.type}_${(issue.section || '').toLowerCase()}_${(issue.title || '').toLowerCase()}`;
+    // Add deterministic issues first
+    for (const issue of deterministicIssues) {
+      const normSection = (issue.section || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const key = `${issue.type}_${normSection}_${(issue.title || '').toLowerCase()}`;
+      if (!seenIssueKeys.has(key)) {
+        seenIssueKeys.add(key);
+        if (issue.type.includes('MISSING_') || issue.type === 'MISSING_REQUIRED_CLAUSE' || issue.type === 'MISSING_RECOMMENDED_CLAUSE' || issue.type === 'MISSING_SIGNATURE_BLOCK') {
+          seenMissingSections.add(normSection);
+        }
+        allIssues.push(issue);
+      }
+    }
+
+    // Add BERT issues if not already covered
+    for (const issue of legalBertIssues) {
+      const normSection = (issue.section || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const isDuplicateMissing = issue.type === 'MISSING_SECTION' && (
+        seenMissingSections.has(normSection) ||
+        Array.from(seenMissingSections).some(s => s.includes(normSection) || normSection.includes(s))
+      );
+
+      if (isDuplicateMissing) {
+        continue;
+      }
+
+      const key = `${issue.type}_${normSection}_${(issue.title || '').toLowerCase()}`;
       if (!seenIssueKeys.has(key)) {
         seenIssueKeys.add(key);
         allIssues.push(issue);
@@ -158,29 +185,64 @@ export class ValidationEngine {
     const lowSeverityCount = allIssues.filter(i => i.severity === 'LOW').length;
     const safeFixableCount = allIssues.filter(i => i.canAutoFix && i.mode === 'SAFE_AUTO').length;
 
-    const factMismatchCount = allIssues.filter(i => i.type === 'FACT_MISMATCH' || i.type === 'CONFLICTING_TERMS' || i.type === 'PARTY_MISMATCH').length;
-    const missingSectionCount = allIssues.filter(i => i.type === 'MISSING_SECTION').length;
+    const factMismatchCount = allIssues.filter(i =>
+      i.type === 'FACT_MISMATCH' ||
+      i.type === 'CONFLICTING_TERMS' ||
+      i.type === 'PARTY_MISMATCH' ||
+      i.type === 'MISSING_REQUIRED_FIELD'
+    ).length;
+    const placeholderCount = allIssues.filter(i => i.type === 'UNRESOLVED_PLACEHOLDER').length;
+    const missingRequiredCount = allIssues.filter(i =>
+      i.type === 'MISSING_REQUIRED_CLAUSE' ||
+      i.type === 'MISSING_SIGNATURE_BLOCK' ||
+      i.type === 'MISSING_SECTION'
+    ).length;
+    const missingRecommendedCount = allIssues.filter(i =>
+      i.type === 'MISSING_RECOMMENDED_CLAUSE' ||
+      i.type === 'MISSING_RECOMMENDED_FIELD'
+    ).length;
+    const incompleteClauseCount = allIssues.filter(i =>
+      i.type === 'INCOMPLETE_CLAUSE' ||
+      i.type === 'EMPTY_OR_TRUNCATED_SECTION'
+    ).length;
+    const conflictingTermsCount = allIssues.filter(i => i.type === 'CONFLICTING_TERMS').length;
 
-    const factualAccuracy = Math.max(0, 100 - (factMismatchCount * 25));
-    const sectionCompleteness = Math.max(0, 100 - (missingSectionCount * 20));
-    const clauseCoverage = Math.max(40, 100 - (medSeverityCount * 8));
-    const semanticConsistency = Math.max(30, Math.round(bertScore));
+    const factualAccuracy = Math.max(0, Math.min(100, 100 - (factMismatchCount * 20 + placeholderCount * 15)));
+    const sectionCompleteness = Math.max(0, Math.min(100, 100 - (missingRequiredCount * 25 + missingRecommendedCount * 10)));
+    const clauseCoverage = Math.max(20, Math.min(100, 100 - (incompleteClauseCount * 15 + missingRecommendedCount * 10)));
+    const semanticConsistency = Math.max(25, Math.min(100, Math.round(bertScore - (conflictingTermsCount * 15))));
     const legalKnowledgeSupport = approvedClauses.length > 0 ? 95 : 85;
 
     // Dynamic Composite Score Calculation
-    // Base 100 with penalties for detected issues
-    const totalPenalty = (highSeverityCount * 12) + (medSeverityCount * 5) + (lowSeverityCount * 2);
-    const overallScore = Math.max(20, Math.min(100, 100 - totalPenalty));
+    // Base 100 with penalties for detected issues:
+    // HIGH: -18, MEDIUM: -5, LOW: -2
+    const totalPenalty = (highSeverityCount * 18) + (medSeverityCount * 5) + (lowSeverityCount * 2);
+    let calculatedScore = Math.max(15, Math.min(100, 100 - totalPenalty));
+
+    // HARD CAP RULES:
+    // A document with missing required information, placeholders, or high-severity defects
+    // must NEVER receive ~100% or be marked as passed.
+    if (highSeverityCount >= 4) {
+      calculatedScore = Math.min(calculatedScore, 35);
+    } else if (highSeverityCount >= 2) {
+      calculatedScore = Math.min(calculatedScore, 55);
+    } else if (highSeverityCount === 1) {
+      calculatedScore = Math.min(calculatedScore, 74);
+    }
+
+    const overallScore = calculatedScore;
 
     let status: 'PASSED' | 'NEEDS_REVIEW' | 'FAILED' = 'PASSED';
-    if (highSeverityCount > 0 || factualAccuracy < 80) {
-      status = 'NEEDS_REVIEW';
-    } else if (overallScore < 60) {
+    if (overallScore < 30 || highSeverityCount >= 5) {
       status = 'FAILED';
+    } else if (highSeverityCount > 0 || medSeverityCount > 2 || overallScore < 80) {
+      status = 'NEEDS_REVIEW';
+    } else {
+      status = 'PASSED';
     }
 
     // Passed checks count calculation (e.g. 16 standard checks - issues count)
-    const passedChecks = Math.max(8, 16 - allIssues.length);
+    const passedChecks = Math.max(0, 16 - allIssues.length);
 
     return {
       overallScore,
@@ -220,6 +282,18 @@ export class ValidationEngine {
     const cleanText = stripTemplateInstructions(fullText);
     const isNDA = /nda|non-disclosure|confidentiality/i.test(documentType);
     const isServicesOrConsulting = /services|consulting|contractor|development/i.test(documentType);
+
+    // ==========================================
+    // 0. REQUIRED FIELDS & UNRESOLVED PLACEHOLDERS
+    // ==========================================
+    const fieldIssues = validateRequiredFields(documentType, facts, fullText, cleanText);
+    issues.push(...fieldIssues);
+
+    // ==========================================
+    // 0.1 REQUIRED & RECOMMENDED CLAUSES
+    // ==========================================
+    const clauseIssues = validateRequiredClauses(documentType, sections, fullText);
+    issues.push(...clauseIssues);
 
     // ==========================================
     // 1. PARTY NAME EXACT CHECK (NDA & NOTICE)

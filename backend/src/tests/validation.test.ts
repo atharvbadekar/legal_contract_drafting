@@ -18,9 +18,24 @@ describe('MIRA Multi-Tier Validation Engine Tests', () => {
         content: 'By and between ABC Technologies Pvt Ltd and XYZ Solutions Pvt Ltd.'
       },
       {
+        sectionType: 'definition',
+        title: 'Definition of Confidential Information',
+        content: 'Confidential Information includes all technical, proprietary, and commercial information.'
+      },
+      {
+        sectionType: 'obligations',
+        title: 'Non-Disclosure Obligations',
+        content: 'Receiving Party shall maintain confidentiality and shall not disclose without written permission.'
+      },
+      {
         sectionType: 'duration',
         title: '6. Term & Duration',
         content: 'This Agreement shall remain binding upon the Receiving Party for a period of 5 years from the Effective Date.'
+      },
+      {
+        sectionType: 'governing_law',
+        title: 'Governing Law',
+        content: 'This Agreement is governed by the laws of India.'
       },
       {
         sectionType: 'signatures',

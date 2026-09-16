@@ -286,4 +286,200 @@ If payment is not made within 60 days of invoice date, default interest shall ap
     const hasOfflineIssue = result.allIssues.some(i => i.type === 'NLP_SERVICE_OFFLINE');
     assert.strictEqual(hasOfflineIssue, false, 'allIssues must NEVER include NLP_SERVICE_OFFLINE');
   });
+
+  // =========================================================================
+  // TEST 8: Document with Unresolved Placeholders ([Party Name], [Date], TBD)
+  // =========================================================================
+  it('Test 8: Document with unresolved placeholders must be flagged as HIGH and CANNOT receive 100% or PASSED', async () => {
+    const facts = {
+      disclosingParty: { name: 'Acme Technologies Pvt Ltd' },
+      receivingParty: { name: 'Beta Solutions Inc' }
+    };
+
+    const docContent = `# NON-DISCLOSURE AGREEMENT
+## 1. Parties
+This Agreement is entered into on [Insert Date] by and between [Disclosing Party Name] and [Receiving Party Name].
+
+## 2. Definition of Confidential Information
+Confidential Information includes all proprietary technical data.
+
+## 3. Obligations
+Receiving Party shall hold in strict confidence all Confidential Information.
+
+## 4. Term
+The term of this agreement shall be TBD.
+
+## 5. Execution
+Acme Technologies Pvt Ltd: _________________
+Beta Solutions Inc: _________________`;
+
+    const sections = docContent.split('\n\n## ').map((s, idx) => ({
+      sectionType: `sec_${idx}`,
+      title: s.split('\n')[0].replace(/^#+\s*/, ''),
+      content: s
+    }));
+
+    const result = await validationEngine.validate('NDA', sections, facts, docContent);
+
+    const placeholderIssues = result.allIssues.filter(i => i.type === 'UNRESOLVED_PLACEHOLDER');
+    assert.ok(placeholderIssues.length >= 2, `Must detect unresolved placeholders, found ${placeholderIssues.length}`);
+
+    // Every placeholder must be HIGH severity
+    for (const p of placeholderIssues) {
+      assert.strictEqual(p.severity, 'HIGH', 'Unresolved placeholder must be HIGH severity');
+    }
+
+    // Hard cap: Cannot exceed 74% or be PASSED
+    assert.ok(result.overallScore < 75, `Score must be < 75 with unresolved placeholders, got ${result.overallScore}`);
+    assert.notStrictEqual(result.status, 'PASSED', 'Document with unresolved placeholders must NEVER be marked PASSED');
+  });
+
+  // =========================================================================
+  // TEST 9: Severely Broken Document with Multiple Missing Required Fields & Clauses
+  // =========================================================================
+  it('Test 9: Severely broken document with missing required information must score <= 35% and FAILED', async () => {
+    // Intentionally broken input: missing parties, missing dates, missing confidentiality clauses
+    const brokenFacts = {};
+
+    const brokenContent = `# AGREEMENT
+This agreement is entered into by Disclosing Party and Receiving Party.
+General information will be shared.`;
+
+    const sections = [
+      { sectionType: 'general', title: 'Preamble', content: brokenContent }
+    ];
+
+    const result = await validationEngine.validate('NDA', sections, brokenFacts, brokenContent);
+
+    // High severity issues must be detected
+    const highIssues = result.allIssues.filter(i => i.severity === 'HIGH');
+    assert.ok(highIssues.length >= 4, `Must detect >= 4 high severity defects, found ${highIssues.length}`);
+
+    // Score must be <= 35 and status must be FAILED
+    assert.ok(result.overallScore <= 35, `Score must be <= 35% for severely broken document, got ${result.overallScore}`);
+    assert.strictEqual(result.status, 'FAILED', `Status must be FAILED for severely broken document, got ${result.status}`);
+  });
+
+  // =========================================================================
+  // TEST 10: Incomplete NDA missing operative confidentiality obligations
+  // =========================================================================
+  it('Test 10: NDA missing operative non-disclosure covenant must flag MISSING_REQUIRED_CLAUSE with HIGH severity', async () => {
+    const facts = {
+      disclosingParty: { name: 'Acme Corp' },
+      receivingParty: { name: 'Beta LLC' },
+      duration: '2 years',
+      governingLaw: 'New York'
+    };
+
+    // Preamble and term exist, but non-disclosure obligations are completely missing
+    const docContent = `## 1. Parties
+This Agreement is entered into by Acme Corp and Beta LLC.
+
+## 2. Term
+This Agreement is effective for 2 years from the Effective Date.
+
+## 3. Governing Law
+This Agreement is governed by the laws of New York.
+
+## 4. Signatures
+Acme Corp: _________________
+Beta LLC: _________________`;
+
+    const sections = [
+      { sectionType: 'parties', title: '1. Parties', content: 'This Agreement is entered into by Acme Corp and Beta LLC.' },
+      { sectionType: 'term', title: '2. Term', content: 'This Agreement is effective for 2 years from the Effective Date.' },
+      { sectionType: 'governing_law', title: '3. Governing Law', content: 'This Agreement is governed by the laws of New York.' },
+      { sectionType: 'signatures', title: '4. Signatures', content: 'Acme Corp: _________________\nBeta LLC: _________________' }
+    ];
+
+    const result = await validationEngine.validate('NDA', sections, facts, docContent);
+    const missingObligation = result.allIssues.find(i =>
+      i.type === 'MISSING_REQUIRED_CLAUSE' && i.title.includes('Non-Disclosure Obligations')
+    );
+
+    assert.ok(missingObligation, 'Must detect missing Non-Disclosure Obligations clause');
+    assert.strictEqual(missingObligation?.severity, 'HIGH');
+    assert.ok(result.overallScore < 75, 'Score must be < 75 when required confidentiality covenant is missing');
+    assert.strictEqual(result.status, 'NEEDS_REVIEW');
+  });
+
+  // =========================================================================
+  // TEST 11: Legal Notice missing required statutory demand and cure period
+  // =========================================================================
+  it('Test 11: Legal Notice missing demand and response period flags MISSING_REQUIRED_FIELD with HIGH severity', async () => {
+    const emptyFacts = {};
+
+    const noticeContent = `# LEGAL NOTICE
+To: Defaulting Tenant
+Subject: Notice of Default
+You have breached our lease agreement.`;
+
+    const sections = [
+      { sectionType: 'header', title: 'Legal Notice', content: noticeContent }
+    ];
+
+    const result = await validationEngine.validate('LEGAL_NOTICE', sections, emptyFacts, noticeContent);
+
+    const highIssues = result.allIssues.filter(i => i.severity === 'HIGH');
+    assert.ok(highIssues.length >= 3, `Expected at least 3 high severity issues for defective notice, got ${highIssues.length}`);
+    assert.ok(result.overallScore < 60, `Score must be < 60 for defective notice, got ${result.overallScore}`);
+    assert.notStrictEqual(result.status, 'PASSED');
+  });
+
+  // =========================================================================
+  // TEST 12: Deterministic engine is authoritative and offline-safe
+  // =========================================================================
+  it('Test 12: Deterministic engine functions authoritatively without requiring live NLP service', async () => {
+    const facts = {
+      disclosingParty: { name: 'Acme Technologies Pvt Ltd' },
+      receivingParty: { name: 'Beta Solutions Inc' },
+      duration: '3 years',
+      governingLaw: 'Delaware'
+    };
+
+    const fullText = `## 1. Parties
+This Mutual Non-Disclosure Agreement is by and between Acme Technologies Pvt Ltd and Beta Solutions Inc.
+
+## 2. Definition of Confidential Information
+Confidential Information includes all proprietary technical data and trade secrets.
+
+## 3. Non-Disclosure Obligations
+Receiving Party shall hold in strict confidence all Confidential Information and not disclose without written consent.
+
+## 4. Exceptions and Exclusions
+Confidential Information excludes publicly known information and prior knowledge.
+
+## 5. Permitted Disclosures
+Disclosure is permitted to employees and advisors with a need to know.
+
+## 6. Return of Materials
+Upon termination, Receiving Party shall return or destroy all confidential materials.
+
+## 7. Term and Survival
+This Agreement shall remain in effect for 3 years from the Effective Date.
+
+## 8. Remedies & Relief
+Breach may cause irreparable harm entitling the non-breaching party to injunctive relief.
+
+## 9. Governing Law
+This Agreement is governed by the laws of Delaware.
+
+## 10. Execution & Signatures
+In witness whereof, authorized representatives executed this agreement.
+Acme Technologies Pvt Ltd: _________________
+Beta Solutions Inc: _________________`;
+
+    const sections = fullText.split('\n\n## ').map((s, idx) => ({
+      sectionType: `sec_${idx}`,
+      title: s.split('\n')[0].replace(/^#+\s*/, ''),
+      content: s
+    }));
+
+    const result = await validationEngine.validate('NDA', sections, facts, fullText);
+
+    // Deterministic validation verifies presence of parties, duration, law, confidentiality
+    assert.ok(result.overallScore >= 90, `Complete valid agreement must score >= 90 even offline, got ${result.overallScore}`);
+    assert.strictEqual(result.status, 'PASSED');
+    assert.strictEqual(result.deterministicIssues.filter(i => i.severity === 'HIGH').length, 0);
+  });
 });
