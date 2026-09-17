@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { documentService, aiService } from '../services/api';
+import { documentService } from '../services/api';
 import { DocumentRecord, ValidationIssue, DocumentDiffResult } from '../types';
 import { 
   FileText, 
@@ -15,7 +15,6 @@ import {
   ShieldCheck,
   ChevronRight,
   HelpCircle,
-  Wand2,
   Layers,
   ArrowLeft,
   Check,
@@ -35,7 +34,10 @@ import {
   List,
   Minus,
   ChevronDown,
-  Tag
+  Tag,
+  Award,
+  BookOpen,
+  Lightbulb
 } from 'lucide-react';
 
 const CLAUSE_LIBRARY: { title: string; category: string; text: string }[] = [
@@ -104,7 +106,7 @@ export const DocumentEditor: React.FC = () => {
   const [content, setContent] = useState('');
   const [saving, setSaving] = useState(false);
   const [validating, setValidating] = useState(false);
-  const [activeTab, setActiveTab] = useState<'VALIDATION' | 'COMPLETENESS' | 'ASSISTANT'>('VALIDATION');
+  const [activeTab, setActiveTab] = useState<'VALIDATION' | 'COMPLETENESS' | 'PERFECTION_GUIDE'>('VALIDATION');
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
 
   // Fix Action States
@@ -144,13 +146,8 @@ export const DocumentEditor: React.FC = () => {
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // AI Assistant state
-  const [explanation, setExplanation] = useState<any>(null);
-  const [explaining, setExplaining] = useState(false);
-  const [rewriting, setRewriting] = useState(false);
+  // Editor feedback & selection state
   const [selectedText, setSelectedText] = useState('');
-  const [customCommand, setCustomCommand] = useState('');
-  const [applyingCommand, setApplyingCommand] = useState(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState('');
 
   // Keyboard shortcut Ctrl+F / Cmd+F to open Search & Replace
@@ -502,73 +499,6 @@ export const DocumentEditor: React.FC = () => {
     setCurrentMatchIdx(0);
     setSaveSuccessMsg(`✓ Replaced ${count} occurrences of "${searchQuery}"`);
     setTimeout(() => setSaveSuccessMsg(''), 3500);
-  };
-
-  const handleExplain = async () => {
-    const textToExplain = selectedText.trim() || content.slice(0, 300);
-    setExplaining(true);
-    try {
-      const res = await aiService.explainClause(textToExplain);
-      setExplanation(res);
-    } catch (err: any) {
-      alert(`Clause explanation error: ${err.message}`);
-    } finally {
-      setExplaining(false);
-    }
-  };
-
-  const handleRewrite = async (style: 'formal' | 'simple' | 'mutual') => {
-    if (!selectedText.trim()) {
-      alert('Please select or highlight text in the document editor to rewrite.');
-      return;
-    }
-    setRewriting(true);
-    try {
-      const res = await aiService.rewriteClause(
-        selectedText,
-        style === 'mutual' ? 'custom' : style,
-        style === 'mutual' ? 'make mutual for both parties' : undefined
-      );
-      setContent((prev) => prev.replace(selectedText, res.rewritten));
-      setSelectedText(res.rewritten);
-      setSaveSuccessMsg('✓ Clause updated in document!');
-      setTimeout(() => setSaveSuccessMsg(''), 3000);
-    } catch (err: any) {
-      alert(`Rewrite error: ${err.message}`);
-    } finally {
-      setRewriting(false);
-    }
-  };
-
-  const handleCustomCommand = async () => {
-    if (!customCommand.trim()) {
-      alert('Please enter an instruction or command for the AI.');
-      return;
-    }
-    const targetText = selectedText.trim() || content.trim();
-    if (!targetText) {
-      alert('Please select or highlight text in the document editor to modify.');
-      return;
-    }
-
-    setApplyingCommand(true);
-    try {
-      const res = await aiService.rewriteClause(targetText, 'custom', customCommand.trim());
-      if (res && res.rewritten) {
-        if (selectedText.trim()) {
-          setContent((prev) => prev.replace(selectedText, res.rewritten));
-        } else {
-          setContent(res.rewritten);
-        }
-        setSelectedText(res.rewritten);
-        setSaveSuccessMsg('✓ Section updated with AI command!');
-        setTimeout(() => setSaveSuccessMsg(''), 3500);
-      }
-    } catch (err: any) {
-      alert(`AI Command failed: ${err.message}`);
-    } finally {
-      setApplyingCommand(false);
-    }
   };
 
   if (!document) {
@@ -979,7 +909,7 @@ export const DocumentEditor: React.FC = () => {
           </div>
         </div>
 
-        {/* PANEL 3: Validation & AI Assistant Panel (Right, 3 cols) */}
+        {/* PANEL 3: Validation & Perfection Guide Panel (Right, 3 cols) */}
         <div className="lg:col-span-3 bg-white rounded-xl border border-mira-border shadow-xs p-4 space-y-4 sticky top-20">
           {/* Tabs */}
           <div className="grid grid-cols-3 gap-1 p-1 bg-gray-100 rounded-lg text-[11px] font-semibold">
@@ -989,7 +919,7 @@ export const DocumentEditor: React.FC = () => {
                 activeTab === 'VALIDATION' ? 'bg-white text-mira-primary shadow-2xs font-bold' : 'text-mira-muted'
               }`}
             >
-              Validation ({validationScore}%)
+              Flags ({validationScore}%)
             </button>
             <button
               onClick={() => setActiveTab('COMPLETENESS')}
@@ -997,15 +927,15 @@ export const DocumentEditor: React.FC = () => {
                 activeTab === 'COMPLETENESS' ? 'bg-white text-mira-primary shadow-2xs font-bold' : 'text-mira-muted'
               }`}
             >
-              Completeness
+              Checklist
             </button>
             <button
-              onClick={() => setActiveTab('ASSISTANT')}
+              onClick={() => setActiveTab('PERFECTION_GUIDE')}
               className={`py-1.5 rounded-md transition-colors cursor-pointer ${
-                activeTab === 'ASSISTANT' ? 'bg-white text-mira-primary shadow-2xs font-bold' : 'text-mira-muted'
+                activeTab === 'PERFECTION_GUIDE' ? 'bg-white text-mira-primary shadow-2xs font-bold' : 'text-mira-muted'
               }`}
             >
-              Assistant
+              Perfection Guide
             </button>
           </div>
 
@@ -1262,6 +1192,15 @@ export const DocumentEditor: React.FC = () => {
                             </div>
                           )}
 
+                          {!canFix && (
+                            <div className="p-2 bg-blue-50/70 rounded-lg border border-blue-200 text-[10px] text-blue-900 flex items-start gap-1.5">
+                              <HelpCircle className="w-3.5 h-3.5 text-blue-600 flex-shrink-0 mt-0.5" />
+                              <span>
+                                <strong>Manual Drafting Required:</strong> Click <em>Jump to Section in Editor</em> below to edit this text directly, or check the <em>Perfection Guide</em> tab for standard clauses.
+                              </span>
+                            </div>
+                          )}
+
                           {/* Human Counsel Review Layer */}
                           <div className="p-2 bg-white/80 rounded-lg border border-black/5 flex items-center justify-between text-[10px]">
                             <span className="font-bold text-gray-600 uppercase tracking-wider">
@@ -1304,30 +1243,15 @@ export const DocumentEditor: React.FC = () => {
                             </div>
                           </div>
 
-                          {/* Action Buttons: Jump & Fix with AI */}
-                          <div className="flex items-center gap-2 pt-1">
+                          {/* Action Button: Jump & Highlight Section in Editor */}
+                          <div className="pt-1">
                             <button
                               onClick={() => scrollToSection(issue.section, issue.evidence, issue.location?.textRange)}
-                              className="flex-1 py-1.5 px-2 bg-white hover:bg-gray-100 text-gray-800 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 border border-gray-300 shadow-2xs transition-colors cursor-pointer"
-                              title="Scroll editor to this exact section and highlight text"
+                              className="w-full py-1.5 px-2 bg-white hover:bg-gray-100 text-gray-800 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1.5 border border-gray-300 shadow-2xs transition-colors cursor-pointer"
+                              title="Scroll editor to this exact section and highlight text for editing"
                             >
-                              <ExternalLink className="w-3 h-3 text-gray-500" />
-                              Jump to Section
-                            </button>
-
-                            <button
-                              onClick={() => {
-                                scrollToSection(issue.section, issue.evidence, issue.location?.textRange);
-                                setActiveTab('ASSISTANT');
-                                if (issue.suggestion) {
-                                  setCustomCommand(issue.suggestion);
-                                }
-                              }}
-                              className="flex-1 py-1.5 px-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 shadow-2xs transition-colors cursor-pointer"
-                              title="Jump to this section and open AI Assistant with resolution instructions"
-                            >
-                              <Sparkles className="w-3 h-3" />
-                              AI Assistant
+                              <ExternalLink className="w-3.5 h-3.5 text-gray-500" />
+                              Jump to Section in Editor
                             </button>
                           </div>
                         </div>
@@ -1410,154 +1334,229 @@ export const DocumentEditor: React.FC = () => {
             </div>
           )}
 
-          {/* TAB 2: AI ASSISTANT */}
-          {activeTab === 'ASSISTANT' && (
-            <div className="space-y-3.5 text-xs">
-              <div className="p-3 bg-purple-50 rounded-xl border border-purple-100 space-y-1">
-                <span className="font-bold text-purple-950 flex items-center gap-1.5 text-[12px]">
-                  <Sparkles className="w-3.5 h-3.5 text-mira-primary" />
-                  Contextual Drafting Assistant
-                </span>
+          {/* TAB 3: DOCUMENT PERFECTION & BEST PRACTICES GUIDE */}
+          {activeTab === 'PERFECTION_GUIDE' && (
+            <div className="space-y-4 text-xs">
+              {/* Header Banner */}
+              <div className="p-3.5 bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl border border-purple-200 shadow-2xs space-y-1.5">
+                <div className="flex items-center gap-1.5 font-bold text-purple-950 text-xs">
+                  <Award className="w-4 h-4 text-purple-700" />
+                  <span>How to Make Your Contract Legally Perfect</span>
+                </div>
                 <p className="text-[11px] text-purple-800 leading-relaxed">
-                  Select text in the editor, write your command below, and ATHARV AI will modify that specific section.
+                  Institutional legal standards used by premier corporate legal teams. Follow these 7 pillars and insert canonical clauses to make your contract bulletproof and enforceable.
                 </p>
               </div>
 
-              {/* Selected Text Preview */}
-              {selectedText ? (
-                <div className="p-2.5 bg-gray-50 rounded-xl border border-mira-border text-[11px] space-y-1">
-                  <div className="flex items-center justify-between font-semibold text-mira-muted text-[10px] uppercase">
-                    <span>Targeted Selection ({selectedText.length} chars)</span>
-                    <button
-                      onClick={() => setSelectedText('')}
-                      className="text-gray-400 hover:text-gray-600 underline text-[10px] cursor-pointer"
-                    >
-                      Clear
-                    </button>
-                  </div>
-                  <div className="font-serif italic line-clamp-3 text-mira-dark bg-white p-1.5 rounded border border-gray-100">
-                    "{selectedText}"
-                  </div>
-                </div>
-              ) : (
-                <div className="p-2.5 bg-amber-50/70 rounded-xl border border-amber-200 text-amber-900 text-[11px] flex items-start gap-2">
-                  <Edit3 className="w-3.5 h-3.5 text-amber-600 flex-shrink-0 mt-0.5" />
-                  <span>
-                    Select or highlight any clause or paragraph in the center editor (or click <strong>"Fix with AI Assistant"</strong> on any flag) to edit that section.
+              {/* Document Health & Perfection Status */}
+              <div className="p-3 bg-white rounded-xl border border-mira-border shadow-2xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-gray-700 text-[11px] uppercase tracking-wider">
+                    Current Document Score
+                  </span>
+                  <span className={`text-xs font-black px-2 py-0.5 rounded-full ${
+                    validationScore >= 90 ? 'bg-emerald-100 text-emerald-800' :
+                    validationScore >= 70 ? 'bg-blue-100 text-blue-800' :
+                    validationScore >= 50 ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800'
+                  }`}>
+                    {validationScore}% — {validationScore >= 90 ? 'Institutional Grade' : validationScore >= 70 ? 'Solid Draft' : 'Needs Review'}
                   </span>
                 </div>
-              )}
 
-              {/* WRITE COMMAND & APPLY CHANGES */}
-              <div className="p-3 bg-white rounded-xl border border-purple-200 shadow-2xs space-y-2">
-                <label className="font-bold text-mira-dark text-[11px] flex items-center gap-1.5">
-                  <Send className="w-3.5 h-3.5 text-mira-primary" />
-                  Write AI Command for Section:
-                </label>
-                <textarea
-                  rows={2}
-                  value={customCommand}
-                  onChange={(e) => setCustomCommand(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleCustomCommand();
+                <div className="text-[11px] text-gray-600 space-y-1">
+                  <p className="font-medium text-gray-800">
+                    {validationScore >= 90 
+                      ? '✓ Excellent contract quality! Verify parties and signatures to finalize.'
+                      : issuesList.length > 0
+                      ? `⚠ You have ${issuesList.length} flag${issuesList.length === 1 ? '' : 's'} to address in the Flags tab. Review the 7 pillars below to elevate to 100%.`
+                      : 'Follow the 7 legal pillars below to add complete protective covenants.'
                     }
-                  }}
-                  placeholder='e.g. "Change notice period to 60 days", "Make bilateral for both parties", "Add 12-month non-solicit", "Replace Bangalore with Delaware"...'
-                  className="w-full p-2 text-xs border border-gray-200 rounded-lg focus:outline-hidden focus:border-mira-primary resize-none font-sans"
-                />
-
-                <button
-                  onClick={handleCustomCommand}
-                  disabled={applyingCommand || !customCommand.trim()}
-                  className="w-full py-2 px-3 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-                >
-                  <Sparkles className={`w-3.5 h-3.5 ${applyingCommand ? 'animate-spin' : ''}`} />
-                  {applyingCommand ? 'Applying AI Changes...' : 'Apply AI Command to Document'}
-                </button>
-                <p className="text-[9px] text-mira-muted text-center italic">
-                  Press Enter to apply command directly to the selected text.
-                </p>
-              </div>
-
-              {/* Quick Preset Buttons */}
-              <div className="space-y-1.5 pt-1">
-                <span className="font-bold text-mira-dark text-[10px] uppercase tracking-wider">
-                  Quick 1-Click Presets:
-                </span>
-                <div className="grid grid-cols-1 gap-1.5">
-                  <button
-                    onClick={() => handleRewrite('mutual')}
-                    disabled={rewriting || !selectedText.trim()}
-                    className="w-full py-1.5 px-2.5 bg-white border border-mira-border hover:border-mira-primary disabled:opacity-50 rounded-lg font-medium text-mira-dark text-left flex items-center justify-between shadow-2xs cursor-pointer text-xs"
-                    title="Make unilateral terms bilateral for both parties"
-                  >
-                    <span className="flex items-center gap-1.5">
-                      <Scale className="w-3.5 h-3.5 text-mira-primary" />
-                      Make Clause Bilateral / Mutual
-                    </span>
-                    {rewriting && <RefreshCw className="w-3 h-3 animate-spin" />}
-                  </button>
-
-                  <button
-                    onClick={() => handleRewrite('simple')}
-                    disabled={rewriting || !selectedText.trim()}
-                    className="w-full py-1.5 px-2.5 bg-white border border-mira-border hover:border-mira-primary disabled:opacity-50 rounded-lg font-medium text-mira-dark text-left flex items-center justify-between shadow-2xs cursor-pointer text-xs"
-                  >
-                    <span className="flex items-center gap-1.5">
-                      <Wand2 className="w-3.5 h-3.5 text-mira-secondary" />
-                      Make Clause Simpler / Plain English
-                    </span>
-                    {rewriting && <RefreshCw className="w-3 h-3 animate-spin" />}
-                  </button>
-
-                  <button
-                    onClick={() => handleRewrite('formal')}
-                    disabled={rewriting || !selectedText.trim()}
-                    className="w-full py-1.5 px-2.5 bg-white border border-mira-border hover:border-mira-primary disabled:opacity-50 rounded-lg font-medium text-mira-dark text-left flex items-center justify-between shadow-2xs cursor-pointer text-xs"
-                  >
-                    <span className="flex items-center gap-1.5">
-                      <Wand2 className="w-3.5 h-3.5 text-mira-primary" />
-                      Make Clause Formal & Binding
-                    </span>
-                    {rewriting && <RefreshCw className="w-3 h-3 animate-spin" />}
-                  </button>
-
-                  <button
-                    onClick={handleExplain}
-                    disabled={explaining}
-                    className="w-full py-1.5 px-2.5 bg-white border border-mira-border hover:border-mira-primary rounded-lg font-medium text-mira-dark text-left flex items-center justify-between shadow-2xs cursor-pointer text-xs"
-                  >
-                    <span className="flex items-center gap-1.5">
-                      <HelpCircle className="w-3.5 h-3.5 text-mira-primary" />
-                      Explain Selected Clause
-                    </span>
-                    {explaining && <RefreshCw className="w-3 h-3 animate-spin" />}
-                  </button>
-                </div>
-              </div>
-
-              {/* Explanation Card */}
-              {explanation && (
-                <div className="p-3 bg-gray-50 rounded-xl border border-mira-border space-y-2 mt-2 animate-in fade-in">
-                  <div className="font-bold text-mira-dark text-[11px] border-b pb-1">
-                    Plain-Language Explanation
-                  </div>
-                  <p className="text-[11px] text-mira-dark leading-relaxed">{explanation.plainLanguage}</p>
-                  <div>
-                    <span className="font-bold text-[10px] text-mira-muted uppercase">Commercial Purpose</span>
-                    <p className="text-[11px] text-mira-dark mt-0.5">{explanation.purpose}</p>
-                  </div>
-                  <div>
-                    <span className="font-bold text-[10px] text-mira-muted uppercase">Legal Implication</span>
-                    <p className="text-[11px] text-mira-dark mt-0.5">{explanation.legalImplication}</p>
-                  </div>
-                  <p className="text-[9px] text-mira-muted italic pt-1 border-t">
-                    {explanation.disclaimer}
                   </p>
                 </div>
-              )}
+              </div>
+
+              {/* 7 INSTITUTIONAL PERFECTION PILLARS */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-gray-800 text-[11px] uppercase tracking-wider flex items-center gap-1">
+                    <BookOpen className="w-3.5 h-3.5 text-purple-600" />
+                    7 Pillars of Contract Perfection:
+                  </span>
+                  <span className="text-[10px] text-mira-muted">Click to insert</span>
+                </div>
+
+                {/* Pillar 1: Liability Cap */}
+                <div className="p-3 bg-white rounded-xl border border-gray-200 shadow-2xs space-y-2 hover:border-purple-300 transition-colors">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 font-bold text-gray-900 text-xs">
+                      <span className="w-4 h-4 rounded-full bg-purple-100 text-purple-700 text-[10px] flex items-center justify-center font-bold">1</span>
+                      <span>Liability & Financial Exposure</span>
+                    </div>
+                    <span className="text-[10px] bg-red-50 text-red-700 px-1.5 py-0.5 rounded font-bold">Critical</span>
+                  </div>
+                  <p className="text-[11px] text-gray-600 leading-relaxed">
+                    <strong>Rule:</strong> Never execute without a mutual liability cap. Limit total aggregate liability to fees paid in the prior 12 months, and include an express waiver of consequential, indirect, and punitive damages.
+                  </p>
+                  <button
+                    onClick={() => {
+                      const clause = CLAUSE_LIBRARY.find(c => c.title.includes('Limitation of Liability'));
+                      if (clause) insertTextAtCursor(clause.text);
+                    }}
+                    className="w-full py-1.5 px-2 bg-purple-50 hover:bg-purple-100 text-purple-800 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1.5 border border-purple-200 transition-colors cursor-pointer"
+                  >
+                    <PlusCircle className="w-3 h-3 text-purple-600" />
+                    Insert 12-Month Liability Cap Clause
+                  </button>
+                </div>
+
+                {/* Pillar 2: IP Assignment */}
+                <div className="p-3 bg-white rounded-xl border border-gray-200 shadow-2xs space-y-2 hover:border-purple-300 transition-colors">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 font-bold text-gray-900 text-xs">
+                      <span className="w-4 h-4 rounded-full bg-purple-100 text-purple-700 text-[10px] flex items-center justify-center font-bold">2</span>
+                      <span>IP Rights & Work Product</span>
+                    </div>
+                    <span className="text-[10px] bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded font-bold">Essential</span>
+                  </div>
+                  <p className="text-[11px] text-gray-600 leading-relaxed">
+                    <strong>Rule:</strong> Use explicit present-tense assignment ("hereby assigns all right, title, and interest in deliverables") while expressly reserving pre-existing background IP, third-party libraries, and developer tools.
+                  </p>
+                  <button
+                    onClick={() => {
+                      const clause = CLAUSE_LIBRARY.find(c => c.title.includes('Intellectual Property'));
+                      if (clause) insertTextAtCursor(clause.text);
+                    }}
+                    className="w-full py-1.5 px-2 bg-purple-50 hover:bg-purple-100 text-purple-800 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1.5 border border-purple-200 transition-colors cursor-pointer"
+                  >
+                    <PlusCircle className="w-3 h-3 text-purple-600" />
+                    Insert IP & Work Product Assignment
+                  </button>
+                </div>
+
+                {/* Pillar 3: Notice & Cure Periods */}
+                <div className="p-3 bg-white rounded-xl border border-gray-200 shadow-2xs space-y-2 hover:border-purple-300 transition-colors">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 font-bold text-gray-900 text-xs">
+                      <span className="w-4 h-4 rounded-full bg-purple-100 text-purple-700 text-[10px] flex items-center justify-center font-bold">3</span>
+                      <span>Notice & Termination Cure</span>
+                    </div>
+                    <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-bold">Standard</span>
+                  </div>
+                  <p className="text-[11px] text-gray-600 leading-relaxed">
+                    <strong>Rule:</strong> Avoid abrupt unilateral termination. Provide at least 30 days prior written notice for convenience, and a mandatory 15-day notice-and-cure period before terminating for material breach.
+                  </p>
+                  <button
+                    onClick={() => {
+                      const clause = CLAUSE_LIBRARY.find(c => c.title.includes('Term, Mutual Termination'));
+                      if (clause) insertTextAtCursor(clause.text);
+                    }}
+                    className="w-full py-1.5 px-2 bg-purple-50 hover:bg-purple-100 text-purple-800 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1.5 border border-purple-200 transition-colors cursor-pointer"
+                  >
+                    <PlusCircle className="w-3 h-3 text-purple-600" />
+                    Insert Notice & Cure Termination Clause
+                  </button>
+                </div>
+
+                {/* Pillar 4: Confidentiality & 4 Exceptions */}
+                <div className="p-3 bg-white rounded-xl border border-gray-200 shadow-2xs space-y-2 hover:border-purple-300 transition-colors">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 font-bold text-gray-900 text-xs">
+                      <span className="w-4 h-4 rounded-full bg-purple-100 text-purple-700 text-[10px] flex items-center justify-center font-bold">4</span>
+                      <span>Confidentiality & Statutory Carve-Outs</span>
+                    </div>
+                    <span className="text-[10px] bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded font-bold">Protective</span>
+                  </div>
+                  <p className="text-[11px] text-gray-600 leading-relaxed">
+                    <strong>Rule:</strong> Ensure the 4 canonical exclusions are stated: public domain, prior knowledge, independent creation, and lawful third-party receipt. Include prompt written notice for court subpoenas.
+                  </p>
+                  <button
+                    onClick={() => {
+                      const clause = CLAUSE_LIBRARY.find(c => c.title.includes('Exclusions from Confidentiality'));
+                      if (clause) insertTextAtCursor(clause.text);
+                    }}
+                    className="w-full py-1.5 px-2 bg-purple-50 hover:bg-purple-100 text-purple-800 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1.5 border border-purple-200 transition-colors cursor-pointer"
+                  >
+                    <PlusCircle className="w-3 h-3 text-purple-600" />
+                    Insert 4 Confidentiality Exceptions
+                  </button>
+                </div>
+
+                {/* Pillar 5: Governing Law & Jurisdiction */}
+                <div className="p-3 bg-white rounded-xl border border-gray-200 shadow-2xs space-y-2 hover:border-purple-300 transition-colors">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 font-bold text-gray-900 text-xs">
+                      <span className="w-4 h-4 rounded-full bg-purple-100 text-purple-700 text-[10px] flex items-center justify-center font-bold">5</span>
+                      <span>Governing Law & Forum Selection</span>
+                    </div>
+                    <span className="text-[10px] bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded font-bold">Enforceability</span>
+                  </div>
+                  <p className="text-[11px] text-gray-600 leading-relaxed">
+                    <strong>Rule:</strong> Nominate one single, unambiguous governing jurisdiction (e.g., State of Delaware, California, or Karnataka) and designate exclusive court venue or binding institutional arbitration.
+                  </p>
+                  <button
+                    onClick={() => {
+                      const clause = CLAUSE_LIBRARY.find(c => c.title.includes('Governing Law'));
+                      if (clause) insertTextAtCursor(clause.text);
+                    }}
+                    className="w-full py-1.5 px-2 bg-purple-50 hover:bg-purple-100 text-purple-800 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1.5 border border-purple-200 transition-colors cursor-pointer"
+                  >
+                    <PlusCircle className="w-3 h-3 text-purple-600" />
+                    Insert Governing Law Clause
+                  </button>
+                </div>
+
+                {/* Pillar 6: Integration & Boilerplate */}
+                <div className="p-3 bg-white rounded-xl border border-gray-200 shadow-2xs space-y-2 hover:border-purple-300 transition-colors">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 font-bold text-gray-900 text-xs">
+                      <span className="w-4 h-4 rounded-full bg-purple-100 text-purple-700 text-[10px] flex items-center justify-center font-bold">6</span>
+                      <span>Integration & Severability (Boilerplate)</span>
+                    </div>
+                    <span className="text-[10px] bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded font-bold">Ironclad</span>
+                  </div>
+                  <p className="text-[11px] text-gray-600 leading-relaxed">
+                    <strong>Rule:</strong> Protect your contract against parol evidence with an Entire Agreement clause, keep the remainder valid if one term is struck via Severability, and authorize digital Counterparts.
+                  </p>
+                  <button
+                    onClick={() => {
+                      const clause = CLAUSE_LIBRARY.find(c => c.title.includes('Severability, Counterparts'));
+                      if (clause) insertTextAtCursor(clause.text);
+                    }}
+                    className="w-full py-1.5 px-2 bg-purple-50 hover:bg-purple-100 text-purple-800 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1.5 border border-purple-200 transition-colors cursor-pointer"
+                  >
+                    <PlusCircle className="w-3 h-3 text-purple-600" />
+                    Insert Entire Agreement & Boilerplate
+                  </button>
+                </div>
+
+                {/* Pillar 7: Execution & Signatures */}
+                <div className="p-3 bg-white rounded-xl border border-gray-200 shadow-2xs space-y-2 hover:border-purple-300 transition-colors">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 font-bold text-gray-900 text-xs">
+                      <span className="w-4 h-4 rounded-full bg-purple-100 text-purple-700 text-[10px] flex items-center justify-center font-bold">7</span>
+                      <span>Execution & Signature Blocks</span>
+                    </div>
+                    <span className="text-[10px] bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded font-bold">Execution</span>
+                  </div>
+                  <p className="text-[11px] text-gray-600 leading-relaxed">
+                    <strong>Rule:</strong> Ensure corporate entity names match the preamble exactly. Include authorized officer names, executive titles (e.g., Director, CEO, VP), and execution dates for each party.
+                  </p>
+                  <button
+                    onClick={() => {
+                      const clause = CLAUSE_LIBRARY.find(c => c.title.includes('Formal Execution'));
+                      if (clause) insertTextAtCursor(clause.text);
+                    }}
+                    className="w-full py-1.5 px-2 bg-purple-50 hover:bg-purple-100 text-purple-800 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1.5 border border-purple-200 transition-colors cursor-pointer"
+                  >
+                    <PlusCircle className="w-3 h-3 text-purple-600" />
+                    Insert Signature Block
+                  </button>
+                </div>
+              </div>
+
+              <p className="text-[10px] text-mira-muted italic pt-2 border-t">
+                "Insert button places canonical institutional clause at your cursor in the editor."
+              </p>
             </div>
           )}
         </div>

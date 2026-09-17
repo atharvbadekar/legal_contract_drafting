@@ -25,7 +25,10 @@ import {
   Edit3,
   Check,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Award,
+  BookOpen,
+  Lightbulb
 } from 'lucide-react';
 
 export const ContractAnalyzer: React.FC = () => {
@@ -640,7 +643,7 @@ Title: Managing Partner`);
                   return (
                     <div
                       key={risk.id}
-                      className={`p-4 rounded-xl border text-xs space-y-2.5 transition-all ${
+                      className={`p-4 rounded-xl border text-xs space-y-3 transition-all ${
                         isCrit || isHigh
                           ? 'bg-red-50/50 border-red-200'
                           : isMed
@@ -648,11 +651,10 @@ Title: Managing Partner`);
                           : 'bg-blue-50/50 border-blue-200'
                       }`}
                     >
+                      {/* Flag Header */}
                       <div className="flex items-center justify-between font-bold">
                         <div className="flex items-center gap-2">
-                          <AlertTriangle className={`w-4 h-4 ${
-                            isCrit || isHigh ? 'text-red-600' : isMed ? 'text-amber-600' : 'text-blue-600'
-                          }`} />
+                          <span className="text-sm">🚩</span>
                           <span className="text-sm font-bold text-gray-900">{risk.title}</span>
                           <span className="text-[10px] text-gray-500 font-normal">({risk.clause})</span>
                         </div>
@@ -663,29 +665,45 @@ Title: Managing Partner`);
                             ? 'bg-amber-200 text-amber-950 border border-amber-300'
                             : 'bg-blue-200 text-blue-950 border border-blue-300'
                         }`}>
-                          {risk.severity}
+                          {risk.severity} FLAG
                         </span>
                       </div>
 
-                      <p className="text-xs text-gray-800 leading-relaxed font-medium">
-                        {risk.description}
-                      </p>
+                      {/* Flaw Identified */}
+                      <div className="p-2.5 bg-white/90 rounded-lg border border-black/5 space-y-1">
+                        <span className="text-[10px] font-bold text-red-800 uppercase tracking-wider block">
+                          🔍 Flaw Identified:
+                        </span>
+                        <p className="text-xs text-gray-800 leading-relaxed font-medium">
+                          {risk.description}
+                        </p>
+                      </div>
 
+                      {/* Quoted Evidence */}
                       {risk.evidence && (
-                        <div className="p-2.5 rounded-lg bg-white border border-black/5 font-mono text-[11px] text-gray-700">
-                          <span className="font-sans font-bold text-gray-500 text-[10px] uppercase block">Quoted Evidence:</span>
-                          "{risk.evidence}"
+                        <div className="p-2.5 rounded-lg bg-white border border-black/5 font-mono text-[11px] text-gray-700 space-y-1">
+                          <span className="font-sans font-bold text-gray-500 text-[10px] uppercase block">
+                            📝 Quoted Contract Evidence:
+                          </span>
+                          <div className="bg-gray-50 p-2 rounded border border-gray-100 italic">
+                            "{risk.evidence}"
+                          </div>
                         </div>
                       )}
 
+                      {/* Rationale and Fix Suggestion */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1 text-[11px]">
-                        <div className="p-2.5 rounded-lg bg-white/70 border border-black/5 space-y-0.5">
-                          <span className="font-bold text-gray-700 uppercase text-[10px]">Legal Rationale:</span>
-                          <p className="text-gray-600 leading-snug">{risk.legalRationale}</p>
+                        <div className="p-2.5 rounded-lg bg-white/80 border border-black/5 space-y-1">
+                          <span className="font-bold text-gray-700 uppercase text-[10px] flex items-center gap-1">
+                            ⚖️ Legal Risk & Rationale:
+                          </span>
+                          <p className="text-gray-600 leading-relaxed">{risk.legalRationale}</p>
                         </div>
-                        <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 space-y-0.5">
-                          <span className="font-bold text-emerald-900 uppercase text-[10px]">Suggested Resolution:</span>
-                          <p className="text-emerald-950 leading-snug">{risk.suggestedResolution}</p>
+                        <div className="p-2.5 rounded-lg bg-emerald-50/90 border border-emerald-200 space-y-1">
+                          <span className="font-bold text-emerald-900 uppercase text-[10px] flex items-center gap-1">
+                            💡 How to Fix (Actionable Suggestion):
+                          </span>
+                          <p className="text-emerald-950 leading-relaxed font-medium">{risk.suggestedResolution}</p>
                         </div>
                       </div>
                     </div>
@@ -757,6 +775,154 @@ Title: Managing Partner`);
             <p className="text-[10px] text-mira-muted italic pt-2 border-t">
               {result.health.disclaimer}
             </p>
+          </div>
+
+          {/* SECTION 5: HOW TO MAKE THIS CONTRACT PERFECT */}
+          <div className="bg-white rounded-2xl border border-mira-border shadow-xs p-6 space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-gray-100 pb-4">
+              <div>
+                <h2 className="text-base font-bold text-mira-dark flex items-center gap-2">
+                  <Award className="w-5 h-5 text-purple-600" />
+                  How to Make This Contract Perfect
+                </h2>
+                <p className="text-xs text-mira-muted mt-0.5">
+                  Institutional legal drafting standards & actionable checklist to elevate this contract to 95%+ Health
+                </p>
+              </div>
+
+              <button
+                onClick={handleImportToEditor}
+                disabled={importing}
+                className="px-4 py-2 bg-mira-primary hover:bg-mira-accent text-white text-xs font-bold rounded-lg shadow-sm transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 self-start sm:self-auto"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                {importing ? 'Importing...' : 'Open in Editor & Apply Fixes'}
+              </button>
+            </div>
+
+            {/* Contract Health & Perfection Status */}
+            <div className="p-4 rounded-xl bg-gradient-to-r from-purple-50 via-indigo-50 to-purple-50 border border-purple-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-purple-900">
+                    Current Contract Health: {result.health.score}%
+                  </span>
+                  <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
+                    result.health.score >= 85 ? 'bg-emerald-100 text-emerald-800' :
+                    result.health.score >= 70 ? 'bg-blue-100 text-blue-800' :
+                    result.health.score >= 50 ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800'
+                  }`}>
+                    {result.health.status.replace(/_/g, ' ')}
+                  </span>
+                </div>
+                <p className="text-xs text-purple-800">
+                  {result.health.score >= 90
+                    ? 'This contract has strong foundational protections. Review the checklist below to achieve institutional perfection.'
+                    : result.health.score >= 70
+                    ? 'Standard draft with notable risk exposure. Implementing the 6 priority fixes below will elevate this document to 95%+.'
+                    : 'Critical vulnerabilities detected. This document requires essential terms, liability caps, and party alignment before signing.'}
+                </p>
+              </div>
+
+              <div className="flex-shrink-0 text-center sm:text-right">
+                <span className="text-[10px] uppercase font-bold text-gray-500 block">Flagged Vulnerabilities</span>
+                <span className="text-2xl font-black text-gray-900">{result.riskAreas.length} Areas</span>
+              </div>
+            </div>
+
+            {/* Top Priority Action Items */}
+            <div className="space-y-3">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-gray-700 flex items-center gap-1.5">
+                <Lightbulb className="w-4 h-4 text-amber-500" />
+                6 Priority Steps to Make This Contract Perfect:
+              </h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* Step 1 */}
+                <div className="p-3.5 rounded-xl border border-gray-200 bg-gray-50/60 space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-purple-600 text-white font-bold text-xs flex items-center justify-center flex-shrink-0">1</span>
+                    <span className="font-bold text-xs text-gray-900">Cap Total Financial Liability</span>
+                  </div>
+                  <p className="text-[11px] text-gray-600 leading-relaxed pl-7">
+                    Add a mutual aggregate liability cap limiting total damages to the fees paid under the agreement in the prior 12 months. Include an express waiver of consequential, indirect, and punitive damages.
+                  </p>
+                </div>
+
+                {/* Step 2 */}
+                <div className="p-3.5 rounded-xl border border-gray-200 bg-gray-50/60 space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-purple-600 text-white font-bold text-xs flex items-center justify-center flex-shrink-0">2</span>
+                    <span className="font-bold text-xs text-gray-900">Unambiguous Intellectual Property Assignment</span>
+                  </div>
+                  <p className="text-[11px] text-gray-600 leading-relaxed pl-7">
+                    Ensure present-tense assignment ("hereby assigns all right, title, and interest in deliverables") while expressly reserving pre-existing background IP and developer toolkits.
+                  </p>
+                </div>
+
+                {/* Step 3 */}
+                <div className="p-3.5 rounded-xl border border-gray-200 bg-gray-50/60 space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-purple-600 text-white font-bold text-xs flex items-center justify-center flex-shrink-0">3</span>
+                    <span className="font-bold text-xs text-gray-900">Establish Notice & Cure Mechanisms</span>
+                  </div>
+                  <p className="text-[11px] text-gray-600 leading-relaxed pl-7">
+                    Replace unilateral or immediate termination traps with a reasonable notice period (30 days for convenience) and a mandatory written notice and 15-day cure period for material default.
+                  </p>
+                </div>
+
+                {/* Step 4 */}
+                <div className="p-3.5 rounded-xl border border-gray-200 bg-gray-50/60 space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-purple-600 text-white font-bold text-xs flex items-center justify-center flex-shrink-0">4</span>
+                    <span className="font-bold text-xs text-gray-900">Incorporate 4 Statutory Confidentiality Exceptions</span>
+                  </div>
+                  <p className="text-[11px] text-gray-600 leading-relaxed pl-7">
+                    Confidentiality covenants must expressly exclude public domain information, prior knowledge, independent creation, and lawful third-party disclosures, plus prompt notice for legal process.
+                  </p>
+                </div>
+
+                {/* Step 5 */}
+                <div className="p-3.5 rounded-xl border border-gray-200 bg-gray-50/60 space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-purple-600 text-white font-bold text-xs flex items-center justify-center flex-shrink-0">5</span>
+                    <span className="font-bold text-xs text-gray-900">Define Governing Law & Exclusive Jurisdiction</span>
+                  </div>
+                  <p className="text-[11px] text-gray-600 leading-relaxed pl-7">
+                    Designate an explicit, single governing jurisdiction (e.g., State of Delaware, California, or Karnataka) and nominate exclusive court forum or binding institutional arbitration to prevent multi-venue litigation.
+                  </p>
+                </div>
+
+                {/* Step 6 */}
+                <div className="p-3.5 rounded-xl border border-gray-200 bg-gray-50/60 space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-purple-600 text-white font-bold text-xs flex items-center justify-center flex-shrink-0">6</span>
+                    <span className="font-bold text-xs text-gray-900">Verify Party Alignment & Authorized Signatures</span>
+                  </div>
+                  <p className="text-[11px] text-gray-600 leading-relaxed pl-7">
+                    Ensure corporate entity names in the preamble match signature lines word-for-word, accompanied by authorized corporate officer titles (e.g., Director, VP, CEO) and execution dates.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Link to Editor */}
+            <div className="p-4 rounded-xl bg-purple-50/60 border border-purple-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="space-y-0.5">
+                <span className="text-xs font-bold text-purple-950">Ready to Perfect This Contract?</span>
+                <p className="text-[11px] text-purple-800">
+                  Open this document in our Document Editor to use 1-Click Quick Fix, resolve placeholders, or insert canonical clauses from the Clause Library.
+                </p>
+              </div>
+              <button
+                onClick={handleImportToEditor}
+                disabled={importing}
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-lg shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                Open in Editor
+              </button>
+            </div>
           </div>
         </div>
       )}
