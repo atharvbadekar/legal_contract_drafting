@@ -461,13 +461,22 @@ export class DocumentsController {
   async applyIssuePatch(req: AuthRequest, res: Response) {
     try {
       const { id, issueId } = req.params;
-      const { patch } = req.body;
+      const { patch, content: clientContent } = req.body;
       const userId = req.user?.id || 'system';
+
+      let doc = await prisma.document.findUnique({ where: { id } });
+      if (!doc) return res.status(404).json({ error: 'Document not found' });
+
+      // Sync database with current editor content if provided
+      if (clientContent && clientContent !== doc.content) {
+        doc = await prisma.document.update({
+          where: { id },
+          data: { content: clientContent }
+        });
+      }
 
       let targetPatch = patch;
       if (!targetPatch) {
-        const doc = await prisma.document.findUnique({ where: { id } });
-        if (!doc) return res.status(404).json({ error: 'Document not found' });
         const summary = (doc.validationSummary as any) || {};
         const issue = (summary.issues || []).find((i: any) => i.id === issueId || i.issueId === issueId);
         targetPatch = await patchService.generatePatchForIssue({
@@ -479,8 +488,11 @@ export class DocumentsController {
       }
 
       if (targetPatch && !targetPatch.canAutoFix && targetPatch.mode === 'MANUAL') {
-        return res.status(400).json({
-          error: targetPatch.reason || 'This issue requires a manual business decision. ATHARV does not invent missing terms.'
+        return res.status(200).json({
+          success: false,
+          applied: false,
+          message: targetPatch.reason || 'This issue requires manual drafting. Please edit the text directly in the editor.',
+          document: doc
         });
       }
 
@@ -499,7 +511,15 @@ export class DocumentsController {
   async fixAllSafe(req: AuthRequest, res: Response) {
     try {
       const { id } = req.params;
+      const { content: clientContent } = req.body;
       const userId = req.user?.id || 'system';
+
+      if (clientContent) {
+        await prisma.document.update({
+          where: { id },
+          data: { content: clientContent }
+        });
+      }
 
       const result = await patchService.batchApplySafePatches({
         documentId: id,

@@ -107,6 +107,7 @@ export const DocumentEditor: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [validating, setValidating] = useState(false);
   const [activeTab, setActiveTab] = useState<'VALIDATION' | 'COMPLETENESS' | 'PERFECTION_GUIDE'>('VALIDATION');
+  const [issueFilter, setIssueFilter] = useState<'ACTIVE' | 'RESOLVED' | 'ALL'>('ACTIVE');
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
 
   // Fix Action States
@@ -308,12 +309,33 @@ export const DocumentEditor: React.FC = () => {
 
     setFixingIssueId(issueId);
     try {
-      const res = await documentService.applyIssuePatch(id, issueId);
+      // Pass current editor content so patch applies to live draft
+      const res = await documentService.applyIssuePatch(id, issueId, { content });
       if (res && res.document) {
         setDocument(res.document);
         setContent(res.document.content);
+
+        // Mark as ACCEPTED so it clears from active view
+        try {
+          await documentService.reviewIssue(id, issueId, 'ACCEPTED');
+        } catch (revErr) {
+          console.warn('Auto-review issue after patch failed:', revErr);
+        }
+
+        // Re-validate to refresh validation score and active issues
+        try {
+          const valRes = await documentService.validate(id);
+          if (valRes && valRes.document) {
+            setDocument(valRes.document);
+          }
+        } catch (vErr) {
+          console.warn('Revalidation after patch failed:', vErr);
+        }
+
         setSaveSuccessMsg(`⚡ Successfully resolved: ${issue.title || issue.section}`);
         setTimeout(() => setSaveSuccessMsg(''), 4000);
+      } else if (res && !res.success) {
+        alert(res.message || 'This issue requires manual drafting directly in the editor.');
       }
     } catch (err: any) {
       alert(`Quick Fix failed: ${err.message}`);
@@ -327,10 +349,21 @@ export const DocumentEditor: React.FC = () => {
     if (!id || !document) return;
     setBatchFixing(true);
     try {
-      const res = await documentService.fixAllSafe(id);
+      const res = await documentService.fixAllSafe(id, { content });
       if (res && res.document) {
         setDocument(res.document);
         setContent(res.document.content);
+
+        // Re-validate to refresh validation score
+        try {
+          const valRes = await documentService.validate(id);
+          if (valRes && valRes.document) {
+            setDocument(valRes.document);
+          }
+        } catch (vErr) {
+          console.warn('Revalidation after batch fix failed:', vErr);
+        }
+
         setSaveSuccessMsg(`⚡ Auto-fixed ${res.appliedCount} safe issue${res.appliedCount === 1 ? '' : 's'}!`);
         setTimeout(() => setSaveSuccessMsg(''), 4000);
       }
@@ -338,6 +371,42 @@ export const DocumentEditor: React.FC = () => {
       alert(`Batch Auto-Fix failed: ${err.message}`);
     } finally {
       setBatchFixing(false);
+    }
+  };
+
+  // Interactive Placeholder Resolver: replaces tokens, persists changes, and refreshes validation
+  const handleResolvePlaceholder = async () => {
+    if (!id || !document || !placeholderModal.replacementValue) return;
+    const targetToken = placeholderModal.placeholder;
+    const val = placeholderModal.replacementValue;
+    const updatedContent = content.split(targetToken).join(val);
+    setContent(updatedContent);
+    setPlaceholderModal(prev => ({ ...prev, isOpen: false }));
+
+    try {
+      // 1. Persist updated content
+      const updatedDoc = await documentService.update(id, { content: updatedContent });
+      if (updatedDoc) {
+        setDocument(updatedDoc);
+      }
+
+      // 2. Mark the placeholder issue as ACCEPTED
+      if (placeholderModal.issueId) {
+        await documentService.reviewIssue(id, placeholderModal.issueId, 'ACCEPTED');
+      }
+
+      // 3. Re-run validation so the placeholder issue is completely cleared
+      const valRes = await documentService.validate(id);
+      if (valRes && valRes.document) {
+        setDocument(valRes.document);
+      }
+
+      setSaveSuccessMsg(`✓ Replaced all "${targetToken}" with "${val}" and cleared flag`);
+      setTimeout(() => setSaveSuccessMsg(''), 4000);
+    } catch (err: any) {
+      console.error('Error resolving placeholder:', err);
+      setSaveSuccessMsg(`✓ Replaced in editor ("${targetToken}" → "${val}")`);
+      setTimeout(() => setSaveSuccessMsg(''), 4000);
     }
   };
 
@@ -511,25 +580,42 @@ export const DocumentEditor: React.FC = () => {
     const headerLine = lines.find(l => l.startsWith('## ') || l.startsWith('# '));
     const title = headerLine ? headerLine.replace(/#+\s*/, '') : `Section ${idx + 1}`;
     
-    // Check if issues exist in this section
-    const hasIssues = document.validationSummary?.issues?.some(
-      (iss: ValidationIssue) => title.toLowerCase().includes(iss.section.toLowerCase()) ||
-        iss.section.toLowerCase().includes(title.toLowerCase())
+    // Check if active issues exist in this section
+    const hasIssues = (document.validationSummary?.issues || []).some(
+      (iss: ValidationIssue) => (!iss.reviewStatus || iss.reviewStatus === 'NEEDS_REVIEW') &&
+        (title.toLowerCase().includes(iss.section.toLowerCase()) || iss.section.toLowerCase().includes(title.toLowerCase()))
     );
 
     return { id: idx, title, content: block.trim(), hasIssues };
   });
 
-  const issuesList = document.validationSummary?.issues || [];
+  const allIssues: ValidationIssue[] = document.validationSummary?.issues || [];
+  const activeIssues = allIssues.filter(
+    (i: ValidationIssue) => !i.reviewStatus || i.reviewStatus === 'NEEDS_REVIEW'
+  );
+  const resolvedIssues = allIssues.filter(
+    (i: ValidationIssue) => i.reviewStatus === 'ACCEPTED' || i.reviewStatus === 'DISMISSED'
+  );
+
+  const displayedIssues = issueFilter === 'ACTIVE' 
+    ? activeIssues 
+    : issueFilter === 'RESOLVED' 
+    ? resolvedIssues 
+    : allIssues;
+
   const validationScore = document.validationScore || 0;
 
-  const safeFixableCount = issuesList.filter((i: ValidationIssue) => 
-    i.canAutoFix || 
-    i.mode === 'SAFE_AUTO' || 
-    i.mode === 'REVIEW' || 
-    i.type === 'UNRESOLVED_PLACEHOLDER' ||
-    i.type === 'MISSING_NOTICE_PERIOD' ||
-    i.type === 'MISSING_SIGNATURE_BLOCK'
+  const safeFixableCount = activeIssues.filter((i: ValidationIssue) => 
+    (i.canAutoFix || 
+     i.mode === 'SAFE_AUTO' || 
+     i.type === 'UNRESOLVED_PLACEHOLDER' ||
+     i.type === 'MISSING_NOTICE_PERIOD' ||
+     i.type === 'MISSING_SIGNATURE_BLOCK' ||
+     i.type === 'UNCAPPED_LIABILITY' ||
+     i.type === 'ONE_SIDED_TERMINATION' ||
+     i.type === 'MISSING_IP_ASSIGNMENT') &&
+    i.type !== 'MISSING_PAYMENT_AMOUNT' &&
+    i.type !== 'CONFLICTING_TERMS'
   ).length;
 
   return (
@@ -1045,62 +1131,139 @@ export const DocumentEditor: React.FC = () => {
                 </div>
               )}
 
-              {/* Detected Issues */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-mira-dark">
-                    Validation Flags ({issuesList.length} items):
-                  </span>
-                  {issuesList.length > 0 && (
-                    <span className="text-[10px] text-mira-muted font-medium">
-                      Click to jump & resolve
+              {/* Detected Issues Header & Filter Tabs */}
+              <div className="space-y-2.5">
+                <div className="flex flex-col gap-2 border-b border-gray-100 pb-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-mira-dark">
+                      Document Compliance Flags:
                     </span>
-                  )}
+                    <span className="text-[10px] text-mira-muted font-medium">
+                      {activeIssues.length} active • {resolvedIssues.length} resolved
+                    </span>
+                  </div>
+
+                  {/* Filter Pills */}
+                  <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg text-xs font-semibold">
+                    <button
+                      type="button"
+                      onClick={() => setIssueFilter('ACTIVE')}
+                      className={`flex-1 py-1 rounded-md transition-all text-center text-[11px] cursor-pointer ${
+                        issueFilter === 'ACTIVE'
+                          ? 'bg-white text-purple-700 shadow-2xs font-bold'
+                          : 'text-gray-500 hover:text-gray-900'
+                      }`}
+                    >
+                      Active Flags ({activeIssues.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIssueFilter('RESOLVED')}
+                      className={`flex-1 py-1 rounded-md transition-all text-center text-[11px] cursor-pointer ${
+                        issueFilter === 'RESOLVED'
+                          ? 'bg-white text-emerald-700 shadow-2xs font-bold'
+                          : 'text-gray-500 hover:text-gray-900'
+                      }`}
+                    >
+                      Resolved ({resolvedIssues.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIssueFilter('ALL')}
+                      className={`flex-1 py-1 rounded-md transition-all text-center text-[11px] cursor-pointer ${
+                        issueFilter === 'ALL'
+                          ? 'bg-white text-gray-900 shadow-2xs font-bold'
+                          : 'text-gray-500 hover:text-gray-900'
+                      }`}
+                    >
+                      All ({allIssues.length})
+                    </button>
+                  </div>
                 </div>
 
-                {issuesList.length === 0 ? (
-                  <div className="p-3 bg-emerald-50 text-emerald-800 text-xs rounded-lg flex items-center gap-2 border border-emerald-200">
-                    <ShieldCheck className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                    <span>No fact mismatches or structural anomalies found.</span>
+                {displayedIssues.length === 0 ? (
+                  <div className="p-4 bg-emerald-50 text-emerald-900 text-xs rounded-xl border border-emerald-200 text-center space-y-1">
+                    <ShieldCheck className="w-6 h-6 text-emerald-600 mx-auto" />
+                    <p className="font-bold">
+                      {issueFilter === 'ACTIVE'
+                        ? '🎉 All Compliance Flags Resolved!'
+                        : issueFilter === 'RESOLVED'
+                        ? 'No Resolved Flags Yet'
+                        : 'No Flags Found in Document'}
+                    </p>
+                    <p className="text-[11px] text-emerald-700">
+                      {issueFilter === 'ACTIVE'
+                        ? resolvedIssues.length > 0 
+                          ? `All ${resolvedIssues.length} flags have been resolved or dismissed. Click "Resolved" tab above to review.`
+                          : 'No fact mismatches, structural anomalies, or missing clauses found.'
+                        : issueFilter === 'RESOLVED'
+                        ? 'Review active flags and accept, quick-fix, or dismiss them to see them here.'
+                        : 'Contract satisfies verified institutional drafting standards.'}
+                    </p>
                   </div>
                 ) : (
                   <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
-                    {issuesList.map((issue: ValidationIssue, idx: number) => {
+                    {displayedIssues.map((issue: ValidationIssue, idx: number) => {
                       const isHigh = issue.severity === 'HIGH';
                       const isMed = issue.severity === 'MEDIUM';
                       const issueKey = issue.id || issue.issueId || `iss_${idx}`;
+                      const isResolved = issue.reviewStatus === 'ACCEPTED' || issue.reviewStatus === 'DISMISSED';
 
-                      const canFix = issue.canAutoFix || 
+                      const isAutoFixable = Boolean(
+                        issue.canAutoFix || 
                         issue.mode === 'SAFE_AUTO' || 
-                        issue.mode === 'REVIEW' || 
-                        issue.type?.includes('MISSING') || 
+                        issue.type === 'UNRESOLVED_PLACEHOLDER' || 
+                        issue.type === 'MISSING_NOTICE_PERIOD' || 
+                        issue.type === 'MISSING_SIGNATURE_BLOCK' || 
                         issue.type === 'UNCAPPED_LIABILITY' || 
                         issue.type === 'UNLIMITED_LIABILITY' ||
                         issue.type === 'ONE_SIDED_TERMINATION' || 
-                        issue.type === 'UNRESOLVED_PLACEHOLDER' || 
-                        issue.type === 'FACT_MISMATCH';
+                        issue.type === 'MISSING_IP_ASSIGNMENT'
+                      ) && issue.type !== 'MISSING_PAYMENT_AMOUNT' && issue.type !== 'CONFLICTING_TERMS';
 
                       return (
                         <div
                           key={idx}
                           className={`p-3.5 rounded-xl border text-xs space-y-2.5 transition-all ${
-                            isHigh
+                            isResolved
+                              ? 'bg-gray-50/80 border-gray-200 text-gray-800 opacity-90'
+                              : isHigh
                               ? 'bg-red-50/70 border-red-200 text-red-950'
                               : isMed
                               ? 'bg-amber-50/70 border-amber-200 text-amber-950'
                               : 'bg-blue-50/70 border-blue-200 text-blue-950'
                           }`}
                         >
+                          {/* If Resolved, show green badge banner */}
+                          {isResolved && (
+                            <div className="flex items-center justify-between bg-emerald-100/90 px-2.5 py-1 rounded-lg border border-emerald-300 text-[11px] text-emerald-950 font-bold">
+                              <span className="flex items-center gap-1.5">
+                                <Check className="w-3.5 h-3.5 text-emerald-700" />
+                                Resolved ({issue.reviewStatus})
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleReviewIssue(issueKey, 'NEEDS_REVIEW')}
+                                className="text-[10px] text-emerald-800 hover:text-emerald-950 underline font-semibold cursor-pointer"
+                                title="Re-open this flag as active"
+                              >
+                                ↺ Re-open
+                              </button>
+                            </div>
+                          )}
+
                           {/* Flag Header: Section + Severity Badge */}
                           <div className="flex items-center justify-between font-bold text-[12px] border-b pb-1.5 border-black/10">
                             <div className="flex items-center gap-1.5 truncate">
                               <AlertTriangle className={`w-3.5 h-3.5 flex-shrink-0 ${
-                                isHigh ? 'text-red-600' : isMed ? 'text-amber-600' : 'text-blue-600'
+                                isResolved ? 'text-gray-400' : isHigh ? 'text-red-600' : isMed ? 'text-amber-600' : 'text-blue-600'
                               }`} />
                               <span className="truncate">{issue.title || issue.section}</span>
                             </div>
                             <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
-                              isHigh
+                              isResolved
+                                ? 'bg-gray-200 text-gray-700 border border-gray-300'
+                                : isHigh
                                 ? 'bg-red-200 text-red-900 border border-red-300'
                                 : isMed
                                 ? 'bg-amber-200 text-amber-900 border border-amber-300'
@@ -1150,8 +1313,8 @@ export const DocumentEditor: React.FC = () => {
                             </p>
                           </div>
 
-                          {/* 1-CLICK QUICK FIX BUTTON */}
-                          {canFix && (
+                          {/* 1-CLICK QUICK FIX BUTTON (Only for active auto-fixable issues) */}
+                          {isAutoFixable && !isResolved && (
                             <div className="pt-0.5">
                               <button
                                 onClick={() => {
@@ -1192,12 +1355,20 @@ export const DocumentEditor: React.FC = () => {
                             </div>
                           )}
 
-                          {!canFix && (
-                            <div className="p-2 bg-blue-50/70 rounded-lg border border-blue-200 text-[10px] text-blue-900 flex items-start gap-1.5">
-                              <HelpCircle className="w-3.5 h-3.5 text-blue-600 flex-shrink-0 mt-0.5" />
-                              <span>
-                                <strong>Manual Drafting Required:</strong> Click <em>Jump to Section in Editor</em> below to edit this text directly, or check the <em>Perfection Guide</em> tab for standard clauses.
-                              </span>
+                          {/* Manual Drafting Guidance for non-auto-fixable items */}
+                          {!isAutoFixable && !isResolved && (
+                            <div className="p-2.5 bg-blue-50/80 rounded-lg border border-blue-200 text-[10px] text-blue-900 space-y-1">
+                              <div className="flex items-center gap-1 font-bold text-[10px] text-blue-800 uppercase tracking-wider">
+                                <HelpCircle className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />
+                                <span>Manual Drafting Required:</span>
+                              </div>
+                              <p className="leading-relaxed">
+                                {issue.type === 'MISSING_PAYMENT_AMOUNT'
+                                  ? 'Commercial consideration (fees, payment schedule, or currency) cannot be invented by AI. Click "Jump to Section in Editor" below to define the agreed commercial terms.'
+                                  : issue.type === 'CONFLICTING_TERMS'
+                                  ? 'Contradictory contractual terms detected. Click "Jump to Section in Editor" below to align the terms.'
+                                  : 'Click "Jump to Section in Editor" below to edit this text directly, or check the Perfection Guide tab for standard clauses.'}
+                              </p>
                             </div>
                           )}
 
@@ -1214,7 +1385,7 @@ export const DocumentEditor: React.FC = () => {
                                     ? 'bg-emerald-600 text-white shadow-2xs'
                                     : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200'
                                 }`}
-                                title="Accept this finding"
+                                title="Accept this finding and mark resolved"
                               >
                                 ✓ Accept
                               </button>
@@ -1229,17 +1400,15 @@ export const DocumentEditor: React.FC = () => {
                               >
                                 Dismiss
                               </button>
-                              <button
-                                onClick={() => handleReviewIssue(issueKey, 'NEEDS_REVIEW')}
-                                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${
-                                  issue.reviewStatus === 'NEEDS_REVIEW'
-                                    ? 'bg-amber-600 text-white shadow-2xs'
-                                    : 'bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200'
-                                }`}
-                                title="Mark for formal counsel review"
-                              >
-                                Review
-                              </button>
+                              {isResolved && (
+                                <button
+                                  onClick={() => handleReviewIssue(issueKey, 'NEEDS_REVIEW')}
+                                  className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200 transition-all cursor-pointer"
+                                  title="Re-open flag as active"
+                                >
+                                  ↺ Re-open
+                                </button>
+                              )}
                             </div>
                           </div>
 
@@ -1367,8 +1536,8 @@ export const DocumentEditor: React.FC = () => {
                   <p className="font-medium text-gray-800">
                     {validationScore >= 90 
                       ? '✓ Excellent contract quality! Verify parties and signatures to finalize.'
-                      : issuesList.length > 0
-                      ? `⚠ You have ${issuesList.length} flag${issuesList.length === 1 ? '' : 's'} to address in the Flags tab. Review the 7 pillars below to elevate to 100%.`
+                      : activeIssues.length > 0
+                      ? `⚠ You have ${activeIssues.length} active flag${activeIssues.length === 1 ? '' : 's'} to address in the Flags tab. Review the 7 pillars below to elevate to 100%.`
                       : 'Follow the 7 legal pillars below to add complete protective covenants.'
                     }
                   </p>
@@ -1639,19 +1808,7 @@ export const DocumentEditor: React.FC = () => {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  if (!placeholderModal.replacementValue) return;
-                  const targetToken = placeholderModal.placeholder;
-                  const val = placeholderModal.replacementValue;
-                  const updated = content.split(targetToken).join(val);
-                  setContent(updated);
-                  setPlaceholderModal({ ...placeholderModal, isOpen: false });
-                  setSaveSuccessMsg(`✓ Replaced all "${targetToken}" with "${val}"`);
-                  setTimeout(() => setSaveSuccessMsg(''), 4000);
-                  if (placeholderModal.issueId) {
-                    handleReviewIssue(placeholderModal.issueId, 'ACCEPTED');
-                  }
-                }}
+                onClick={handleResolvePlaceholder}
                 disabled={!placeholderModal.replacementValue}
                 className="px-4 py-1.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg shadow-2xs cursor-pointer"
               >

@@ -91,8 +91,8 @@ export const documentService = {
     const res = await api.post<{ result: any; document: DocumentRecord }>(`/documents/${id}/generate`, payload);
     return res.data;
   },
-  validate: async (id: string, payload: { content?: string; structuredFacts?: any }) => {
-    const res = await api.post<{ validationResult: any; document: DocumentRecord }>(`/documents/${id}/validate`, payload);
+  validate: async (id: string, payload?: { content?: string; structuredFacts?: any }) => {
+    const res = await api.post<{ validationResult: any; document: DocumentRecord }>(`/documents/${id}/validate`, payload || {});
     return res.data;
   },
   getVersions: async (id: string) => {
@@ -107,23 +107,25 @@ export const documentService = {
     const res = await api.get<{ patch: any }>(`/documents/${id}/issues/${issueId}/patch`);
     return res.data.patch;
   },
-  applyIssuePatch: async (id: string, issueId: string, patch?: any) => {
+  applyIssuePatch: async (id: string, issueId: string, options?: { patch?: any; content?: string }) => {
     const res = await api.post<{
       success: boolean;
+      applied?: boolean;
+      message?: string;
       document: DocumentRecord;
-      validationResult: any;
-      patch: any;
-    }>(`/documents/${id}/issues/${issueId}/fix`, { patch });
+      validationResult?: any;
+      patch?: any;
+    }>(`/documents/${id}/issues/${issueId}/fix`, options || {});
     return res.data;
   },
-  fixAllSafe: async (id: string) => {
+  fixAllSafe: async (id: string, options?: { content?: string }) => {
     const res = await api.post<{
       success: boolean;
       appliedCount: number;
       remainingIssuesCount: number;
       document: DocumentRecord;
       validationResult: any;
-    }>(`/documents/${id}/fix-safe`);
+    }>(`/documents/${id}/fix-safe`, options || {});
     return res.data;
   },
   undoLastFix: async (id: string) => {
