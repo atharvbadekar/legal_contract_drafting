@@ -1,0 +1,176 @@
+<svg width="1200" height="720" viewBox="0 0 1200 720" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0F172A"/>
+      <stop offset="100%" stop-color="#1E1B4B"/>
+    </linearGradient>
+    <linearGradient id="cardGrad1" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#F8FAFC"/>
+    </linearGradient>
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="115%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.12"/>
+    </filter>
+    <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#6366F1"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#10B981"/>
+    </marker>
+    <marker id="arrowAmber" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#F59E0B"/>
+    </marker>
+  </defs>
+
+  <!-- Canvas Background -->
+  <rect width="1200" height="720" fill="#F1F5F9" rx="14"/>
+
+  <!-- Top Title Bar -->
+  <rect x="0" y="0" width="1200" height="64" fill="url(#bgGrad)" rx="14"/>
+  <rect x="0" y="50" width="1200" height="14" fill="#1E1B4B"/>
+  <text x="35" y="38" fill="#FFFFFF" font-size="20" font-weight="bold" letter-spacing="0.5">ATHARV LEGAL AI • END-TO-END SYSTEM ARCHITECTURE</text>
+  <text x="830" y="38" fill="#A5B4FC" font-size="12" font-weight="600">ZERO-DOWNTIME HYBRID CLOUD SPECIFICATION</text>
+
+  <!-- 1. FRONTEND LAYER -->
+  <g transform="translate(35, 90)" filter="url(#shadow)">
+    <rect width="250" height="590" rx="10" fill="url(#cardGrad1)" stroke="#CBD5E1" stroke-width="1.5"/>
+    <rect width="250" height="42" rx="10" fill="#3B82F6"/>
+    <rect y="32" width="250" height="10" fill="#3B82F6"/>
+    <text x="20" y="27" fill="#FFFFFF" font-size="15" font-weight="bold">Frontend Client (Vercel)</text>
+    
+    <!-- Sub-cards -->
+    <rect x="15" y="58" width="220" height="85" rx="6" fill="#EFF6FF" stroke="#BFDBFE"/>
+    <text x="25" y="80" fill="#1E3A8A" font-size="12" font-weight="bold">Document Editor Workspace</text>
+    <text x="25" y="100" fill="#3B82F6" font-size="11">• 3-Panel Layout &amp; Outline</text>
+    <text x="25" y="118" fill="#3B82F6" font-size="11">• Live Markdown / Textarea</text>
+    <text x="25" y="134" fill="#3B82F6" font-size="11">• Active / Resolved Filter Tabs</text>
+
+    <rect x="15" y="155" width="220" height="85" rx="6" fill="#EFF6FF" stroke="#BFDBFE"/>
+    <text x="25" y="177" fill="#1E3A8A" font-size="12" font-weight="bold">Contract Analyzer UI</text>
+    <text x="25" y="197" fill="#3B82F6" font-size="11">• PDF / DOCX Drag &amp; Drop</text>
+    <text x="25" y="215" fill="#3B82F6" font-size="11">• Executive Facts Summary</text>
+    <text x="25" y="231" fill="#3B82F6" font-size="11">• 1-Click "Open in Editor"</text>
+
+    <rect x="15" y="252" width="220" height="85" rx="6" fill="#EFF6FF" stroke="#BFDBFE"/>
+    <text x="25" y="274" fill="#1E3A8A" font-size="12" font-weight="bold">Perfection &amp; Clause Library</text>
+    <text x="25" y="294" fill="#3B82F6" font-size="11">• 7 Legal Perfection Pillars</text>
+    <text x="25" y="312" fill="#3B82F6" font-size="11">• 1-Click Clause Inserters</text>
+    <text x="25" y="328" fill="#3B82F6" font-size="11">• Version Diff Modal</text>
+
+    <rect x="15" y="349" width="220" height="100" rx="6" fill="#EFF6FF" stroke="#BFDBFE"/>
+    <text x="25" y="371" fill="#1E3A8A" font-size="12" font-weight="bold">Interactive Resolver</text>
+    <text x="25" y="391" fill="#3B82F6" font-size="11">• Placeholder Token Dialog</text>
+    <text x="25" y="409" fill="#3B82F6" font-size="11">• Global Multi-Token Replace</text>
+    <text x="25" y="427" fill="#3B82F6" font-size="11">• Instant DB Save &amp; Refresh</text>
+
+    <rect x="15" y="462" width="220" height="110" rx="6" fill="#F8FAFC" stroke="#E2E8F0"/>
+    <text x="25" y="484" fill="#475569" font-size="11" font-weight="bold">Client Technologies:</text>
+    <text x="25" y="504" fill="#64748B" font-size="10">• React 18 + TypeScript</text>
+    <text x="25" y="522" fill="#64748B" font-size="10">• Tailwind CSS + Lucide Icons</text>
+    <text x="25" y="540" fill="#64748B" font-size="10">• Vite Build Tooling</text>
+    <text x="25" y="558" fill="#64748B" font-size="10">• Axios Client with JWT</text>
+  </g>
+
+  <!-- 2. BACKEND API GATEWAY &amp; ORCHESTRATOR -->
+  <g transform="translate(325, 90)" filter="url(#shadow)">
+    <rect width="530" height="590" rx="10" fill="url(#cardGrad1)" stroke="#CBD5E1" stroke-width="1.5"/>
+    <rect width="530" height="42" rx="10" fill="#4338CA"/>
+    <rect y="32" width="530" height="10" fill="#4338CA"/>
+    <text x="25" y="27" fill="#FFFFFF" font-size="15" font-weight="bold">Backend API Gateway &amp; Business Engine (Node.js + Express + TS)</text>
+    
+    <!-- Engine 1: Analyzer &amp; Binary Parsing -->
+    <rect x="20" y="58" width="490" height="85" rx="6" fill="#EEF2FF" stroke="#C7D2FE"/>
+    <text x="35" y="80" fill="#312E81" font-size="12" font-weight="bold">Contract Analyzer Engine (contract_analyzer.ts)</text>
+    <text x="35" y="100" fill="#4338CA" font-size="11">• Multi-Format Ingestion: PDF (pdf-parse + Flate stream fallback) &amp; Word (mammoth + raw OpenXML zip fallback)</text>
+    <text x="35" y="118" fill="#4338CA" font-size="11">• Regex State Machines: Party detection, Term dates, Multi-currency fees, Jurisdiction</text>
+    <text x="35" y="134" fill="#4338CA" font-size="11">• Clause Map Classifier: Audit 9 core institutional clauses (Present, Incomplete, Ambiguous, Missing)</text>
+
+    <!-- Engine 2: Multi-Tier Validation Engine -->
+    <rect x="20" y="155" width="490" height="98" rx="6" fill="#EEF2FF" stroke="#C7D2FE"/>
+    <text x="35" y="177" fill="#312E81" font-size="12" font-weight="bold">MIRA Multi-Tier Validation Engine (validation_engine.ts)</text>
+    <text x="35" y="197" fill="#4338CA" font-size="11">• Layer 1: Deterministic Factual Audit (Fact vs Text contradictions, required fields, unreplaced tokens)</text>
+    <text x="35" y="215" fill="#4338CA" font-size="11">• Layer 2: Legal-BERT Semantic Consistency (Section vs canonical clause cosine alignment)</text>
+    <text x="35" y="233" fill="#4338CA" font-size="11">• Layer 3: Risk &amp; Exposure Engine (Uncapped liability, termination traps, missing IP assignment)</text>
+    <text x="35" y="247" fill="#4338CA" font-size="11">• Explainable Scoring: 4 weighted dimensions + Absolute 45% Risk Ceiling Rule</text>
+
+    <!-- Engine 3: Quick AI Fix &amp; Patch Verification -->
+    <rect x="20" y="265" width="490" height="90" rx="6" fill="#EEF2FF" stroke="#C7D2FE"/>
+    <text x="35" y="287" fill="#312E81" font-size="12" font-weight="bold">Quick AI Fix &amp; Patch Verification Service (patch_service.ts)</text>
+    <text x="35" y="307" fill="#4338CA" font-size="11">• Precision Character Offset Targeting: locateTextInDocument maps start &amp; end character coordinates</text>
+    <text x="35" y="325" fill="#4338CA" font-size="11">• Action Modes: SAFE_AUTO (1-click deterministic), REVIEW (counsel approval), MANUAL (anti-hallucination)</text>
+    <text x="35" y="343" fill="#4338CA" font-size="11">• Candidate Sandbox Dry-Run: Validates score monotonicity before saving; automatic rollback if score drops</text>
+
+    <!-- Engine 4: Controlled Generation &amp; RAG -->
+    <rect x="20" y="367" width="490" height="85" rx="6" fill="#EEF2FF" stroke="#C7D2FE"/>
+    <text x="35" y="389" fill="#312E81" font-size="12" font-weight="bold">Controlled Generation &amp; RAG Orchestrator (generation_service.ts)</text>
+    <text x="35" y="409" fill="#4338CA" font-size="11">• Fact-Anchored Binding: Binds structured intake JSON to statutory templates (zero token hallucination)</text>
+    <text x="35" y="427" fill="#4338CA" font-size="11">• Statutory Carve-Outs: Mandatory 4 confidentiality exceptions &amp; reciprocal 12-month liability caps</text>
+    <text x="35" y="443" fill="#4338CA" font-size="11">• RAG Retrieval: Queries PostgreSQL pgvector for top-5 canonical clauses matching document type</text>
+
+    <!-- Engine 5: Autonomous Resilient Layer -->
+    <rect x="20" y="464" width="490" height="110" rx="6" fill="#FEF3C7" stroke="#FDE68A"/>
+    <text x="35" y="486" fill="#92400E" font-size="12" font-weight="bold">⚡ Autonomous Resilient Failover Architecture</text>
+    <text x="35" y="506" fill="#B45309" font-size="11">• Continuous 2-Second Health Probing of Satellite Python Microservice</text>
+    <text x="35" y="524" fill="#B45309" font-size="11">• Instant Autonomous Fallback: If NLP service is sleeping/busy, runs internal deterministic algorithms</text>
+    <text x="35" y="542" fill="#B45309" font-size="11">• Zero Cloud Costs: Fully operational on free Render / PostgreSQL infrastructure without memory crashes</text>
+    <text x="35" y="560" fill="#B45309" font-size="11">• High Throughput: 12ms sub-millisecond deterministic evaluation latency</text>
+  </g>
+
+  <!-- 3. DATA &amp; SATELLITE AI SERVICES LAYER -->
+  <g transform="translate(895, 90)" filter="url(#shadow)">
+    <rect width="270" height="590" rx="10" fill="url(#cardGrad1)" stroke="#CBD5E1" stroke-width="1.5"/>
+    <rect width="270" height="42" rx="10" fill="#0D9488"/>
+    <rect y="32" width="270" height="10" fill="#0D9488"/>
+    <text x="20" y="27" fill="#FFFFFF" font-size="15" font-weight="bold">Data &amp; Satellite AI</text>
+    
+    <!-- PostgreSQL &amp; pgvector -->
+    <rect x="15" y="58" width="240" height="240" rx="6" fill="#F0FDFA" stroke="#CCFBF1"/>
+    <text x="25" y="80" fill="#115E59" font-size="13" font-weight="bold">PostgreSQL + pgvector</text>
+    <text x="25" y="100" fill="#0F766E" font-size="11" font-weight="600">Dual Relational &amp; Vector Store</text>
+    
+    <text x="25" y="125" fill="#134E4A" font-size="11">• Relational Tables:</text>
+    <text x="35" y="143" fill="#0F766E" font-size="10">- documents (content, JSON facts)</text>
+    <text x="35" y="159" fill="#0F766E" font-size="10">- document_versions (full diffs)</text>
+    <text x="35" y="175" fill="#0F766E" font-size="10">- audit_logs &amp; user accounts</text>
+
+    <text x="25" y="200" fill="#134E4A" font-size="11">• Vector Tables (pgvector):</text>
+    <text x="35" y="218" fill="#0F766E" font-size="10">- clauses (embedding vector(384))</text>
+    <text x="35" y="234" fill="#0F766E" font-size="10">- knowledge_chunks (vector(384))</text>
+    
+    <text x="25" y="260" fill="#134E4A" font-size="11">• Cosine Operator:</text>
+    <text x="35" y="278" fill="#0F766E" font-size="10" font-family="monospace">1 - (embedding &lt;=&gt; $vec)</text>
+
+    <!-- Python FastAPI NLP Microservice -->
+    <rect x="15" y="315" width="240" height="255" rx="6" fill="#F0FDFA" stroke="#CCFBF1"/>
+    <text x="25" y="337" fill="#115E59" font-size="13" font-weight="bold">Python FastAPI Microservice</text>
+    <text x="25" y="357" fill="#0F766E" font-size="11" font-weight="600">Port 8001 / Embedded Legal-BERT</text>
+
+    <text x="25" y="385" fill="#134E4A" font-size="11">• Models Hosted:</text>
+    <text x="35" y="403" fill="#0F766E" font-size="10">- all-MiniLM-L6-v2 (384-d dense)</text>
+    <text x="35" y="419" fill="#0F766E" font-size="10">- Legal-BERT Pretrained Weights</text>
+
+    <text x="25" y="445" fill="#134E4A" font-size="11">• Microservice Endpoints:</text>
+    <text x="35" y="463" fill="#0F766E" font-size="10" font-family="monospace">POST /classify (Doc type)</text>
+    <text x="35" y="479" fill="#0F766E" font-size="10" font-family="monospace">POST /extract (Entities &amp; dates)</text>
+    <text x="35" y="495" fill="#0F766E" font-size="10" font-family="monospace">POST /embed (Dense 384-d)</text>
+    <text x="35" y="511" fill="#0F766E" font-size="10" font-family="monospace">POST /similarity (Cosine match)</text>
+    <text x="35" y="527" fill="#0F766E" font-size="10" font-family="monospace">POST /validate (Section audit)</text>
+    <text x="35" y="545" fill="#0F766E" font-size="10" font-family="monospace">GET  /health (Liveness probe)</text>
+  </g>
+
+  <!-- Connective Arrows &amp; Data Flows -->
+  <!-- Frontend -> Backend -->
+  <line x1="285" y1="210" x2="323" y2="210" stroke="#6366F1" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <line x1="325" y1="230" x2="287" y2="230" stroke="#10B981" stroke-width="2" marker-end="url(#arrowGreen)"/>
+  <text x="288" y="200" fill="#4F46E5" font-size="9" font-weight="bold">REST / JSON</text>
+
+  <!-- Backend -> DB -->
+  <line x1="855" y1="210" x2="893" y2="210" stroke="#0D9488" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <line x1="895" y1="230" x2="857" y2="230" stroke="#10B981" stroke-width="2" marker-end="url(#arrowGreen)"/>
+  <text x="858" y="200" fill="#0D9488" font-size="9" font-weight="bold">Prisma / SQL</text>
+
+  <!-- Backend -> Python NLP -->
+  <line x1="855" y1="420" x2="893" y2="420" stroke="#6366F1" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <line x1="895" y1="440" x2="857" y2="440" stroke="#10B981" stroke-width="2" marker-end="url(#arrowGreen)"/>
+  <text x="858" y="410" fill="#4F46E5" font-size="9" font-weight="bold">HTTP :8001</text>
+</svg>

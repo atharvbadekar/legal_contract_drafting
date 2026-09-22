@@ -1,0 +1,149 @@
+<svg width="1200" height="660" viewBox="0 0 1200 660" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+  <defs>
+    <linearGradient id="bgGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0F172A"/>
+      <stop offset="100%" stop-color="#312E81"/>
+    </linearGradient>
+    <filter id="shadow2" x="-5%" y="-5%" width="110%" height="115%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.10"/>
+    </filter>
+    <marker id="arrow2" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#4338CA"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="660" fill="#F8FAFC" rx="14"/>
+
+  <!-- Top Title -->
+  <rect x="0" y="0" width="1200" height="60" fill="url(#bgGrad2)" rx="14"/>
+  <rect x="0" y="48" width="1200" height="12" fill="#312E81"/>
+  <text x="35" y="36" fill="#FFFFFF" font-size="19" font-weight="bold">THE LEGAL RAG PIPELINE &amp; PGVECTOR RETRIEVAL WORKFLOW</text>
+  <text x="860" y="36" fill="#C7D2FE" font-size="12" font-weight="600">SEMANTIC EMBEDDINGS &amp; FACT BINDING</text>
+
+  <!-- TRACK 1: INGESTION PIPELINE -->
+  <g transform="translate(35, 80)" filter="url(#shadow2)">
+    <rect width="1130" height="240" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.5"/>
+    <rect width="1130" height="34" rx="10" fill="#4338CA"/>
+    <rect y="24" width="1130" height="10" fill="#4338CA"/>
+    <text x="20" y="22" fill="#FFFFFF" font-size="13.5" font-weight="bold">PHASE 1: STATUTORY KNOWLEDGE INGESTION &amp; PGVECTOR INDEXING</text>
+
+    <!-- Step 1: Raw Precedents -->
+    <rect x="25" y="55" width="220" height="155" rx="8" fill="#F8FAFC" stroke="#E2E8F0"/>
+    <rect x="25" y="55" width="220" height="28" rx="8" fill="#E0E7FF"/>
+    <rect x="25" y="73" width="220" height="10" fill="#E0E7FF"/>
+    <text x="35" y="73" fill="#312E81" font-size="11" font-weight="bold">1. Legal Source Ingestion</text>
+    <text x="35" y="100" fill="#475569" font-size="10">• Master Service Precedents</text>
+    <text x="35" y="118" fill="#475569" font-size="10">• Statutory Contract Acts</text>
+    <text x="35" y="136" fill="#475569" font-size="10">• Approved Firm Templates</text>
+    <text x="35" y="154" fill="#475569" font-size="10">• Standard Non-Disclosure Rules</text>
+    <text x="35" y="172" fill="#475569" font-size="10">• Canonical Liability Waivers</text>
+
+    <!-- Arrow 1 -> 2 -->
+    <line x1="245" y1="130" x2="280" y2="130" stroke="#4338CA" stroke-width="2.5" marker-end="url(#arrow2)"/>
+
+    <!-- Step 2: Semantic Paragraph Chunking -->
+    <rect x="290" y="55" width="230" height="155" rx="8" fill="#F8FAFC" stroke="#E2E8F0"/>
+    <rect x="290" y="55" width="230" height="28" rx="8" fill="#E0E7FF"/>
+    <rect x="290" y="73" width="230" height="10" fill="#E0E7FF"/>
+    <text x="300" y="73" fill="#312E81" font-size="11" font-weight="bold">2. Semantic Chunking</text>
+    <text x="300" y="100" fill="#475569" font-size="10">• Structural Section Boundary split</text>
+    <text x="300" y="118" fill="#475569" font-size="10">• Strict 300 to 800 character window</text>
+    <text x="300" y="136" fill="#475569" font-size="10">• Zero mid-covenant severance</text>
+    <text x="300" y="154" fill="#475569" font-size="10">• Preserves titles &amp; sub-clauses</text>
+    <text x="300" y="172" fill="#475569" font-size="10">• Assigns chunkIndex &amp; Doc ID</text>
+
+    <!-- Arrow 2 -> 3 -->
+    <line x1="520" y1="130" x2="555" y2="130" stroke="#4338CA" stroke-width="2.5" marker-end="url(#arrow2)"/>
+
+    <!-- Step 3: Legal-BERT Vector Embedding -->
+    <rect x="565" y="55" width="240" height="155" rx="8" fill="#F8FAFC" stroke="#E2E8F0"/>
+    <rect x="565" y="55" width="240" height="28" rx="8" fill="#E0E7FF"/>
+    <rect x="565" y="73" width="240" height="10" fill="#E0E7FF"/>
+    <text x="575" y="73" fill="#312E81" font-size="11" font-weight="bold">3. Dense Vectorization</text>
+    <text x="575" y="100" fill="#475569" font-size="10">• Legal-BERT / all-MiniLM-L6-v2</text>
+    <text x="575" y="118" fill="#475569" font-size="10">• Dense 384-dimensional vectors</text>
+    <text x="575" y="136" fill="#475569" font-size="10">• Captures legal semantic meaning</text>
+    <text x="575" y="154" fill="#475569" font-size="10">• Normalizes mathematical weights</text>
+    <text x="575" y="172" fill="#475569" font-size="10">• Fast batch asynchronous process</text>
+
+    <!-- Arrow 3 -> 4 -->
+    <line x1="805" y1="130" x2="840" y2="130" stroke="#4338CA" stroke-width="2.5" marker-end="url(#arrow2)"/>
+
+    <!-- Step 4: PostgreSQL pgvector Storage -->
+    <rect x="850" y="55" width="255" height="155" rx="8" fill="#ECFDF5" stroke="#A7F3D0"/>
+    <rect x="850" y="55" width="255" height="28" rx="8" fill="#10B981"/>
+    <rect x="850" y="73" width="255" height="10" fill="#10B981"/>
+    <text x="860" y="73" fill="#FFFFFF" font-size="11" font-weight="bold">4. pgvector Storage in DB</text>
+    <text x="860" y="100" fill="#065F46" font-size="10">• Table: knowledge_chunks</text>
+    <text x="860" y="118" fill="#065F46" font-size="10">• Column: embedding vector(384)</text>
+    <text x="860" y="136" fill="#065F46" font-size="10">• Table: clauses (canonical clauses)</text>
+    <text x="860" y="154" fill="#065F46" font-size="10">• Indexed with IVFFlat / HNSW</text>
+    <text x="860" y="172" fill="#065F46" font-size="10">• $executeRawUnsafe SQL persistence</text>
+  </g>
+
+  <!-- TRACK 2: RETRIEVAL &amp; FACT BINDING -->
+  <g transform="translate(35, 350)" filter="url(#shadow2)">
+    <rect width="1130" height="270" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.5"/>
+    <rect width="1130" height="34" rx="10" fill="#0D9488"/>
+    <rect y="24" width="1130" height="10" fill="#0D9488"/>
+    <text x="20" y="22" fill="#FFFFFF" font-size="13.5" font-weight="bold">PHASE 2: REAL-TIME COSINE QUERY RETRIEVAL &amp; CONTROLLED FACT BINDING</text>
+
+    <!-- Query Step 1: User Request -->
+    <rect x="25" y="55" width="220" height="185" rx="8" fill="#F8FAFC" stroke="#E2E8F0"/>
+    <rect x="25" y="55" width="220" height="28" rx="8" fill="#CCFBF1"/>
+    <rect x="25" y="73" width="220" height="10" fill="#CCFBF1"/>
+    <text x="35" y="73" fill="#115E59" font-size="11" font-weight="bold">A. User Drafting Request</text>
+    <text x="35" y="98" fill="#475569" font-size="10">• Document Type: NDA / Services</text>
+    <text x="35" y="116" fill="#475569" font-size="10">• Disclosing Party: ClientCorp Inc.</text>
+    <text x="35" y="134" fill="#475569" font-size="10">• Receiving Party: DevStudio LLP</text>
+    <text x="35" y="152" fill="#475569" font-size="10">• Duration: 2 Years</text>
+    <text x="35" y="170" fill="#475569" font-size="10">• Consideration: $15,000</text>
+    <text x="35" y="188" fill="#475569" font-size="10">• Jurisdiction: Delaware</text>
+    <text x="35" y="206" fill="#059669" font-size="10" font-weight="bold">✓ Structured JSON Facts Schema</text>
+
+    <!-- Arrow A -> B -->
+    <line x1="245" y1="145" x2="280" y2="145" stroke="#0D9488" stroke-width="2.5" marker-end="url(#arrow2)"/>
+
+    <!-- Query Step 2: Query Vectorization -->
+    <rect x="290" y="55" width="230" height="185" rx="8" fill="#F8FAFC" stroke="#E2E8F0"/>
+    <rect x="290" y="55" width="230" height="28" rx="8" fill="#CCFBF1"/>
+    <rect x="290" y="73" width="230" height="10" fill="#CCFBF1"/>
+    <text x="300" y="73" fill="#115E59" font-size="11" font-weight="bold">B. Query Embedding</text>
+    <text x="300" y="98" fill="#475569" font-size="10">• Request vectorized in Python NLP</text>
+    <text x="300" y="116" fill="#475569" font-size="10">• Sub-50ms execution speed</text>
+    <text x="300" y="134" fill="#475569" font-size="10">• Produces 384-float query array</text>
+    <text x="300" y="152" fill="#475569" font-size="10">• Formats PostgreSQL vector literal:</text>
+    <text x="300" y="170" fill="#0F766E" font-family="monospace" font-size="9.5">[0.021, -0.045, 0.112, ...]</text>
+    <text x="300" y="195" fill="#475569" font-size="10">• Safe parameter injection via Prisma</text>
+
+    <!-- Arrow B -> C -->
+    <line x1="520" y1="145" x2="555" y2="145" stroke="#0D9488" stroke-width="2.5" marker-end="url(#arrow2)"/>
+
+    <!-- Query Step 3: Native Cosine Distance Match -->
+    <rect x="565" y="55" width="250" height="185" rx="8" fill="#F8FAFC" stroke="#E2E8F0"/>
+    <rect x="565" y="55" width="250" height="28" rx="8" fill="#CCFBF1"/>
+    <rect x="565" y="73" width="250" height="10" fill="#CCFBF1"/>
+    <text x="575" y="73" fill="#115E59" font-size="11" font-weight="bold">C. pgvector Cosine Match</text>
+    <text x="575" y="98" fill="#475569" font-size="10">• Native SQL operator:</text>
+    <text x="575" y="114" fill="#0F766E" font-family="monospace" font-size="9.5">1 - (embedding &lt;=&gt; $queryVec)</text>
+    <text x="575" y="134" fill="#475569" font-size="10">• Filtered by documentType</text>
+    <text x="575" y="152" fill="#475569" font-size="10">• Returns Top-5 closest matches</text>
+    <text x="575" y="170" fill="#475569" font-size="10">• Score threshold: &gt; 0.82 similarity</text>
+    <text x="575" y="188" fill="#475569" font-size="10">• Ultra-fast: &lt; 8ms database latency</text>
+
+    <!-- Arrow C -> D -->
+    <line x1="815" y1="145" x2="850" y2="145" stroke="#0D9488" stroke-width="2.5" marker-end="url(#arrow2)"/>
+
+    <!-- Query Step 4: Controlled Synthesis &amp; Output -->
+    <rect x="860" y="55" width="245" height="185" rx="8" fill="#ECFDF5" stroke="#A7F3D0"/>
+    <rect x="860" y="55" width="245" height="28" rx="8" fill="#10B981"/>
+    <rect x="860" y="73" width="245" height="10" fill="#10B981"/>
+    <text x="870" y="73" fill="#FFFFFF" font-size="11" font-weight="bold">D. Fact-Anchored Binding</text>
+    <text x="870" y="98" fill="#065F46" font-size="10">• Pre-approved clause template locked</text>
+    <text x="870" y="116" fill="#065F46" font-size="10">• Structured facts injected programmatically</text>
+    <text x="870" y="134" fill="#065F46" font-size="10">• 4 Statutory carve-outs enforced</text>
+    <text x="870" y="152" fill="#065F46" font-size="10">• Reciprocal liability cap included</text>
+    <text x="870" y="170" fill="#065F46" font-size="10">• Zero AI hallucination risk</text>
+    <text x="870" y="195" fill="#065F46" font-size="10" font-weight="bold">✓ Institutional Grade Document</text>
+  </g>
+</svg>

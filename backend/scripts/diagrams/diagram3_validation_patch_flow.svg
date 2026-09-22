@@ -1,0 +1,177 @@
+<svg width="1200" height="660" viewBox="0 0 1200 660" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+  <defs>
+    <linearGradient id="bgGrad3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0F172A"/>
+      <stop offset="100%" stop-color="#1E3A8A"/>
+    </linearGradient>
+    <filter id="shadow3" x="-5%" y="-5%" width="110%" height="115%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.10"/>
+    </filter>
+    <marker id="arrow3" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#2563EB"/>
+    </marker>
+    <marker id="arrowRed" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#DC2626"/>
+    </marker>
+    <marker id="arrowGreen2" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#16A34A"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="660" fill="#F8FAFC" rx="14"/>
+
+  <!-- Top Title -->
+  <rect x="0" y="0" width="1200" height="60" fill="url(#bgGrad3)" rx="14"/>
+  <rect x="0" y="48" width="1200" height="12" fill="#1E3A8A"/>
+  <text x="35" y="36" fill="#FFFFFF" font-size="19" font-weight="bold">MULTI-TIER VALIDATION &amp; SURGICAL QUICK FIX VERIFICATION FLOW</text>
+  <text x="820" y="36" fill="#BFDBFE" font-size="12" font-weight="600">ZERO REGRESSION CANDIDATE DRY-RUN</text>
+
+  <!-- Step 1: Input Document -->
+  <g transform="translate(35, 90)" filter="url(#shadow3)">
+    <rect width="200" height="520" rx="8" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.5"/>
+    <rect width="200" height="34" rx="8" fill="#3B82F6"/>
+    <rect y="24" width="200" height="10" fill="#3B82F6"/>
+    <text x="15" y="22" fill="#FFFFFF" font-size="12.5" font-weight="bold">1. Document Intake</text>
+    
+    <text x="15" y="55" fill="#1E293B" font-size="11" font-weight="bold">Source Inputs:</text>
+    <text x="15" y="75" fill="#475569" font-size="10">• Generated Legal Draft</text>
+    <text x="15" y="93" fill="#475569" font-size="10">• Uploaded Contract (PDF/DOCX)</text>
+    <text x="15" y="111" fill="#475569" font-size="10">• Pasted Plain Text</text>
+    <text x="15" y="129" fill="#475569" font-size="10">• Redlined Editor Content</text>
+
+    <text x="15" y="165" fill="#1E293B" font-size="11" font-weight="bold">Structure Extracted:</text>
+    <text x="15" y="185" fill="#475569" font-size="10">• Sections &amp; Headers</text>
+    <text x="15" y="203" fill="#475569" font-size="10">• Character Text Ranges</text>
+    <text x="15" y="221" fill="#475569" font-size="10">• Paragraph ID Mapping</text>
+    <text x="15" y="239" fill="#475569" font-size="10">• Defined Term Occurrences</text>
+
+    <rect x="12" y="270" width="176" height="225" rx="6" fill="#EFF6FF" stroke="#BFDBFE"/>
+    <text x="22" y="292" fill="#1E40AF" font-size="11" font-weight="bold">Execution Flow</text>
+    <text x="22" y="315" fill="#3B82F6" font-size="9.5">1. locateTextInDocument</text>
+    <text x="22" y="333" fill="#3B82F6" font-size="9.5">2. Parse AST Sections</text>
+    <text x="22" y="351" fill="#3B82F6" font-size="9.5">3. Run 3-Tier Checks</text>
+    <text x="22" y="369" fill="#3B82F6" font-size="9.5">4. Classify Modes</text>
+    <text x="22" y="387" fill="#3B82F6" font-size="9.5">5. Dry-Run Candidate</text>
+    <text x="22" y="405" fill="#3B82F6" font-size="9.5">6. Monotonicity Test</text>
+    <text x="22" y="423" fill="#3B82F6" font-size="9.5">7. DB Commit / Undo</text>
+    <text x="22" y="450" fill="#1E40AF" font-size="10" font-weight="bold">⚡ Fast &amp; Reversible</text>
+  </g>
+
+  <!-- Arrow 1 -> 2 -->
+  <line x1="235" y1="250" x2="265" y2="250" stroke="#2563EB" stroke-width="2.5" marker-end="url(#arrow3)"/>
+
+  <!-- Step 2: 3-Tier Multi-Layer Engine -->
+  <g transform="translate(270, 90)" filter="url(#shadow3)">
+    <rect width="320" height="520" rx="8" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.5"/>
+    <rect width="320" height="34" rx="8" fill="#4338CA"/>
+    <rect y="24" width="320" height="10" fill="#4338CA"/>
+    <text x="15" y="22" fill="#FFFFFF" font-size="12.5" font-weight="bold">2. Multi-Tier Validation Engine</text>
+
+    <!-- Layer 1 -->
+    <rect x="15" y="50" width="290" height="135" rx="6" fill="#F8FAFC" stroke="#E2E8F0"/>
+    <text x="25" y="70" fill="#312E81" font-size="11" font-weight="bold">Layer 1: Deterministic Legal Heuristics</text>
+    <text x="25" y="90" fill="#475569" font-size="10">• Fact Match: Intake Duration vs Contract text</text>
+    <text x="25" y="108" fill="#475569" font-size="10">• Entity Match: Preamble vs Signature line names</text>
+    <text x="25" y="126" fill="#475569" font-size="10">• Required Clauses: Check mandatory covenants</text>
+    <text x="25" y="144" fill="#475569" font-size="10">• Token Scanner: Detect [Party Name], ____</text>
+    <text x="25" y="162" fill="#475569" font-size="10">• Broken Cross-References &amp; Date chronology</text>
+
+    <!-- Layer 2 -->
+    <rect x="15" y="198" width="290" height="110" rx="6" fill="#F8FAFC" stroke="#E2E8F0"/>
+    <text x="25" y="218" fill="#312E81" font-size="11" font-weight="bold">Layer 2: Legal-BERT Semantic Alignment</text>
+    <text x="25" y="238" fill="#475569" font-size="10">• Vector cosine similarity against approved clauses</text>
+    <text x="25" y="256" fill="#475569" font-size="10">• Flags deleted statutory carve-outs</text>
+    <text x="25" y="274" fill="#475569" font-size="10">• Detects ambiguous legal phrasing</text>
+    <text x="25" y="292" fill="#475569" font-size="10">• Automated fallback if NLP container asleep</text>
+
+    <!-- Layer 3 -->
+    <rect x="15" y="320" width="290" height="120" rx="6" fill="#F8FAFC" stroke="#E2E8F0"/>
+    <text x="25" y="340" fill="#312E81" font-size="11" font-weight="bold">Layer 3: Risk &amp; Exposure Auditing</text>
+    <text x="25" y="360" fill="#475569" font-size="10">• Uncapped Liability: Flags "without limitation"</text>
+    <text x="25" y="378" fill="#475569" font-size="10">• Termination Traps: Flags immediate no-notice exit</text>
+    <text x="25" y="396" fill="#475569" font-size="10">• IP Rights: Flags missing present-tense assignment</text>
+    <text x="25" y="414" fill="#475569" font-size="10">• Indemnification: Flags consequential damages</text>
+
+    <!-- Scoring Engine -->
+    <rect x="15" y="452" width="290" height="55" rx="6" fill="#FEF3C7" stroke="#FDE68A"/>
+    <text x="25" y="472" fill="#92400E" font-size="10" font-weight="bold">Mathematical Health Score (0-100%)</text>
+    <text x="25" y="490" fill="#B45309" font-size="9.5">Deductions + Absolute 45% Hard Ceiling on Critical</text>
+  </g>
+
+  <!-- Arrow 2 -> 3 -->
+  <line x1="590" y1="250" x2="620" y2="250" stroke="#2563EB" stroke-width="2.5" marker-end="url(#arrow3)"/>
+
+  <!-- Step 3: Issue Modes &amp; Heuristics -->
+  <g transform="translate(625, 90)" filter="url(#shadow3)">
+    <rect width="250" height="520" rx="8" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.5"/>
+    <rect width="250" height="34" rx="8" fill="#7C3AED"/>
+    <rect y="24" width="250" height="10" fill="#7C3AED"/>
+    <text x="15" y="22" fill="#FFFFFF" font-size="12.5" font-weight="bold">3. Issue Mode Classification</text>
+
+    <!-- Mode 1: Safe Auto -->
+    <rect x="15" y="50" width="220" height="135" rx="6" fill="#ECFDF5" stroke="#A7F3D0"/>
+    <text x="25" y="72" fill="#065F46" font-size="11" font-weight="bold">MODE 1: SAFE_AUTO</text>
+    <text x="25" y="90" fill="#047857" font-size="10" font-weight="600">⚡ 1-Click Instant Patch</text>
+    <text x="25" y="112" fill="#065F46" font-size="9.5">• Conflicting Duration fix</text>
+    <text x="25" y="130" fill="#065F46" font-size="9.5">• Party Name alignment</text>
+    <text x="25" y="148" fill="#065F46" font-size="9.5">• Notice Period injection</text>
+    <text x="25" y="166" fill="#065F46" font-size="9.5">• Canonical Signature block</text>
+
+    <!-- Mode 2: Review -->
+    <rect x="15" y="198" width="220" height="125" rx="6" fill="#EFF6FF" stroke="#BFDBFE"/>
+    <text x="25" y="220" fill="#1E40AF" font-size="11" font-weight="bold">MODE 2: REVIEW</text>
+    <text x="25" y="238" fill="#2563EB" font-size="10" font-weight="600">⚖️ Counsel Confirmation</text>
+    <text x="25" y="260" fill="#1E40AF" font-size="9.5">• Stylistic clause ambiguity</text>
+    <text x="25" y="278" fill="#1E40AF" font-size="9.5">• Governing jurisdiction shift</text>
+    <text x="25" y="296" fill="#1E40AF" font-size="9.5">• Proposed wording amendments</text>
+    <text x="25" y="312" fill="#1E40AF" font-size="9.5">• Accept or Dismiss button</text>
+
+    <!-- Mode 3: Manual -->
+    <rect x="15" y="335" width="220" height="165" rx="6" fill="#FEF2F2" stroke="#FECACA"/>
+    <text x="25" y="357" fill="#991B1B" font-size="11" font-weight="bold">MODE 3: MANUAL</text>
+    <text x="25" y="375" fill="#DC2626" font-size="10" font-weight="600">🛡️ Anti-Hallucination Barrier</text>
+    <text x="25" y="397" fill="#7F1D1D" font-size="9.5">• Missing Payment Amount</text>
+    <text x="25" y="415" fill="#7F1D1D" font-size="9.5">• Conflicting Fee schedules</text>
+    <text x="25" y="433" fill="#7F1D1D" font-size="9.5">• AI strictly refuses to guess $</text>
+    <text x="25" y="451" fill="#7F1D1D" font-size="9.5">• "Manual Drafting Required"</text>
+    <text x="25" y="469" fill="#7F1D1D" font-size="9.5">• Jump to Section in Editor</text>
+    <text x="25" y="487" fill="#7F1D1D" font-size="9.5">• Perfection Guide assistance</text>
+  </g>
+
+  <!-- Arrow 3 -> 4 -->
+  <line x1="875" y1="250" x2="905" y2="250" stroke="#2563EB" stroke-width="2.5" marker-end="url(#arrow3)"/>
+
+  <!-- Step 4: Dry-Run Sandbox &amp; Safety -->
+  <g transform="translate(910, 90)" filter="url(#shadow3)">
+    <rect width="255" height="520" rx="8" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.5"/>
+    <rect width="255" height="34" rx="8" fill="#059669"/>
+    <rect y="24" width="255" height="10" fill="#059669"/>
+    <text x="15" y="22" fill="#FFFFFF" font-size="12.5" font-weight="bold">4. Dry-Run Verification</text>
+
+    <!-- Candidate Sandbox Box -->
+    <rect x="15" y="50" width="225" height="165" rx="6" fill="#ECFDF5" stroke="#A7F3D0"/>
+    <text x="25" y="72" fill="#065F46" font-size="11" font-weight="bold">Candidate Sandbox</text>
+    <text x="25" y="92" fill="#047857" font-size="10">• Generate in-memory candidate</text>
+    <text x="25" y="110" fill="#047857" font-size="10">• Apply surgical AST patch</text>
+    <text x="25" y="128" fill="#047857" font-size="10">• Full validation re-run in memory</text>
+    <text x="25" y="146" fill="#047857" font-size="10">• Compare New Score vs Old Score</text>
+    <text x="25" y="164" fill="#047857" font-size="10">• Detect hash divergence (stale)</text>
+    <text x="25" y="186" fill="#065F46" font-size="10" font-weight="bold">Score Must Improve Monotonically</text>
+
+    <!-- Branch: Success vs Fail -->
+    <rect x="15" y="235" width="225" height="120" rx="6" fill="#F0FDF4" stroke="#86EFAC"/>
+    <text x="25" y="257" fill="#166534" font-size="11" font-weight="bold">✓ IF SCORE IMPROVES:</text>
+    <text x="25" y="277" fill="#15803D" font-size="10">• Write to PostgreSQL DB</text>
+    <text x="25" y="295" fill="#15803D" font-size="10">• Increment document version v+1</text>
+    <text x="25" y="313" fill="#15803D" font-size="10">• Auto-mark issue as ACCEPTED</text>
+    <text x="25" y="331" fill="#15803D" font-size="10">• Decrement Active Flags counter</text>
+
+    <rect x="15" y="375" width="225" height="125" rx="6" fill="#FEF2F2" stroke="#FCA5A5"/>
+    <text x="25" y="397" fill="#991B1B" font-size="11" font-weight="bold">✗ IF REGRESSION / STALE:</text>
+    <text x="25" y="417" fill="#B91C1C" font-size="10">• Throw UnsafePatchError</text>
+    <text x="25" y="435" fill="#B91C1C" font-size="10">• Candidate discarded in memory</text>
+    <text x="25" y="453" fill="#B91C1C" font-size="10">• Zero changes committed to DB</text>
+    <text x="25" y="471" fill="#B91C1C" font-size="10">• User document 100% protected</text>
+    <text x="25" y="489" fill="#B91C1C" font-size="10">• Alert: Manual review required</text>
+  </g>
+</svg>
