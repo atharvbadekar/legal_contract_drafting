@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { DocumentRecord, ClauseRecord, KnowledgeDocumentRecord, TemplateRecord, User, ContractAnalysisResult, DocumentDiffResult } from '../types';
+import { DocumentRecord, ClauseRecord, KnowledgeDocumentRecord, TemplateRecord, User, ContractAnalysisResult } from '../types';
 
 export const getApiBaseUrl = (): string => {
   if (typeof window !== 'undefined') {
@@ -160,16 +160,6 @@ export const documentService = {
     const res = await api.post<{ success: boolean; validationSummary: any; document: DocumentRecord }>(
       `/documents/${id}/issues/${issueId}/review`,
       { reviewStatus, note }
-    );
-    return res.data;
-  },
-  getDiff: async (id: string, versionA?: string | number, versionB?: string | number) => {
-    const params: any = {};
-    if (versionA) params.versionA = versionA;
-    if (versionB) params.versionB = versionB;
-    const res = await api.get<{ diff: DocumentDiffResult; docTitle: string; comparedVersions: any }>(
-      `/documents/${id}/diff`,
-      { params }
     );
     return res.data;
   }

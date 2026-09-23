@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { documentService } from '../services/api';
-import { DocumentRecord, ValidationIssue, DocumentDiffResult } from '../types';
+import { DocumentRecord, ValidationIssue } from '../types';
 import { 
   FileText, 
   CheckCircle2, 
@@ -21,7 +21,7 @@ import {
   Send,
   Edit3,
   Scale,
-  Eye,
+
   X,
   XCircle,
   CheckSquare,
@@ -139,11 +139,6 @@ export const DocumentEditor: React.FC = () => {
     replacementValue: ''
   });
 
-  // Diff Modal state
-  const [showDiffModal, setShowDiffModal] = useState(false);
-  const [diffResult, setDiffResult] = useState<DocumentDiffResult | null>(null);
-  const [diffLoading, setDiffLoading] = useState(false);
-  const [diffLabels, setDiffLabels] = useState({ original: '', modified: '' });
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -270,22 +265,6 @@ export const DocumentEditor: React.FC = () => {
       alert(`Validation failed: ${err.message}`);
     } finally {
       setValidating(false);
-    }
-  };
-
-  const handleOpenDiff = async () => {
-    if (!id) return;
-    setDiffLoading(true);
-    setShowDiffModal(true);
-    try {
-      const res = await documentService.getDiff(id);
-      setDiffResult(res.diff);
-      setDiffLabels(res.comparedVersions || { original: 'Initial Draft (v1)', modified: 'Current Draft' });
-    } catch (err: any) {
-      alert(`Failed to load version diff: ${err.message}`);
-      setShowDiffModal(false);
-    } finally {
-      setDiffLoading(false);
     }
   };
 
@@ -679,15 +658,6 @@ export const DocumentEditor: React.FC = () => {
           >
             <RotateCcw className={`w-3.5 h-3.5 text-amber-600 ${undoing ? 'animate-spin' : ''}`} />
             {undoing ? 'Reverting...' : 'Undo Fix'}
-          </button>
-
-          <button
-            onClick={handleOpenDiff}
-            className="px-3 py-1.5 bg-white border border-mira-border hover:border-mira-primary text-xs font-semibold rounded-lg text-mira-dark flex items-center gap-1.5 shadow-2xs cursor-pointer"
-            title="Compare current draft against initial version or previous revisions"
-          >
-            <Eye className="w-3.5 h-3.5 text-purple-600" />
-            Version Diff
           </button>
 
           <button
@@ -1813,103 +1783,6 @@ export const DocumentEditor: React.FC = () => {
                 className="px-4 py-1.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg shadow-2xs cursor-pointer"
               >
                 Replace All in Document
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* VERSION DIFF MODAL */}
-      {showDiffModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[85vh] flex flex-col border border-gray-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            {/* Modal Header */}
-            <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/70">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 bg-purple-100 text-purple-700 rounded-lg">
-                  <Eye className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-gray-900 text-base">Document Revision Diff</h3>
-                  <p className="text-xs text-gray-500">
-                    Comparing <span className="font-semibold text-gray-700">{diffLabels.original || 'Initial Draft'}</span> vs <span className="font-semibold text-purple-700">{diffLabels.modified || 'Current Draft'}</span>
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowDiffModal(false)}
-                className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded-lg transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Diff Stats Banner */}
-            {diffResult && (
-              <div className="px-5 py-2.5 bg-gray-100/70 border-b border-gray-200 flex items-center justify-between text-xs">
-                <div className="flex items-center gap-4">
-                  <span className="flex items-center gap-1.5 font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200">
-                    <span className="font-mono">+{diffResult.summary.addedCount}</span> Added
-                  </span>
-                  <span className="flex items-center gap-1.5 font-semibold text-red-700 bg-red-50 px-2.5 py-1 rounded-md border border-red-200">
-                    <span className="font-mono">-{diffResult.summary.removedCount}</span> Removed
-                  </span>
-                  <span className="flex items-center gap-1.5 text-gray-600">
-                    <span className="font-mono font-semibold text-gray-800">{diffResult.summary.unchangedCount}</span> Unchanged lines
-                  </span>
-                </div>
-                <span className="text-[11px] text-gray-500 italic">
-                  Deterministic line-by-line legal comparison
-                </span>
-              </div>
-            )}
-
-            {/* Modal Body: Diff Content */}
-            <div className="flex-1 overflow-y-auto p-4 font-mono text-xs leading-relaxed bg-slate-950 text-slate-100">
-              {diffLoading ? (
-                <div className="py-16 text-center space-y-3">
-                  <RefreshCw className="w-8 h-8 text-purple-400 animate-spin mx-auto" />
-                  <p className="text-sm text-slate-400 font-sans">Computing exact version differences...</p>
-                </div>
-              ) : diffResult && diffResult.lines.length > 0 ? (
-                <div className="space-y-0.5">
-                  {diffResult.lines.map((dl, i) => (
-                    <div
-                      key={i}
-                      className={`flex items-start px-2 py-0.5 rounded-xs transition-colors ${
-                        dl.type === 'added'
-                          ? 'bg-emerald-950/60 text-emerald-300 border-l-2 border-emerald-500'
-                          : dl.type === 'removed'
-                          ? 'bg-red-950/60 text-red-300 border-l-2 border-red-500 line-through opacity-80'
-                          : 'text-slate-400 hover:bg-slate-900'
-                      }`}
-                    >
-                      <span className="w-10 select-none text-right pr-3 text-[10px] text-slate-600 font-mono">
-                        {dl.lineA || dl.lineB || ''}
-                      </span>
-                      <span className="w-4 select-none text-center font-bold font-mono">
-                        {dl.type === 'added' ? '+' : dl.type === 'removed' ? '-' : ' '}
-                      </span>
-                      <span className="flex-1 whitespace-pre-wrap break-words font-mono">
-                        {dl.text || ' '}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="py-16 text-center text-slate-400 font-sans">
-                  No differences found between the compared versions.
-                </div>
-              )}
-            </div>
-
-            {/* Modal Footer */}
-            <div className="p-3.5 bg-gray-50 border-t border-gray-200 flex items-center justify-end">
-              <button
-                onClick={() => setShowDiffModal(false)}
-                className="px-4 py-2 bg-gray-900 hover:bg-black text-white text-xs font-semibold rounded-lg shadow-2xs transition-colors cursor-pointer"
-              >
-                Close Diff
               </button>
             </div>
           </div>

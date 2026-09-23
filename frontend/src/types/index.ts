@@ -274,22 +274,3 @@ export interface ContractAnalysisResult {
   };
   extractedText: string;
 }
-
-export interface DiffLine {
-  type: 'added' | 'removed' | 'unchanged';
-  lineA?: number;
-  lineB?: number;
-  text: string;
-}
-
-export interface DocumentDiffResult {
-  lines: DiffLine[];
-  summary: {
-    addedCount: number;
-    removedCount: number;
-    unchangedCount: number;
-    totalLinesA: number;
-    totalLinesB: number;
-  };
-}
-

@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import zlib from 'zlib';
 import { contractAnalyzer } from '../services/analyzer/contract_analyzer.js';
-import { diffService } from '../utils/diff_service.js';
+
 
 describe('Contract Analyzer & Advanced Legal Intelligence Tests', () => {
   it('Test 1: Complete NDA analysis correctly extracts overview and passes health thresholds', async () => {
@@ -121,36 +121,6 @@ Dated: 2026-12-01. Term expires: 2026-04-15.`;
 
     // 7. Consistency: Chronological discrepancy
     assert.strictEqual(result.consistency.dateChronologyValid, false);
-  });
-
-  it('Test 3: Document Diff accurately computes line additions, removals, and unchanged blocks', () => {
-    const originalText = `Section 1. Purpose
-The purpose is confidential evaluation.
-Section 2. Duration
-The duration shall be 1 year.
-Section 3. Governing Law
-State of New York.`;
-
-    const modifiedText = `Section 1. Purpose
-The purpose is mutual technology and business evaluation.
-Section 2. Duration
-The duration shall be 3 years.
-Section 3. Governing Law
-State of Delaware.
-Section 4. Jurisdiction
-Courts of Wilmington.`;
-
-    const diff = diffService.computeDiff(originalText, modifiedText);
-
-    assert.ok(diff.lines.length > 0);
-    assert.ok(diff.summary.addedCount > 0, 'Must have added lines');
-    assert.ok(diff.summary.removedCount > 0, 'Must have removed lines');
-    assert.ok(diff.summary.unchangedCount > 0, 'Must have unchanged lines');
-
-    // Section 1 Purpose heading should be unchanged
-    const unchangedPurpose = diff.lines.find(l => l.text === 'Section 1. Purpose');
-    assert.ok(unchangedPurpose);
-    assert.strictEqual(unchangedPurpose.type, 'unchanged');
   });
 
   it('Test 4: Fallback DOCX text extraction handles raw XML and strips formatting cleanly', () => {

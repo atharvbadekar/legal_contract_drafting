@@ -33,7 +33,7 @@ router.post('/:id/issues/:issueId/fix', (req, res) => documentsController.applyI
 router.post('/:id/issues/:issueId/review', (req, res) => documentsController.reviewIssue(req, res));
 router.post('/:id/fix-safe', (req, res) => documentsController.fixAllSafe(req, res));
 
-router.get('/:id/diff', (req, res) => documentsController.getDiff(req, res));
+
 router.get('/:id/export/docx', (req, res) => documentsController.exportDocx(req, res));
 router.get('/:id/export/pdf', (req, res) => documentsController.exportPdf(req, res));
 

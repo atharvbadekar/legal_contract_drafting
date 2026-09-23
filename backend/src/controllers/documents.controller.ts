@@ -7,7 +7,7 @@ import { patchService } from '../services/validation/patch_service.js';
 import { exportService } from '../services/documents/export_service.js';
 import { parseDocumentStructure } from '../services/documents/document_structure.js';
 import { contractAnalyzer } from '../services/analyzer/contract_analyzer.js';
-import { diffService } from '../utils/diff_service.js';
+
 
 export class DocumentsController {
   async list(req: AuthRequest, res: Response) {
@@ -729,47 +729,6 @@ export class DocumentsController {
     } catch (err: any) {
       console.error('Review issue error:', err);
       return res.status(500).json({ error: err.message });
-    }
-  }
-
-  async getDiff(req: AuthRequest, res: Response) {
-    try {
-      const { id } = req.params;
-      const { versionA, versionB } = req.query;
-
-      const doc = await prisma.document.findUnique({
-        where: { id },
-        include: { versions: { orderBy: { versionNumber: 'asc' } } }
-      });
-      if (!doc) return res.status(404).json({ error: 'Document not found' });
-
-      let textA = '';
-      let textB = doc.content;
-
-      if (versionA) {
-        const vA = doc.versions.find(v => v.versionNumber === Number(versionA) || v.id === versionA);
-        if (vA) textA = vA.content;
-      } else if (doc.versions.length > 1) {
-        textA = doc.versions[0].content;
-      }
-
-      if (versionB) {
-        const vB = doc.versions.find(v => v.versionNumber === Number(versionB) || v.id === versionB);
-        if (vB) textB = vB.content;
-      }
-
-      const diff = diffService.computeDiff(textA, textB);
-      return res.json({
-        diff,
-        docTitle: doc.title,
-        comparedVersions: {
-          original: versionA ? `Version ${versionA}` : 'Initial Version (v1)',
-          modified: versionB ? `Version ${versionB}` : 'Current Draft'
-        }
-      });
-    } catch (err: any) {
-      console.error('Diff computation error:', err);
-      return res.status(500).json({ error: `Failed to compute diff: ${err.message}` });
     }
   }
 }
