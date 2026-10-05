@@ -146,9 +146,13 @@ Title: Managing Partner`);
     if (!result) return;
     setImporting(true);
     try {
+      const validTypes = ['NDA', 'EMPLOYMENT_AGREEMENT', 'SERVICE_AGREEMENT', 'SAAS_AGREEMENT', 'CONSULTING_AGREEMENT', 'MOU', 'VENDOR_AGREEMENT', 'PARTNERSHIP_AGREEMENT', 'INTERNSHIP_AGREEMENT', 'COMMERCIAL_LEASE', 'LEGAL_NOTICE'];
+      const rawType = result.overview.contractType;
+      const docType = validTypes.includes(rawType) ? rawType : (rawType === 'GENERAL_CONTRACT' ? 'SERVICE_AGREEMENT' : 'NDA');
+
       const doc = await contractAnalyzerService.importAnalyzed({
         title: result.overview.title || `${result.overview.contractType.replace(/_/g, ' ')} Document`,
-        documentType: result.overview.contractType === 'LEGAL_NOTICE' ? 'LEGAL_NOTICE' : 'NDA',
+        documentType: docType,
         content: result.extractedText,
         structuredFacts: {
           parties: result.overview.parties,

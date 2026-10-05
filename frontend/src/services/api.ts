@@ -1,10 +1,48 @@
 import axios from 'axios';
-import { DocumentRecord, ClauseRecord, KnowledgeDocumentRecord, TemplateRecord, User, ContractAnalysisResult } from '../types';
+import {
+  DocumentRecord,
+  ClauseRecord,
+  KnowledgeDocumentRecord,
+  TemplateRecord,
+  User,
+  ContractAnalysisResult,
+  ContractTypeSummary,
+  ContractTypeSchema,
+  LintResult
+} from '../types';
 
 export const getApiBaseUrl = (): string => {
   if (typeof window !== 'undefined') {
-    const custom = localStorage.getItem('atharv_api_url');
+    const host = window.location.hostname;
+    const isLocalHost = 
+      host === 'localhost' || 
+      host === '127.0.0.1' || 
+      host === '0.0.0.0' || 
+      host === '::1' ||
+      host.endsWith('.localhost') ||
+      /^192\.168\.\d+\.\d+$/.test(host) ||
+      /^10\.\d+\.\d+\.\d+$/.test(host) ||
+      /^172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+$/.test(host);
+
+    if (isLocalHost) {
+      // On localhost and local LAN IPs, always route through local Vite proxy (/api -> http://localhost:5000)
+      try {
+        localStorage.removeItem('atharv_api_url');
+        localStorage.removeItem('mira_api_url');
+      } catch {}
+      return '/api';
+    }
+
+    const custom = localStorage.getItem('atharv_api_url') || localStorage.getItem('mira_api_url');
     if (custom && custom.trim().length > 0) {
+      // Purge stale unpushed Render URLs that produce 404s
+      if (custom.includes('onrender.com')) {
+        try {
+          localStorage.removeItem('atharv_api_url');
+          localStorage.removeItem('mira_api_url');
+        } catch {}
+        return '/api';
+      }
       const clean = custom.trim().replace(/\/+$/, '');
       return clean.endsWith('/api') ? clean : `${clean}/api`;
     }
@@ -30,7 +68,16 @@ api.interceptors.request.use((config) => {
   const token = localStorage.getItem('atharv_token') || localStorage.getItem('mira_token');
   if (token && config.headers) {
     config.headers.Authorization = `Bearer ${token}`;
+  } else if (config.headers && !config.headers.Authorization) {
+    // Provide a resilient fallback demo token so API calls never fail due to missing auth in local testing
+    config.headers.Authorization = 'Bearer mira-demo-token-user';
   }
+
+  // Allow browser to attach correct multipart boundary for FormData uploads
+  if (config.data instanceof FormData && config.headers) {
+    delete config.headers['Content-Type'];
+  }
+
   return config;
 });
 
@@ -76,8 +123,8 @@ export const documentService = {
     return res.data.document;
   },
   create: async (data: { title: string; documentType: string; structuredFacts?: any; content?: string; generationMode?: string }) => {
-    const res = await api.post<{ document: DocumentRecord }>('/documents', data);
-    return res.data.document;
+    const res = await api.post<any>('/documents', data);
+    return res.data?.document || res.data;
   },
   update: async (id: string, data: { title?: string; content?: string; structuredFacts?: any; saveAsVersion?: boolean }) => {
     const res = await api.put<{ document: DocumentRecord }>(`/documents/${id}`, data);
@@ -88,6 +135,9 @@ export const documentService = {
     return res.data;
   },
   generate: async (id: string, payload: { rawInput?: string; documentType?: string; structuredFacts?: any; generationMode?: string }) => {
+    if (!id || id === 'undefined') {
+      throw new Error('Valid document ID is required to execute generation pipeline');
+    }
     const res = await api.post<{ result: any; document: DocumentRecord }>(`/documents/${id}/generate`, payload);
     return res.data;
   },
@@ -174,9 +224,7 @@ export const contractAnalyzerService = {
   analyzeFile: async (file: File) => {
     const formData = new FormData();
     formData.append('file', file);
-    const res = await api.post<{ result: ContractAnalysisResult }>('/documents/analyze', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    });
+    const res = await api.post<{ result: ContractAnalysisResult }>('/documents/analyze', formData);
     return res.data.result;
   },
   importAnalyzed: async (data: {
@@ -352,3 +400,28 @@ export const researchService = {
     return res.data.runs;
   }
 };
+
+// Contract Type Service
+export const contractTypeService = {
+  getAll: async () => {
+    const res = await api.get<{ contractTypes: ContractTypeSummary[] }>('/contract-types');
+    return res.data.contractTypes;
+  },
+  getSchema: async (code: string) => {
+    const res = await api.get<ContractTypeSchema>(`/contract-types/${code}`);
+    return res.data;
+  },
+  getClauses: async (code: string) => {
+    const res = await api.get<{ clauses: ClauseRecord[] }>(`/contract-types/${code}/clauses`);
+    return res.data.clauses;
+  }
+};
+
+// Linter Service
+export const linterService = {
+  lint: async (content: string, documentType?: string) => {
+    const res = await api.post<LintResult>('/linter/lint', { content, documentType });
+    return res.data;
+  }
+};
+

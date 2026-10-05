@@ -36,11 +36,11 @@ export const Navbar: React.FC = () => {
                 <div className="flex items-center gap-1.5">
                   <span className="font-bold text-lg text-mira-dark tracking-tight">Atharv Legal AI</span>
                   <span className="text-[10px] font-semibold uppercase tracking-wider bg-mira-light text-mira-primary px-1.5 py-0.5 rounded">
-                    Enterprise
+                    Multi-Contract
                   </span>
                 </div>
                 <span className="text-[10px] text-mira-muted -mt-0.5 hidden sm:block">
-                  Document Generation & Validation
+                  Safe Multi-Contract Legal Intelligence Platform
                 </span>
               </div>
             </Link>

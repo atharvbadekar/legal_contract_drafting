@@ -593,7 +593,7 @@ export class ValidationEngine {
 
     for (const line of textLines) {
       const t = line.trim();
-      if (!t || isInstructionOrPlaceholder(t)) continue;
+      if (!t || isInstructionOrPlaceholder(t) || /^(?:specify\s+the|\[specify|\{specify|<specify)/i.test(t)) continue;
 
       // Skip common non-payment/disclaimer phrases:
       // - "damages alone would be inadequate compensation"
@@ -735,9 +735,14 @@ export class ValidationEngine {
     // ==========================================
     // 9. MISSING IP OWNERSHIP
     // ==========================================
-    // Suppress on NDAs: In an NDA, 'intellectual property' and 'proprietary information' are merely defined as confidential.
+    // Suppress on NDAs, Legal Notices, MOUs, and Employment:
     // Only check in services, consulting, or development agreements where custom deliverables or work product are commissioned.
-    if (!isNDA && documentType !== 'LEGAL_NOTICE') {
+    const isExcludedFromIPCheck = isNDA || 
+      documentType === 'LEGAL_NOTICE' || 
+      /mou|memorandum/i.test(documentType) ||
+      /employment/i.test(documentType);
+
+    if (!isExcludedFromIPCheck) {
       const commissionsCustomWork = /(?:shall\s*(?:create|develop|author|deliver|provide|build)\s*(?:custom\s*)?(?:software|deliverables|work\s*product|source\s*code|inventions)|custom\s*software\s*modules|deliverables\s*and\s*deliverables|commissioned\s*work)\b/i.test(cleanText);
       const definesOwnership = /hereby\s*assigns|exclusive\s*property\s*of|sole\s*and\s*exclusive\s*owner|retains\s*all\s*right|all\s*rights.*shall\s*belong|work\s*(?:made\s*)?for\s*hire|ownership\s*of\s*(?:ip|intellectual\s*property|deliverables)|assignment\s*of\s*rights|title\s*and\s*interest\s*in/i.test(cleanText);
 

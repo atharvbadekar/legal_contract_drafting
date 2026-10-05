@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { documentsController } from '../controllers/documents.controller.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, optionalAuth } from '../middleware/auth.js';
 
 import multer from 'multer';
 
@@ -11,12 +11,15 @@ const upload = multer({
 
 const router = Router();
 
+// Public / Guest accessible analysis routes
+router.post('/analyze', optionalAuth, upload.single('file'), (req, res) => documentsController.analyzeContract(req, res));
+router.post('/import-analyzed', optionalAuth, (req, res) => documentsController.importAnalyzed(req, res));
+
+// Authenticated workspace document operations
 router.use(requireAuth);
 
 router.get('/', (req, res) => documentsController.list(req, res));
 router.post('/', (req, res) => documentsController.create(req, res));
-router.post('/analyze', upload.single('file'), (req, res) => documentsController.analyzeContract(req, res));
-router.post('/import-analyzed', (req, res) => documentsController.importAnalyzed(req, res));
 router.get('/:id', (req, res) => documentsController.getById(req, res));
 router.put('/:id', (req, res) => documentsController.update(req, res));
 router.delete('/:id', (req, res) => documentsController.delete(req, res));

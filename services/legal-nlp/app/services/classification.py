@@ -11,7 +11,7 @@ class LegalClassificationService:
         self.mgr = model_manager
         self.embedder = embedding_service
 
-        # Prototype vectors for document types
+        # Prototype vectors for 10 document types
         self.doc_prototypes = {
             "NDA": [
                 "non-disclosure agreement proprietary information confidentiality disclosing party receiving party mutual nda trade secrets obligations return destruction",
@@ -20,6 +20,42 @@ class LegalClassificationService:
             "LEGAL_NOTICE": [
                 "legal notice formal notice demand for payment breach of contract default section 138 statutory notice outstanding dues dishonour of cheque",
                 "notice under section demand notice call upon you to pay amount failed to perform obligation litigation consequences"
+            ],
+            "EMPLOYMENT": [
+                "employment agreement employment contract offer letter designation employee employer salary probation period ctc termination duties",
+                "contract of employment appointment letter employee obligations compensation benefits annual leave notice period resignation"
+            ],
+            "SERVICE": [
+                "master services agreement professional services contract scope of work deliverables client service provider service fees milestones invoicing",
+                "service agreement statement of work deliverables timeline terms of service acceptance criteria fees payment terms"
+            ],
+            "SAAS": [
+                "software as a service agreement saas subscription agreement platform cloud hosting license service level agreement uptime sla recurring fee customer provider",
+                "cloud subscription terms access grant data protection sla uptime maintenance window auto-renewal"
+            ],
+            "CONSULTING": [
+                "consulting agreement consultant independent contractor advisory services retainer fee deliverables scope strategic advisor client",
+                "independent consultancy contract advisory duties hourly rate retainer intellectual property rights work product"
+            ],
+            "MOU": [
+                "memorandum of understanding mou collaboration cooperation non-binding understanding mutual objectives statement of intent joint initiative",
+                "mou between parties exploratory collaboration non binding declaration of intent institutional cooperation"
+            ],
+            "VENDOR": [
+                "vendor agreement supplier agreement supply of goods purchase order procurement pricing delivery warranty vendor buyer",
+                "master vendor contract product supply specification order terms returns inspection"
+            ],
+            "PARTNERSHIP": [
+                "partnership agreement general partnership joint venture capital contribution profit sharing partners dissolution governance",
+                "business partnership deed capital investment profit loss allocation partnership management"
+            ],
+            "INTERNSHIP": [
+                "internship agreement trainee contract student intern stipend internship duration educational mentor learning objectives",
+                "intern appointment letter training program stipend project mentor completion certificate"
+            ],
+            "LEASE": [
+                "commercial lease agreement residential lease tenancy contract landlord tenant premises rent security deposit maintenance term",
+                "rental deed lease premises possession monthly rent security deposit covenants quiet enjoyment"
             ]
         }
 
@@ -60,8 +96,7 @@ class LegalClassificationService:
     def _get_doc_proto_embeddings(self):
         if self._doc_proto_cache is None:
             self._doc_proto_cache = {
-                "NDA": self.embedder.embed_texts(self.doc_prototypes["NDA"]),
-                "LEGAL_NOTICE": self.embedder.embed_texts(self.doc_prototypes["LEGAL_NOTICE"])
+                k: self.embedder.embed_texts(v) for k, v in self.doc_prototypes.items()
             }
         return self._doc_proto_cache
 
@@ -84,40 +119,43 @@ class LegalClassificationService:
     def classify_document(self, text: str) -> Tuple[str, float, Dict[str, float]]:
         text_lower = text.lower()
 
-        # Deterministic keyword priors
-        nda_keywords = ["nda", "non-disclosure", "confidentiality", "trade secret", "disclosing party", "receiving party", "confidential information"]
-        notice_keywords = ["legal notice", "demand notice", "statutory notice", "breach of contract", "outstanding amount", "called upon to pay", "cheque dishonour", "consequences of failure"]
-
-        nda_score = sum(2.0 for k in nda_keywords if k in text_lower)
-        notice_score = sum(2.0 for k in notice_keywords if k in text_lower)
+        type_keywords = {
+            "NDA": ["nda", "non-disclosure", "confidentiality", "trade secret", "disclosing party", "receiving party", "confidential information"],
+            "LEGAL_NOTICE": ["legal notice", "demand notice", "statutory notice", "breach of contract", "outstanding amount", "called upon to pay", "cheque dishonour", "consequences of failure"],
+            "EMPLOYMENT": ["employment agreement", "contract of employment", "appointment letter", "employer", "employee", "probation period", "salary", "ctc"],
+            "SERVICE": ["master services agreement", "service agreement", "scope of services", "deliverables", "service provider", "client", "milestones"],
+            "SAAS": ["software as a service", "saas agreement", "subscription agreement", "cloud service", "uptime sla", "licensed users", "subscription fee"],
+            "CONSULTING": ["consulting agreement", "consultancy agreement", "independent contractor", "advisory services", "consultant"],
+            "MOU": ["memorandum of understanding", "mou", "non-binding understanding", "statement of intent", "collaboration between"],
+            "VENDOR": ["vendor agreement", "supplier agreement", "procurement", "purchase order", "supply of goods"],
+            "PARTNERSHIP": ["partnership agreement", "general partnership", "profit sharing", "joint venture"],
+            "INTERNSHIP": ["internship agreement", "internship", "trainee", "stipend", "educational mentor"],
+            "LEASE": ["lease agreement", "rental agreement", "landlord", "tenant", "premises", "security deposit"]
+        }
 
         # Semantic embedding similarity
         text_emb = self.embedder.embed_texts([text])[0]
-        
         proto_cache = self._get_doc_proto_embeddings()
-        nda_proto_embs = proto_cache["NDA"]
-        notice_proto_embs = proto_cache["LEGAL_NOTICE"]
 
-        sim_nda = max(self.embedder.compute_similarity(text_emb, p) for p in nda_proto_embs)
-        sim_notice = max(self.embedder.compute_similarity(text_emb, p) for p in notice_proto_embs)
+        raw_scores = {}
+        for doc_type, proto_embs in proto_cache.items():
+            kw_list = type_keywords.get(doc_type, [])
+            kw_score = sum(2.0 for k in kw_list if k in text_lower)
+            sim = max(self.embedder.compute_similarity(text_emb, p) for p in proto_embs)
+            raw_scores[doc_type] = sim * 3.0 + kw_score
 
-        total_nda = sim_nda * 3.0 + nda_score
-        total_notice = sim_notice * 3.0 + notice_score
+        sum_scores = sum(raw_scores.values()) + 1e-5
+        normalized_scores = {k: round(float(v / sum_scores), 4) for k, v in raw_scores.items()}
+        normalized_scores["UNKNOWN"] = 0.02
 
-        scores = {
-            "NDA": round(float(total_nda / (total_nda + total_notice + 1e-5)), 4),
-            "LEGAL_NOTICE": round(float(total_notice / (total_nda + total_notice + 1e-5)), 4),
-            "UNKNOWN": 0.05
-        }
+        best_type = max(raw_scores, key=raw_scores.get)
+        best_val = raw_scores[best_type]
 
-        if total_nda > total_notice and total_nda > 1.2:
-            conf = min(0.98, max(0.60, round(sim_nda * 0.5 + 0.45, 2)))
-            return "NDA", conf, scores
-        elif total_notice > total_nda and total_notice > 1.2:
-            conf = min(0.98, max(0.60, round(sim_notice * 0.5 + 0.45, 2)))
-            return "LEGAL_NOTICE", conf, scores
+        if best_val > 1.2:
+            conf = min(0.98, max(0.60, round(normalized_scores[best_type] * 0.5 + 0.45, 2)))
+            return best_type, conf, normalized_scores
         else:
-            return "UNKNOWN", 0.50, scores
+            return "UNKNOWN", 0.50, normalized_scores
 
     def classify_clause(self, text: str, document_type: str = "NDA") -> Tuple[str, float, Dict[str, float]]:
         proto_embs_map = self._get_clause_proto_embeddings(document_type)

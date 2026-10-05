@@ -525,6 +525,402 @@ export function extractFactValue(facts: Record<string, any>, aliases: string[]):
   return undefined;
 }
 
+export const EMPLOYMENT_FIELDS: FieldDefinition[] = [
+  {
+    key: 'employerName',
+    label: 'Employer Legal Name',
+    requirement: 'REQUIRED',
+    description: 'Legal registered entity name of the employing company.',
+    category: 'FACTUAL',
+    aliases: ['employer.name', 'employerName', 'company', 'employer', 'partyA'],
+    textPatterns: [
+      /(?:entered\s+into\s+by|by\s+and\s+between)\s+([^,("\n]+)/i,
+      /Employer[:\s]+([^\n,]+)/i
+    ],
+    missingReason: 'An employment agreement requires formal identification of the employing corporate entity.',
+    suggestion: 'Specify the registered legal name of the Employer.'
+  },
+  {
+    key: 'employeeName',
+    label: 'Employee Full Name',
+    requirement: 'REQUIRED',
+    description: 'Full legal name of the employee.',
+    category: 'FACTUAL',
+    aliases: ['employee.name', 'employeeName', 'employee', 'partyB'],
+    textPatterns: [
+      /(?:and\s+)([^,("\n]+?)(?=\s*\("Employee|\s*\(the\s*"Employee)/i,
+      /Employee[:\s]+([^\n,]+)/i
+    ],
+    missingReason: 'The employee bound by the employment agreement must be identifiable by legal name.',
+    suggestion: 'Specify the full legal name of the Employee.'
+  },
+  {
+    key: 'designation',
+    label: 'Job Title / Designation',
+    requirement: 'REQUIRED',
+    description: 'Official corporate designation or job position appointed.',
+    category: 'FACTUAL',
+    aliases: ['designation', 'position', 'role', 'jobTitle'],
+    textPatterns: [
+      /(?:position\s+of|employed\s+as|designation\s+of|role\s+of)\s+([^\n,\.]+)/i
+    ],
+    missingReason: 'The specific job title and duties must be specified to establish terms of employment.',
+    suggestion: 'Specify the official corporate designation or role.'
+  },
+  {
+    key: 'salary',
+    label: 'Salary / Compensation',
+    requirement: 'REQUIRED',
+    description: 'Agreed gross compensation, base salary, or CTC.',
+    category: 'FACTUAL',
+    aliases: ['salary', 'compensation', 'baseSalary', 'ctc'],
+    textPatterns: [
+      /\$[\d,]+|\bINR\s*[\d,]+|\bUSD\s*[\d,]+|\bEUR\s*[\d,]+|\b\d[\d,]+\s*(?:per\s+annum|per\s+month|CTC)/i
+    ],
+    missingReason: 'Remuneration is essential consideration for an employment agreement.',
+    suggestion: 'Specify the agreed salary or annual CTC amount.'
+  },
+  {
+    key: 'joiningDate',
+    label: 'Joining / Commencement Date',
+    requirement: 'REQUIRED',
+    description: 'Date on which active employment begins.',
+    category: 'FACTUAL',
+    aliases: ['joiningDate', 'startDate', 'commencementDate', 'effectiveDate'],
+    textPatterns: [
+      /(?:commenc\w+\s+on|effective\s+(?:from|as\s+of)|joining\s+date:?)\s*([A-Za-z0-9\s,\-\/]{4,30})(?=\.|,|\n|$)/i,
+      /\b(\d{1,2}(?:st|nd|rd|th)?\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4})\b/i
+    ],
+    missingReason: 'The commencement date is required to establish vesting, benefits, and term calculation.',
+    suggestion: 'State the formal joining date.'
+  },
+  {
+    key: 'governingLaw',
+    label: 'Governing Law',
+    requirement: 'REQUIRED',
+    description: 'Governing labor and statutory jurisdiction.',
+    category: 'STRUCTURAL',
+    aliases: ['governingLaw', 'jurisdiction'],
+    textPatterns: [
+      /(?:governed\s+by|laws\s+of|jurisdiction\s+of)\s+([A-Za-z\s]+?)(?=\.|\,|\n|$)/i
+    ],
+    missingReason: 'Statutory employment dispute jurisdiction must be designated.',
+    suggestion: 'Specify governing state or national employment laws.'
+  }
+];
+
+export const SERVICE_FIELDS: FieldDefinition[] = [
+  {
+    key: 'clientName',
+    label: 'Client Legal Entity Name',
+    requirement: 'REQUIRED',
+    description: 'Legal registered entity name of the client.',
+    category: 'FACTUAL',
+    aliases: ['client.name', 'clientName', 'client', 'company', 'partyA'],
+    textPatterns: [
+      /(?:entered\s+into\s+by|by\s+and\s+between)\s+([^,("\n]+)/i,
+      /Client[:\s]+([^\n,]+)/i
+    ],
+    missingReason: 'Contracting client entity must be formally identified to create binding obligations.',
+    suggestion: 'Specify registered legal entity name of the Client.'
+  },
+  {
+    key: 'serviceProviderName',
+    label: 'Service Provider Name',
+    requirement: 'REQUIRED',
+    description: 'Legal registered name of the service provider.',
+    category: 'FACTUAL',
+    aliases: ['serviceProvider.name', 'serviceProviderName', 'serviceProvider', 'contractor', 'partyB'],
+    textPatterns: [
+      /(?:and\s+)([^,("\n]+?)(?=\s*\("Service\s*Provider|\s*\(the\s*"Service\s*Provider)/i,
+      /Service\s*Provider[:\s]+([^\n,]+)/i
+    ],
+    missingReason: 'The performing corporate entity must be identified.',
+    suggestion: 'Specify registered legal name of the Service Provider.'
+  },
+  {
+    key: 'scopeOfServices',
+    label: 'Scope of Services',
+    requirement: 'REQUIRED',
+    description: 'Description of the professional services to be rendered.',
+    category: 'STRUCTURAL',
+    aliases: ['scopeOfServices', 'services', 'scope'],
+    textPatterns: [
+      /##\s*Scope\s*of\s*Services/i,
+      /(?:scope\s+of\s+services|shall\s+perform\s+the\s+following\s+services|agrees\s+to\s+provide)/i
+    ],
+    missingReason: 'Services scope is required to define contract deliverables and performance criteria.',
+    suggestion: 'Provide a substantive description of the services.'
+  },
+  {
+    key: 'fees',
+    label: 'Service Fees / Consideration',
+    requirement: 'REQUIRED',
+    description: 'Monetary fee, rate, or consideration for services rendered.',
+    category: 'FACTUAL',
+    aliases: ['fees', 'fee', 'amount', 'compensation', 'contractPrice'],
+    textPatterns: [
+      /\$[\d,]+|\bINR\s*[\d,]+|\bUSD\s*[\d,]+|\bEUR\s*[\d,]+|\b\d[\d,]+\s*(?:fee|dollars|rupees)/i
+    ],
+    missingReason: 'A services contract requires definite consideration or agreed billing rates.',
+    suggestion: 'State the total service fees or billing rate schedule.'
+  },
+  {
+    key: 'commencementDate',
+    label: 'Commencement / Effective Date',
+    requirement: 'REQUIRED',
+    description: 'Date on which services begin.',
+    category: 'FACTUAL',
+    aliases: ['commencementDate', 'effectiveDate', 'startDate'],
+    textPatterns: [
+      /(?:effective\s+(?:as\s+of|date:?)|commenc\w+\s+on|dated\s+as\s+of)\s*([A-Za-z0-9\s,\-\/]{4,30})(?=\.|,|\n|$)/i,
+      /\b(\d{1,2}(?:st|nd|rd|th)?\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4})\b/i
+    ],
+    missingReason: 'Effective start date is required to establish project schedule and milestones.',
+    suggestion: 'Specify the services commencement date.'
+  },
+  {
+    key: 'governingLaw',
+    label: 'Governing Law',
+    requirement: 'REQUIRED',
+    description: 'Governing jurisdiction for contract interpretation and disputes.',
+    category: 'STRUCTURAL',
+    aliases: ['governingLaw', 'jurisdiction'],
+    textPatterns: [
+      /(?:governed\s+by|laws\s+of|jurisdiction\s+of)\s+([A-Za-z\s]+?)(?=\.|\,|\n|$)/i
+    ],
+    missingReason: 'Designation of governing substantive law is required.',
+    suggestion: 'Designate governing state law and dispute forum.'
+  }
+];
+
+export const SAAS_FIELDS: FieldDefinition[] = [
+  {
+    key: 'providerName',
+    label: 'SaaS Provider Legal Name',
+    requirement: 'REQUIRED',
+    description: 'Legal corporate name of the SaaS vendor or provider.',
+    category: 'FACTUAL',
+    aliases: ['provider.name', 'providerName', 'provider', 'company', 'partyA'],
+    textPatterns: [
+      /(?:entered\s+into\s+by|by\s+and\s+between)\s+([^,("\n]+)/i,
+      /Provider[:\s]+([^\n,]+)/i
+    ],
+    missingReason: 'The cloud software provider entity must be formally identified.',
+    suggestion: 'Specify registered legal entity name of the Provider.'
+  },
+  {
+    key: 'customerName',
+    label: 'Customer Legal Name',
+    requirement: 'REQUIRED',
+    description: 'Legal registered name of the customer organization.',
+    category: 'FACTUAL',
+    aliases: ['customer.name', 'customerName', 'customer', 'partyB'],
+    textPatterns: [
+      /(?:and\s+)([^,("\n]+?)(?=\s*\("Customer|\s*\(the\s*"Customer)/i,
+      /Customer[:\s]+([^\n,]+)/i
+    ],
+    missingReason: 'The subscribing customer entity must be formally identified.',
+    suggestion: 'Specify registered legal name of the Customer.'
+  },
+  {
+    key: 'productName',
+    label: 'SaaS Platform / Product Name',
+    requirement: 'REQUIRED',
+    description: 'Brand or commercial name of the hosted SaaS application.',
+    category: 'FACTUAL',
+    aliases: ['productName', 'product', 'platformName', 'softwareName'],
+    textPatterns: [
+      /(?:platform|software|subscription\s+to|access\s+to\s+the)\s+([A-Za-z0-9\s\-_]+?)(?=\s+platform|\s+service|\s+software|\.|\,)/i
+    ],
+    missingReason: 'The specific cloud product or platform subscribed to must be identified.',
+    suggestion: 'Specify the SaaS product or service platform name.'
+  },
+  {
+    key: 'subscriptionFee',
+    label: 'Subscription Fee',
+    requirement: 'REQUIRED',
+    description: 'Recurring subscription price for cloud access.',
+    category: 'FACTUAL',
+    aliases: ['subscriptionFee', 'fee', 'amount', 'pricing'],
+    textPatterns: [
+      /\$[\d,]+|\bINR\s*[\d,]+|\bUSD\s*[\d,]+|\bEUR\s*[\d,]+|\b\d[\d,]+\s*(?:annual|monthly|per\s+year)/i
+    ],
+    missingReason: 'SaaS agreements require agreed subscription fees and billing cycles.',
+    suggestion: 'Specify subscription pricing and billing frequency.'
+  },
+  {
+    key: 'startDate',
+    label: 'Subscription Start Date',
+    requirement: 'REQUIRED',
+    description: 'Date subscription provisioning and access begin.',
+    category: 'FACTUAL',
+    aliases: ['startDate', 'effectiveDate', 'commencementDate'],
+    textPatterns: [
+      /(?:effective\s+(?:as\s+of|date:?)|subscription\s+commenc\w+|start\s+date:?)\s*([A-Za-z0-9\s,\-\/]{4,30})(?=\.|,|\n|$)/i,
+      /\b(\d{1,2}(?:st|nd|rd|th)?\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4})\b/i
+    ],
+    missingReason: 'Subscription start date determines billing cycle and SLA coverage commencement.',
+    suggestion: 'Specify subscription start date.'
+  },
+  {
+    key: 'governingLaw',
+    label: 'Governing Law',
+    requirement: 'REQUIRED',
+    description: 'Governing law for software licensing and data disputes.',
+    category: 'STRUCTURAL',
+    aliases: ['governingLaw', 'jurisdiction'],
+    textPatterns: [
+      /(?:governed\s+by|laws\s+of|jurisdiction\s+of)\s+([A-Za-z\s]+?)(?=\.|\,|\n|$)/i
+    ],
+    missingReason: 'Designation of governing substantive law is required.',
+    suggestion: 'Designate governing state law.'
+  }
+];
+
+export const CONSULTING_FIELDS: FieldDefinition[] = [
+  {
+    key: 'clientName',
+    label: 'Client Legal Entity Name',
+    requirement: 'REQUIRED',
+    description: 'Legal registered entity name of the client.',
+    category: 'FACTUAL',
+    aliases: ['client.name', 'clientName', 'client', 'company'],
+    textPatterns: [
+      /(?:entered\s+into\s+by|by\s+and\s+between)\s+([^,("\n]+)/i,
+      /Client[:\s]+([^\n,]+)/i
+    ],
+    missingReason: 'The contracting client must be formally identified.',
+    suggestion: 'Specify registered legal entity name of the Client.'
+  },
+  {
+    key: 'consultantName',
+    label: 'Consultant Legal Name',
+    requirement: 'REQUIRED',
+    description: 'Legal name of the independent consultant or advisory firm.',
+    category: 'FACTUAL',
+    aliases: ['consultant.name', 'consultantName', 'consultant', 'partyB'],
+    textPatterns: [
+      /(?:and\s+)([^,("\n]+?)(?=\s*\("Consultant|\s*\(the\s*"Consultant)/i,
+      /Consultant[:\s]+([^\n,]+)/i
+    ],
+    missingReason: 'The independent consultant must be identified.',
+    suggestion: 'Specify legal name of the Consultant.'
+  },
+  {
+    key: 'scopeOfServices',
+    label: 'Scope of Consulting Services',
+    requirement: 'REQUIRED',
+    description: 'Description of advisory and strategic consulting responsibilities.',
+    category: 'STRUCTURAL',
+    aliases: ['scopeOfServices', 'services', 'scope'],
+    textPatterns: [
+      /##\s*(?:Scope|Consulting\s*Services)/i,
+      /(?:advisory\s+services|consulting\s+services|scope\s+of\s+work)/i
+    ],
+    missingReason: 'The advisory scope must be clearly articulated.',
+    suggestion: 'Detail the consulting scope and expected deliverables.'
+  },
+  {
+    key: 'compensation',
+    label: 'Consulting Compensation / Fee',
+    requirement: 'REQUIRED',
+    description: 'Agreed consulting fee, retainer, or rate.',
+    category: 'FACTUAL',
+    aliases: ['compensation', 'fees', 'fee', 'amount'],
+    textPatterns: [
+      /\$[\d,]+|\bINR\s*[\d,]+|\bUSD\s*[\d,]+|\bEUR\s*[\d,]+|\b\d[\d,]+\s*(?:fee|retainer|dollars|rupees)/i
+    ],
+    missingReason: 'Consulting consideration or retainer terms must be defined.',
+    suggestion: 'Specify the consulting fee or retainer amount.'
+  },
+  {
+    key: 'governingLaw',
+    label: 'Governing Law',
+    requirement: 'REQUIRED',
+    description: 'Governing legal jurisdiction.',
+    category: 'STRUCTURAL',
+    aliases: ['governingLaw', 'jurisdiction'],
+    textPatterns: [
+      /(?:governed\s+by|laws\s+of|jurisdiction\s+of)\s+([A-Za-z\s]+?)(?=\.|\,|\n|$)/i
+    ],
+    missingReason: 'Designation of governing jurisdiction is required.',
+    suggestion: 'Designate governing law and dispute forum.'
+  }
+];
+
+export const MOU_FIELDS: FieldDefinition[] = [
+  {
+    key: 'partyAName',
+    label: 'First Institution / Party A Name',
+    requirement: 'REQUIRED',
+    description: 'Legal registered entity or institutional name of the first party.',
+    category: 'FACTUAL',
+    aliases: ['partyA.name', 'partyAName', 'partyA', 'firstParty', 'parties.partyA', 'disclosingParty.name'],
+    textPatterns: [
+      /(?:entered\s+into\s+by|by\s+and\s+between)\s+([^,("\n]+)/i,
+      /First\s*Party[:\s]+([^\n,]+)/i
+    ],
+    missingReason: 'The first cooperating institution must be formally identified.',
+    suggestion: 'Specify registered institutional name of First Party / Party A.'
+  },
+  {
+    key: 'partyBName',
+    label: 'Second Institution / Party B Name',
+    requirement: 'REQUIRED',
+    description: 'Legal registered entity or institutional name of the second party.',
+    category: 'FACTUAL',
+    aliases: ['partyB.name', 'partyBName', 'partyB', 'secondParty', 'parties.partyB', 'receivingParty.name'],
+    textPatterns: [
+      /(?:and\s+)([^,("\n]+?)(?=\s*\("Party\s*B|\s*\(the\s*"Second\s*Party)/i,
+      /Second\s*Party[:\s]+([^\n,]+)/i
+    ],
+    missingReason: 'The second cooperating institution must be formally identified.',
+    suggestion: 'Specify registered institutional name of Second Party / Party B.'
+  },
+  {
+    key: 'purpose',
+    label: 'Purpose of Collaboration',
+    requirement: 'REQUIRED',
+    description: 'Shared objectives and collaborative mission statement.',
+    category: 'STRUCTURAL',
+    aliases: ['purpose', 'objective', 'collaborationObjective'],
+    textPatterns: [
+      /##\s*Purpose/i,
+      /(?:purpose\s+of\s+this\s+mou|collaborative\s+efforts|joint\s+initiatives|purpose\s+of\s+cooperation)/i
+    ],
+    missingReason: 'An MOU requires an articulated collaboration purpose.',
+    suggestion: 'Describe the intended collaborative objectives and areas of cooperation.'
+  },
+  {
+    key: 'effectiveDate',
+    label: 'Effective Date',
+    requirement: 'REQUIRED',
+    description: 'Date on which the understanding commences.',
+    category: 'FACTUAL',
+    aliases: ['effectiveDate', 'date', 'commencementDate'],
+    textPatterns: [
+      /(?:effective\s+(?:as\s+of|date:?)|dated\s+as\s+of|executed\s+on)\s*([A-Za-z0-9\s,\-\/]{4,30})(?=\.|,|\n|$)/i,
+      /\b(\d{1,2}(?:st|nd|rd|th)?\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4})\b/i
+    ],
+    missingReason: 'The effective date is required to establish the operative term of the MOU.',
+    suggestion: 'Specify the effective date.'
+  },
+  {
+    key: 'governingLaw',
+    label: 'Governing Law',
+    requirement: 'REQUIRED',
+    description: 'Governing law and jurisdiction.',
+    category: 'STRUCTURAL',
+    aliases: ['governingLaw', 'jurisdiction'],
+    textPatterns: [
+      /(?:governed\s+by|laws\s+of|jurisdiction\s+of)\s+([A-Za-z\s]+?)(?=\.|\,|\n|$)/i
+    ],
+    missingReason: 'Designation of governing legal principles is required.',
+    suggestion: 'Designate governing law.'
+  }
+];
+
 // ============================================================================
 // MAIN VALIDATION FUNCTION
 // ============================================================================
@@ -546,8 +942,16 @@ export function validateRequiredFields(
   let fieldDefs: FieldDefinition[] = NDA_FIELDS;
   if (upperType === 'LEGAL_NOTICE' || /notice|demand/i.test(upperType)) {
     fieldDefs = NOTICE_FIELDS;
-  } else if (/services|consulting|contractor|contract/i.test(upperType)) {
-    fieldDefs = CONTRACT_FIELDS;
+  } else if (/employment|internship/i.test(upperType)) {
+    fieldDefs = EMPLOYMENT_FIELDS;
+  } else if (/saas/i.test(upperType)) {
+    fieldDefs = SAAS_FIELDS;
+  } else if (/consulting/i.test(upperType)) {
+    fieldDefs = CONSULTING_FIELDS;
+  } else if (/mou|memorandum|partnership/i.test(upperType)) {
+    fieldDefs = MOU_FIELDS;
+  } else if (/services|contractor|vendor|contract|lease/i.test(upperType)) {
+    fieldDefs = SERVICE_FIELDS;
   }
 
   // 1. UNRESOLVED PLACEHOLDER DETECTION

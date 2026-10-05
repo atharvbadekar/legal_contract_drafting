@@ -307,6 +307,417 @@ export const CONTRACT_CLAUSES: ClauseDefinition[] = [
   }
 ];
 
+export const EMPLOYMENT_CLAUSES: ClauseDefinition[] = [
+  {
+    key: 'APPOINTMENT_POSITION',
+    title: 'Appointment and Position',
+    requirement: 'REQUIRED',
+    minWordCount: 8,
+    headingPatterns: [/appointment/i, /designation/i, /position/i, /duties/i, /role/i],
+    substantivePatterns: [
+      /(?:appoint|position|designation|duties|responsibilities|employed\s+as)/i
+    ],
+    missingReason: 'An employment agreement must define the employee position, duties, and appointment terms.',
+    suggestion: 'Define the formal job title, duties, reporting relationship, and base of employment.'
+  },
+  {
+    key: 'COMPENSATION_BENEFITS',
+    title: 'Compensation and Benefits',
+    requirement: 'REQUIRED',
+    minWordCount: 8,
+    headingPatterns: [/compensation/i, /salary/i, /remuneration/i, /benefits/i],
+    substantivePatterns: [
+      /(?:salary|compensation|remuneration|ctc|allowance|per\s+annum|per\s+month|payroll)/i
+    ],
+    missingReason: 'An employment agreement must specify compensation, remuneration, and payment frequency.',
+    suggestion: 'Incorporate base salary details, statutory benefits, and payment cycles.'
+  },
+  {
+    key: 'TERM_PROBATION',
+    title: 'Term & Probation Period',
+    requirement: 'RECOMMENDED',
+    minWordCount: 8,
+    headingPatterns: [/probation/i, /term/i, /commencement/i],
+    substantivePatterns: [
+      /(?:probation|commence|effective\s+date|joining\s+date)/i
+    ],
+    missingReason: 'The contract should define the commencement date and any applicable probation evaluation period.',
+    suggestion: 'Specify the joining date and probation terms with evaluation criteria.'
+  },
+  {
+    key: 'CONFIDENTIALITY_IP',
+    title: 'Confidentiality & Inventions Assignment',
+    requirement: 'REQUIRED',
+    minWordCount: 10,
+    headingPatterns: [/confidentiality/i, /intellectual\s+property/i, /inventions/i, /proprietary/i, /work\s+(?:made\s*)?for\s*hire/i],
+    substantivePatterns: [
+      /(?:confidential|proprietary|inventions|work\s+(?:made\s*)?for\s*hire|sole\s+and\s+exclusive\s+property|assigns?\s+all\s+rights)/i
+    ],
+    missingReason: 'Employer proprietary rights and work-product assignment must be explicitly protected.',
+    suggestion: 'Add standard proprietary information and employer inventions assignment covenants.'
+  },
+  {
+    key: 'TERMINATION_NOTICE',
+    title: 'Termination and Notice Period',
+    requirement: 'REQUIRED',
+    minWordCount: 10,
+    headingPatterns: [/termination/i, /notice\s+period/i, /resignation/i],
+    substantivePatterns: [
+      /(?:terminate|termination|notice\s+period|resignation|written\s+notice)/i
+    ],
+    missingReason: 'An employment contract must specify notice periods and procedures for resignation or separation.',
+    suggestion: 'Define mutual notice periods (e.g., 30 or 60 days) and grounds for summary dismissal for cause.'
+  },
+  {
+    key: 'GOVERNING_LAW',
+    title: 'Governing Law and Dispute Resolution',
+    requirement: 'REQUIRED',
+    minWordCount: 6,
+    headingPatterns: [/governing\s+law/i, /jurisdiction/i, /dispute\s+resolution/i],
+    substantivePatterns: [
+      /(?:governed\s+by|laws\s+of|jurisdiction\s+of|courts\s+of)/i
+    ],
+    missingReason: 'Designation of applicable employment statutes and competent labor jurisdiction is essential.',
+    suggestion: 'Designate the governing jurisdiction and competent judicial forum.'
+  }
+];
+
+export const SERVICE_CLAUSES: ClauseDefinition[] = [
+  {
+    key: 'SERVICES_SCOPE',
+    title: 'Scope of Services & Deliverables',
+    requirement: 'REQUIRED',
+    minWordCount: 12,
+    headingPatterns: [/services/i, /scope/i, /deliverables/i, /specifications/i],
+    substantivePatterns: [
+      /(?:services|deliverables|scope\s+of\s+work|specifications|milestones)/i
+    ],
+    missingReason: 'A services agreement must delineate the scope of work and required deliverables.',
+    suggestion: 'Define services, milestones, and deliverables in sufficient detail.'
+  },
+  {
+    key: 'FEES_PAYMENT',
+    title: 'Fees & Payment Terms',
+    requirement: 'REQUIRED',
+    minWordCount: 10,
+    headingPatterns: [/payment/i, /fees/i, /compensation/i, /invoicing/i, /consideration/i],
+    substantivePatterns: [
+      /(?:fee|fees|payment|invoice|invoices|payable|milestone)/i
+    ],
+    missingReason: 'Definite commercial consideration and invoicing schedules must be established.',
+    suggestion: 'Define service fees, billing milestones, and payment terms.'
+  },
+  {
+    key: 'TERM_TERMINATION',
+    title: 'Term & Termination',
+    requirement: 'REQUIRED',
+    minWordCount: 10,
+    headingPatterns: [/term/i, /termination/i],
+    substantivePatterns: [
+      /(?:term|termination|effective\s+date|convenience|breach|written\s+notice)/i
+    ],
+    missingReason: 'Contract duration, expiry, and early termination mechanics must be provided.',
+    suggestion: 'Include term length and termination provisions for breach and convenience.'
+  },
+  {
+    key: 'IP_RIGHTS',
+    title: 'Intellectual Property Rights',
+    requirement: 'REQUIRED',
+    minWordCount: 10,
+    headingPatterns: [/intellectual\s+property/i, /ip\s+rights/i, /work\s+product/i, /ownership/i],
+    substantivePatterns: [
+      /(?:intellectual\s+property|work\s+product|deliverables|ownership|license|assign)/i
+    ],
+    missingReason: 'Ownership or licensing of newly created deliverables and pre-existing IP must be stated.',
+    suggestion: 'Specify whether deliverables are assigned to client or licensed by provider.'
+  },
+  {
+    key: 'CONFIDENTIALITY',
+    title: 'Confidentiality Obligations',
+    requirement: 'REQUIRED',
+    minWordCount: 8,
+    headingPatterns: [/confidential/i, /proprietary/i, /non-disclosure/i],
+    substantivePatterns: [
+      /(?:confidential|proprietary|non-disclosure|duty\s+of\s+care)/i
+    ],
+    missingReason: 'Commercial services involve exchange of proprietary information requiring protection.',
+    suggestion: 'Incorporate mutual confidentiality covenants protecting proprietary disclosures.'
+  },
+  {
+    key: 'LIMITATION_LIABILITY',
+    title: 'Limitation of Liability',
+    requirement: 'REQUIRED',
+    minWordCount: 8,
+    headingPatterns: [/limitation\s+of\s+liability/i, /liability/i, /indemnification/i],
+    substantivePatterns: [
+      /(?:liability|damages|indirect|consequential|cap|shall\s+not\s+exceed)/i
+    ],
+    missingReason: 'Commercial contracts require liability caps to limit exposure to catastrophic claims.',
+    suggestion: 'Insert an aggregate liability limitation cap.'
+  },
+  {
+    key: 'GOVERNING_LAW',
+    title: 'Governing Law and Dispute Resolution',
+    requirement: 'REQUIRED',
+    minWordCount: 6,
+    headingPatterns: [/governing\s+law/i, /jurisdiction/i, /dispute\s+resolution/i],
+    substantivePatterns: [
+      /(?:governed\s+by|laws\s+of|jurisdiction\s+of|courts\s+of)/i
+    ],
+    missingReason: 'Designation of governing substantive law and jurisdiction is required.',
+    suggestion: 'Designate the governing jurisdiction and dispute forum.'
+  }
+];
+
+export const SAAS_CLAUSES: ClauseDefinition[] = [
+  {
+    key: 'LICENSE_GRANT',
+    title: 'Subscription & License Grant',
+    requirement: 'REQUIRED',
+    minWordCount: 10,
+    headingPatterns: [/subscription/i, /license/i, /grant/i, /access/i, /service\s+access/i],
+    substantivePatterns: [
+      /(?:subscription|license|grant|access|non-exclusive|saas|hosted\s+service)/i
+    ],
+    missingReason: 'A SaaS agreement must define the scope of customer access to the hosted software.',
+    suggestion: 'Include a non-exclusive, non-transferable subscription license grant.'
+  },
+  {
+    key: 'SLA_SUPPORT',
+    title: 'Service Level Agreement & Support',
+    requirement: 'RECOMMENDED',
+    minWordCount: 8,
+    headingPatterns: [/service\s+level/i, /sla/i, /uptime/i, /support/i, /maintenance/i],
+    substantivePatterns: [
+      /(?:sla|uptime|availability|support|maintenance|response\s+time)/i
+    ],
+    missingReason: 'SaaS agreements should specify availability commitments and technical support standards.',
+    suggestion: 'Define target availability percentage (e.g. 99.9%) and support ticket channels.'
+  },
+  {
+    key: 'FEES_BILLING',
+    title: 'Subscription Fees & Billing',
+    requirement: 'REQUIRED',
+    minWordCount: 10,
+    headingPatterns: [/fees/i, /subscription\s+fees/i, /billing/i, /payment/i],
+    substantivePatterns: [
+      /(?:subscription\s+fee|billing|payment|invoicing|recurring|annual|monthly)/i
+    ],
+    missingReason: 'Recurring subscription pricing, billing intervals, and payment methods must be detailed.',
+    suggestion: 'Specify recurring subscription fees and payment schedules.'
+  },
+  {
+    key: 'DATA_SECURITY',
+    title: 'Data Security & Ownership',
+    requirement: 'REQUIRED',
+    minWordCount: 10,
+    headingPatterns: [/data\s+security/i, /customer\s+data/i, /privacy/i, /data\s+protection/i],
+    substantivePatterns: [
+      /(?:customer\s+data|security|encryption|data\s+protection|privacy|gdpr)/i
+    ],
+    missingReason: 'Cloud customers require explicit data ownership guarantees and security standards.',
+    suggestion: 'Affirm customer retains exclusive ownership of uploaded data and provider implements industry security.'
+  },
+  {
+    key: 'TERM_RENEWAL',
+    title: 'Term, Renewal & Termination',
+    requirement: 'REQUIRED',
+    minWordCount: 10,
+    headingPatterns: [/term/i, /renewal/i, /termination/i],
+    substantivePatterns: [
+      /(?:initial\s+term|renewal|auto-renew|terminate|written\s+notice)/i
+    ],
+    missingReason: 'Initial term duration, renewal mechanisms, and cancellation deadlines must be set.',
+    suggestion: 'Provide initial subscription duration and non-renewal notice requirements.'
+  },
+  {
+    key: 'LIMITATION_LIABILITY',
+    title: 'Limitation of Liability',
+    requirement: 'REQUIRED',
+    minWordCount: 8,
+    headingPatterns: [/limitation\s+of\s+liability/i, /liability/i],
+    substantivePatterns: [
+      /(?:liability|damages|cap|fees\s+paid|shall\s+not\s+exceed)/i
+    ],
+    missingReason: 'Cloud providers must cap enterprise risk to fees received under the contract.',
+    suggestion: 'Stipulate an aggregate liability cap (e.g., 12 months fees paid).'
+  },
+  {
+    key: 'GOVERNING_LAW',
+    title: 'Governing Law and Jurisdiction',
+    requirement: 'REQUIRED',
+    minWordCount: 6,
+    headingPatterns: [/governing\s+law/i, /jurisdiction/i],
+    substantivePatterns: [
+      /(?:governed\s+by|laws\s+of|jurisdiction\s+of)/i
+    ],
+    missingReason: 'Governing state jurisdiction must be defined.',
+    suggestion: 'Designate the governing jurisdiction and venue.'
+  }
+];
+
+export const CONSULTING_CLAUSES: ClauseDefinition[] = [
+  {
+    key: 'SERVICES_SCOPE',
+    title: 'Scope of Consulting Services',
+    requirement: 'REQUIRED',
+    minWordCount: 10,
+    headingPatterns: [/services/i, /scope/i, /consulting/i, /advisory/i],
+    substantivePatterns: [
+      /(?:consulting|advisory|services|scope|deliverables)/i
+    ],
+    missingReason: 'A consulting agreement must specify advisory duties and expected contributions.',
+    suggestion: 'Define the scope of advisory services and deliverables.'
+  },
+  {
+    key: 'INDEPENDENT_CONTRACTOR',
+    title: 'Independent Contractor Status',
+    requirement: 'REQUIRED',
+    minWordCount: 8,
+    headingPatterns: [/independent\s+contractor/i, /relationship/i, /status/i],
+    substantivePatterns: [
+      /(?:independent\s+contractor|no\s+employment|no\s+agency|no\s+partnership)/i
+    ],
+    missingReason: 'Expressly disclaiming employment or agency status is critical to avoid misclassification liabilities.',
+    suggestion: 'State that consultant acts strictly as an independent contractor without employee benefits.'
+  },
+  {
+    key: 'COMPENSATION',
+    title: 'Compensation and Invoicing',
+    requirement: 'REQUIRED',
+    minWordCount: 8,
+    headingPatterns: [/compensation/i, /fees/i, /retainer/i, /payment/i],
+    substantivePatterns: [
+      /(?:fee|compensation|retainer|hourly|milestone|invoicing|payment)/i
+    ],
+    missingReason: 'A consulting contract requires defined fee arrangements and reimbursement rules.',
+    suggestion: 'Specify consulting fees, payment milestones, and invoice terms.'
+  },
+  {
+    key: 'IP_RIGHTS',
+    title: 'Work Product & Intellectual Property',
+    requirement: 'REQUIRED',
+    minWordCount: 8,
+    headingPatterns: [/intellectual\s+property/i, /work\s+product/i, /ip/i, /ownership/i],
+    substantivePatterns: [
+      /(?:work\s+product|deliverables|intellectual\s+property|assigns?|ownership)/i
+    ],
+    missingReason: 'Clear allocation of advisory deliverables ownership is required.',
+    suggestion: 'Specify assignment of custom deliverables to client with retention of consultant background know-how.'
+  },
+  {
+    key: 'CONFIDENTIALITY',
+    title: 'Confidentiality Obligations',
+    requirement: 'REQUIRED',
+    minWordCount: 8,
+    headingPatterns: [/confidential/i, /proprietary/i],
+    substantivePatterns: [
+      /(?:confidential|proprietary|non-disclosure)/i
+    ],
+    missingReason: 'Strategic consulting involves access to internal business data that must be safeguarded.',
+    suggestion: 'Include binding confidentiality obligations on disclosed materials.'
+  },
+  {
+    key: 'TERM_TERMINATION',
+    title: 'Term & Termination',
+    requirement: 'REQUIRED',
+    minWordCount: 8,
+    headingPatterns: [/term/i, /termination/i],
+    substantivePatterns: [
+      /(?:term|termination|notice|effective\s+date)/i
+    ],
+    missingReason: 'Duration of engagement and right to terminate on notice must be defined.',
+    suggestion: 'Specify the engagement period and notice timeline for termination.'
+  },
+  {
+    key: 'GOVERNING_LAW',
+    title: 'Governing Law',
+    requirement: 'REQUIRED',
+    minWordCount: 6,
+    headingPatterns: [/governing\s+law/i, /jurisdiction/i],
+    substantivePatterns: [
+      /(?:governed\s+by|laws\s+of|jurisdiction\s+of)/i
+    ],
+    missingReason: 'Governing law is needed to resolve disputes.',
+    suggestion: 'Designate governing state law and dispute forum.'
+  }
+];
+
+export const MOU_CLAUSES: ClauseDefinition[] = [
+  {
+    key: 'PURPOSE_OBJECTIVES',
+    title: 'Purpose & Objectives',
+    requirement: 'REQUIRED',
+    minWordCount: 10,
+    headingPatterns: [/purpose/i, /objectives/i, /mission/i, /background/i],
+    substantivePatterns: [
+      /(?:purpose|objective|collaboration|cooperation|mutual\s+interest)/i
+    ],
+    missingReason: 'An MOU must define the overarching purpose and shared objectives of the collaboration.',
+    suggestion: 'Define the intended collaborative initiatives and joint goals.'
+  },
+  {
+    key: 'SCOPE_COOPERATION',
+    title: 'Scope of Cooperation',
+    requirement: 'REQUIRED',
+    minWordCount: 10,
+    headingPatterns: [/scope/i, /cooperation/i, /responsibilities/i, /initiatives/i],
+    substantivePatterns: [
+      /(?:scope|cooperation|initiatives|undertakings|activities|roles)/i
+    ],
+    missingReason: 'The MOU must identify the areas of cooperative effort and institutional contributions.',
+    suggestion: 'Detail the collaborative programs, resources, or joint activities.'
+  },
+  {
+    key: 'NON_BINDING_STATUS',
+    title: 'Legal Status of MOU (Non-Binding)',
+    requirement: 'REQUIRED',
+    minWordCount: 8,
+    headingPatterns: [/legal\s+status/i, /non-binding/i, /understanding/i, /nature\s+of\s+mou/i],
+    substantivePatterns: [
+      /(?:non-binding|statement\s+of\s+intent|does\s+not\s+create\s+a\s+legal\s+obligation|good\s+faith|not\s+legally\s+enforceable)/i
+    ],
+    missingReason: 'An MOU must expressly clarify its non-binding character to prevent unintended contractual obligations.',
+    suggestion: 'Clarify that this MOU constitutes a declaration of mutual intent and creates no binding legal relations except confidentiality.'
+  },
+  {
+    key: 'TERM_TERMINATION',
+    title: 'Term & Termination',
+    requirement: 'REQUIRED',
+    minWordCount: 8,
+    headingPatterns: [/term/i, /validity/i, /duration/i, /termination/i],
+    substantivePatterns: [
+      /(?:term|duration|validity|terminate|withdraw|written\s+notice)/i
+    ],
+    missingReason: 'An MOU should provide a duration and mutual right to withdraw upon notice.',
+    suggestion: 'Define the term (e.g. 2 years) and allow unilateral withdrawal with written notice.'
+  },
+  {
+    key: 'CONFIDENTIALITY',
+    title: 'Confidentiality',
+    requirement: 'RECOMMENDED',
+    minWordCount: 6,
+    headingPatterns: [/confidential/i, /proprietary/i],
+    substantivePatterns: [
+      /(?:confidential|proprietary|non-disclosure)/i
+    ],
+    missingReason: 'Confidentiality should remain binding even within a non-binding memorandum.',
+    suggestion: 'Include binding confidentiality provisions for shared data.'
+  },
+  {
+    key: 'GOVERNING_LAW',
+    title: 'Governing Law & Amicable Resolution',
+    requirement: 'RECOMMENDED',
+    minWordCount: 6,
+    headingPatterns: [/governing\s+law/i, /dispute/i, /amicable/i],
+    substantivePatterns: [
+      /(?:governed\s+by|laws\s+of|amicable|consultation|good\s+faith)/i
+    ],
+    missingReason: 'Governing jurisdiction and good-faith resolution protocols prevent litigation.',
+    suggestion: 'Designate governing law and provide for amicable dispute settlement.'
+  }
+];
+
 // ============================================================================
 // MAIN VALIDATION LOGIC
 // ============================================================================
@@ -326,8 +737,16 @@ export function validateRequiredClauses(
   let clauseDefs = NDA_CLAUSES;
   if (upperType === 'LEGAL_NOTICE' || /notice|demand/i.test(upperType)) {
     clauseDefs = NOTICE_CLAUSES;
-  } else if (/services|consulting|contractor|contract/i.test(upperType)) {
-    clauseDefs = CONTRACT_CLAUSES;
+  } else if (/employment|internship/i.test(upperType)) {
+    clauseDefs = EMPLOYMENT_CLAUSES;
+  } else if (/saas/i.test(upperType)) {
+    clauseDefs = SAAS_CLAUSES;
+  } else if (/consulting/i.test(upperType)) {
+    clauseDefs = CONSULTING_CLAUSES;
+  } else if (/mou|memorandum|partnership/i.test(upperType)) {
+    clauseDefs = MOU_CLAUSES;
+  } else if (/services|contractor|vendor|contract|lease/i.test(upperType)) {
+    clauseDefs = SERVICE_CLAUSES;
   }
 
   for (const clause of clauseDefs) {

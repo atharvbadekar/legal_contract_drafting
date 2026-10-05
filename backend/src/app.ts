@@ -11,6 +11,8 @@ import clausesRoutes from './routes/clauses.routes.js';
 import knowledgeRoutes from './routes/knowledge.routes.js';
 import templatesRoutes from './routes/templates.routes.js';
 import researchRoutes from './routes/research.routes.js';
+import contractTypesRoutes from './routes/contract-types.routes.js';
+import linterRoutes from './routes/linter.routes.js';
 import { legalNLPClient } from './services/nlp/legal_nlp_client.js';
 
 dotenv.config();
@@ -40,25 +42,34 @@ const limiter = rateLimit({
 });
 app.use('/api', limiter);
 
-// Health Check
-app.get('/health', async (req, res) => {
+// Health Check (both /health and /api/health)
+const healthHandler = async (req: express.Request, res: express.Response) => {
   const nlpHealth = await legalNLPClient.healthCheck();
   res.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
-    service: 'Atharv Legal AI Document Generation & Validation Backend',
+    service: 'Atharv Legal AI Multi-Contract Generation & Validation Backend',
     nlpService: nlpHealth
   });
-});
+};
+app.get('/health', healthHandler);
+app.get('/api/health', healthHandler);
 
-// API Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/documents', documentsRoutes);
-app.use('/api/ai', aiRoutes);
-app.use('/api/clauses', clausesRoutes);
-app.use('/api/knowledge', knowledgeRoutes);
-app.use('/api/templates', templatesRoutes);
-app.use('/api/research', researchRoutes);
+// API Routes - Mounted at both /api/xxx and /xxx for robust routing compatibility
+const mountRoute = (path: string, router: express.Router) => {
+  app.use(`/api${path}`, router);
+  app.use(path, router);
+};
+
+mountRoute('/auth', authRoutes);
+mountRoute('/documents', documentsRoutes);
+mountRoute('/ai', aiRoutes);
+mountRoute('/clauses', clausesRoutes);
+mountRoute('/knowledge', knowledgeRoutes);
+mountRoute('/templates', templatesRoutes);
+mountRoute('/research', researchRoutes);
+mountRoute('/contract-types', contractTypesRoutes);
+mountRoute('/linter', linterRoutes);
 
 // Global Error Handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

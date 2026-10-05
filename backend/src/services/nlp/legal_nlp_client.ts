@@ -3,7 +3,7 @@ import axios from 'axios';
 const LEGAL_NLP_URL = process.env.LEGAL_NLP_URL || 'http://localhost:8001';
 
 export interface ClassifyResponse {
-  documentType: 'NDA' | 'LEGAL_NOTICE' | 'UNKNOWN';
+  documentType: string;
   confidence: number;
   scores: Record<string, number>;
 }
@@ -72,13 +72,25 @@ export class LegalNLPClient {
       return res.data;
     } catch {
       const lower = (text || '').toLowerCase();
-      const isNotice = lower.includes('notice') || lower.includes('demand') || lower.includes('dishonour') || lower.includes('breach');
-      const isNDA = lower.includes('non-disclosure') || lower.includes('confidential') || lower.includes('nda') || lower.includes('proprietary');
-      const docType: 'NDA' | 'LEGAL_NOTICE' = (isNotice && !isNDA) ? 'LEGAL_NOTICE' : 'NDA';
+      let docType = 'NDA';
+      if (lower.includes('employment agreement') || (lower.includes('employer') && lower.includes('employee'))) {
+        docType = 'EMPLOYMENT';
+      } else if (lower.includes('saas') || lower.includes('software as a service') || lower.includes('subscription agreement')) {
+        docType = 'SAAS';
+      } else if (lower.includes('consulting agreement') || (lower.includes('consultant') && lower.includes('advisory'))) {
+        docType = 'CONSULTING';
+      } else if (lower.includes('memorandum of understanding') || lower.includes('mou')) {
+        docType = 'MOU';
+      } else if (lower.includes('master services agreement') || lower.includes('services agreement') || lower.includes('scope of services')) {
+        docType = 'SERVICE';
+      } else if (lower.includes('notice') || lower.includes('demand') || lower.includes('dishonour') || lower.includes('breach')) {
+        docType = 'LEGAL_NOTICE';
+      }
       return {
         documentType: docType,
         confidence: 0.94,
         scores: {
+          [docType]: 0.94,
           NDA: docType === 'NDA' ? 0.94 : 0.06,
           LEGAL_NOTICE: docType === 'LEGAL_NOTICE' ? 0.94 : 0.06
         }

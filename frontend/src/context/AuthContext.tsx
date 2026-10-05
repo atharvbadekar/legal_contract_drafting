@@ -27,12 +27,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         authService.me().then(u => {
           setUser(u);
           localStorage.setItem('atharv_user', JSON.stringify(u));
-        }).catch(() => {
-          localStorage.removeItem('atharv_token');
-          localStorage.removeItem('atharv_user');
-          localStorage.removeItem('mira_token');
-          localStorage.removeItem('mira_user');
-          setUser(null);
+        }).catch((err: any) => {
+          if (err.response?.status === 401) {
+            localStorage.removeItem('atharv_token');
+            localStorage.removeItem('atharv_user');
+            localStorage.removeItem('mira_token');
+            localStorage.removeItem('mira_user');
+            setUser(null);
+          } else {
+            console.warn('Backend unavailable during session verification, preserving cached session');
+          }
         }).finally(() => setLoading(false));
       } catch (e) {
         setUser(null);

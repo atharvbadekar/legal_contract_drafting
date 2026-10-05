@@ -17,7 +17,14 @@ import {
   Sparkles,
   ShieldAlert,
   BarChart2,
-  Search
+  Search,
+  Briefcase,
+  Wrench,
+  Cloud,
+  UserCheck,
+  Handshake,
+  Building2,
+  MapPin
 } from 'lucide-react';
 
 export const Dashboard: React.FC = () => {
@@ -161,73 +168,289 @@ export const Dashboard: React.FC = () => {
       </div>
 
       {/* Document Creation & Analysis CTA Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-gradient-to-br from-purple-900 to-indigo-950 rounded-2xl p-6 text-white relative overflow-hidden shadow-sm flex flex-col justify-between">
-          <div className="absolute right-0 top-0 translate-x-8 -translate-y-8 w-44 h-44 bg-purple-500/20 rounded-full blur-2xl" />
-          <div className="relative z-10 space-y-3">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-purple-200 text-xs font-medium backdrop-blur-xs">
-              <Sparkles className="w-3.5 h-3.5 text-purple-300" />
-              Bilateral Protection
-            </div>
-            <h3 className="text-lg font-bold">Non-Disclosure Agreement</h3>
-            <p className="text-xs text-purple-200/90 leading-relaxed">
-              Synthesize a controlled 14-section NDA anchored in structured facts, approved legal clauses, and statutory citations.
-            </p>
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-bold text-mira-dark">Multi-Contract Quick Drafting</h2>
+            <p className="text-xs text-mira-muted">Select an institutional legal contract type to generate an authoritative draft</p>
           </div>
-          <div className="pt-4 relative z-10">
-            <button
-              onClick={() => navigate('/create?type=NDA')}
-              className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-white text-mira-primary hover:bg-purple-50 text-xs font-semibold rounded-lg shadow-sm transition-all cursor-pointer"
-            >
-              Draft NDA
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
+          <Link
+            to="/create"
+            className="text-xs font-semibold text-mira-primary hover:text-purple-800 flex items-center gap-1"
+          >
+            All 10 Contract Types <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* NDA */}
+          <div className="bg-gradient-to-br from-purple-900 to-indigo-950 rounded-xl p-5 text-white relative overflow-hidden shadow-xs flex flex-col justify-between">
+            <div className="relative z-10 space-y-2">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/10 text-purple-200 text-[11px] font-medium">
+                <Sparkles className="w-3 h-3 text-purple-300" />
+                Commercial
+              </div>
+              <h3 className="text-base font-bold">Non-Disclosure Agreement</h3>
+              <p className="text-xs text-purple-200/80 leading-relaxed line-clamp-2">
+                Mutual or unilateral NDA protecting confidential technical & business disclosures.
+              </p>
+            </div>
+            <div className="pt-4 relative z-10">
+              <button
+                onClick={() => navigate('/create?type=NDA')}
+                className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-white text-mira-primary hover:bg-purple-50 text-xs font-semibold rounded-lg shadow-xs transition-all cursor-pointer"
+              >
+                Draft NDA <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
+
+          {/* Employment */}
+          <div className="bg-gradient-to-br from-emerald-900 to-teal-950 rounded-xl p-5 text-white relative overflow-hidden shadow-xs flex flex-col justify-between">
+            <div className="relative z-10 space-y-2">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/10 text-emerald-200 text-[11px] font-medium">
+                <Briefcase className="w-3 h-3 text-emerald-300" />
+                Human Resources
+              </div>
+              <h3 className="text-base font-bold">Employment Agreement</h3>
+              <p className="text-xs text-emerald-200/80 leading-relaxed line-clamp-2">
+                Executive employment contract with designation, CTC, probation, and IP assignment.
+              </p>
+            </div>
+            <div className="pt-4 relative z-10">
+              <button
+                onClick={() => navigate('/create?type=EMPLOYMENT')}
+                className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-white text-emerald-800 hover:bg-emerald-50 text-xs font-semibold rounded-lg shadow-xs transition-all cursor-pointer"
+              >
+                Draft Employment <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
+
+          {/* Master Services */}
+          <div className="bg-gradient-to-br from-violet-900 to-purple-950 rounded-xl p-5 text-white relative overflow-hidden shadow-xs flex flex-col justify-between">
+            <div className="relative z-10 space-y-2">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/10 text-violet-200 text-[11px] font-medium">
+                <Wrench className="w-3 h-3 text-violet-300" />
+                Services
+              </div>
+              <h3 className="text-base font-bold">Master Services Agreement</h3>
+              <p className="text-xs text-violet-200/80 leading-relaxed line-clamp-2">
+                Commercial contract for engineering, deliverables, milestones, and liability cap.
+              </p>
+            </div>
+            <div className="pt-4 relative z-10">
+              <button
+                onClick={() => navigate('/create?type=SERVICE')}
+                className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-white text-violet-800 hover:bg-violet-50 text-xs font-semibold rounded-lg shadow-xs transition-all cursor-pointer"
+              >
+                Draft Services <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
+
+          {/* SaaS Agreement */}
+          <div className="bg-gradient-to-br from-indigo-900 to-blue-950 rounded-xl p-5 text-white relative overflow-hidden shadow-xs flex flex-col justify-between">
+            <div className="relative z-10 space-y-2">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/10 text-indigo-200 text-[11px] font-medium">
+                <Cloud className="w-3 h-3 text-indigo-300" />
+                Technology
+              </div>
+              <h3 className="text-base font-bold">SaaS Subscription</h3>
+              <p className="text-xs text-indigo-200/80 leading-relaxed line-clamp-2">
+                Cloud software subscription with SLA uptime, recurring billing, and data protection.
+              </p>
+            </div>
+            <div className="pt-4 relative z-10">
+              <button
+                onClick={() => navigate('/create?type=SAAS')}
+                className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-white text-indigo-800 hover:bg-indigo-50 text-xs font-semibold rounded-lg shadow-xs transition-all cursor-pointer"
+              >
+                Draft SaaS <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-slate-900 to-gray-900 rounded-2xl p-6 text-white relative overflow-hidden shadow-sm flex flex-col justify-between">
-          <div className="absolute right-0 top-0 translate-x-8 -translate-y-8 w-44 h-44 bg-blue-500/15 rounded-full blur-2xl" />
-          <div className="relative z-10 space-y-3">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-gray-300 text-xs font-medium backdrop-blur-xs">
-              <Cpu className="w-3.5 h-3.5 text-blue-300" />
-              Demand & Default
+        {/* Second Row: Consulting, MOU, Legal Notice, Analyzer */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Consulting */}
+          <div className="bg-white rounded-xl p-5 border border-mira-border shadow-2xs hover:border-purple-300 transition-all flex flex-col justify-between">
+            <div className="space-y-2">
+              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 text-[11px] font-medium">
+                <UserCheck className="w-3 h-3 text-orange-600" />
+                Advisory
+              </div>
+              <h3 className="text-base font-bold text-mira-dark">Consulting Agreement</h3>
+              <p className="text-xs text-mira-muted leading-relaxed line-clamp-2">
+                Independent advisor contract with retainer, work product IP, and confidentiality.
+              </p>
             </div>
-            <h3 className="text-lg font-bold">Formal Legal Notice</h3>
-            <p className="text-xs text-gray-300/90 leading-relaxed">
-              Generate an advocate-calibrated 12-section demand notice with strict fact verification and zero fabricated citations.
-            </p>
+            <div className="pt-4">
+              <button
+                onClick={() => navigate('/create?type=CONSULTING')}
+                className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-800 text-xs font-semibold rounded-lg transition-all cursor-pointer"
+              >
+                Draft Consulting <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
           </div>
-          <div className="pt-4 relative z-10">
-            <button
-              onClick={() => navigate('/create?type=LEGAL_NOTICE')}
-              className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-white text-gray-900 hover:bg-gray-100 text-xs font-semibold rounded-lg shadow-sm transition-all cursor-pointer"
-            >
-              Draft Legal Notice
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
+
+          {/* MOU */}
+          <div className="bg-white rounded-xl p-5 border border-mira-border shadow-2xs hover:border-purple-300 transition-all flex flex-col justify-between">
+            <div className="space-y-2">
+              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 text-[11px] font-medium">
+                <Handshake className="w-3 h-3 text-teal-600" />
+                Partnership
+              </div>
+              <h3 className="text-base font-bold text-mira-dark">Memorandum of Understanding</h3>
+              <p className="text-xs text-mira-muted leading-relaxed line-clamp-2">
+                Statement of mutual intent, joint objectives, and preliminary collaboration terms.
+              </p>
+            </div>
+            <div className="pt-4">
+              <button
+                onClick={() => navigate('/create?type=MOU')}
+                className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-800 text-xs font-semibold rounded-lg transition-all cursor-pointer"
+              >
+                Draft MOU <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
+
+          {/* Legal Notice */}
+          <div className="bg-white rounded-xl p-5 border border-mira-border shadow-2xs hover:border-purple-300 transition-all flex flex-col justify-between">
+            <div className="space-y-2">
+              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-100 text-slate-800 text-[11px] font-medium">
+                <Cpu className="w-3 h-3 text-slate-700" />
+                Litigation
+              </div>
+              <h3 className="text-base font-bold text-mira-dark">Formal Legal Notice</h3>
+              <p className="text-xs text-mira-muted leading-relaxed line-clamp-2">
+                Advocate demand notice for breach, default, and litigation consequences.
+              </p>
+            </div>
+            <div className="pt-4">
+              <button
+                onClick={() => navigate('/create?type=LEGAL_NOTICE')}
+                className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-900 text-xs font-semibold rounded-lg transition-all cursor-pointer"
+              >
+                Draft Legal Notice <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
+
+          {/* Contract Analyzer */}
+          <div className="bg-white rounded-xl p-5 border border-purple-200 bg-purple-50/30 shadow-2xs hover:border-mira-primary transition-all flex flex-col justify-between">
+            <div className="space-y-2">
+              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-purple-100 text-mira-primary text-[11px] font-medium">
+                <Search className="w-3 h-3 text-purple-600" />
+                Analysis & Health
+              </div>
+              <h3 className="text-base font-bold text-mira-dark">Contract Analyzer</h3>
+              <p className="text-xs text-mira-muted leading-relaxed line-clamp-2">
+                Upload DOCX, PDF, or text. Audits clauses, uncovers risk, and generates health score.
+              </p>
+            </div>
+            <div className="pt-4">
+              <button
+                onClick={() => navigate('/analyzer')}
+                className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-mira-primary hover:bg-mira-accent text-white text-xs font-semibold rounded-lg transition-all cursor-pointer"
+              >
+                Launch Analyzer <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-indigo-950 via-slate-900 to-purple-950 rounded-2xl p-6 text-white relative overflow-hidden shadow-sm flex flex-col justify-between border border-purple-500/20">
-          <div className="absolute right-0 top-0 translate-x-8 -translate-y-8 w-44 h-44 bg-emerald-500/15 rounded-full blur-2xl" />
-          <div className="relative z-10 space-y-3">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-emerald-300 text-xs font-medium backdrop-blur-xs">
-              <Search className="w-3.5 h-3.5 text-emerald-400" />
-              Multi-Format Audit
+        {/* Third Row: Vendor Supply, Partnership, Internship, Commercial Lease */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Vendor Agreement */}
+          <div className="bg-white rounded-xl p-5 border border-mira-border shadow-2xs hover:border-blue-300 transition-all flex flex-col justify-between">
+            <div className="space-y-2">
+              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[11px] font-medium">
+                <Building2 className="w-3 h-3 text-blue-600" />
+                Procurement
+              </div>
+              <h3 className="text-base font-bold text-mira-dark">Vendor Supply Agreement</h3>
+              <p className="text-xs text-mira-muted leading-relaxed line-clamp-2">
+                B2B procurement contract for goods delivery, PO specs, inspection, and warranties.
+              </p>
             </div>
-            <h3 className="text-lg font-bold">Contract Analyzer</h3>
-            <p className="text-xs text-purple-200/90 leading-relaxed">
-              Upload PDF, DOCX, or raw text. Audits clause completeness, uncovers high-risk liabilities, and scores contract health.
-            </p>
+            <div className="pt-4">
+              <button
+                onClick={() => navigate('/create?type=VENDOR')}
+                className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-800 text-xs font-semibold rounded-lg transition-all cursor-pointer"
+              >
+                Draft Vendor <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
           </div>
-          <div className="pt-4 relative z-10">
-            <button
-              onClick={() => navigate('/analyzer')}
-              className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-semibold rounded-lg shadow-sm transition-all cursor-pointer"
-            >
-              Launch Analyzer
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
+
+          {/* Partnership Agreement */}
+          <div className="bg-white rounded-xl p-5 border border-mira-border shadow-2xs hover:border-amber-300 transition-all flex flex-col justify-between">
+            <div className="space-y-2">
+              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 text-[11px] font-medium">
+                <Layers className="w-3 h-3 text-amber-600" />
+                Corporate
+              </div>
+              <h3 className="text-base font-bold text-mira-dark">Partnership Agreement</h3>
+              <p className="text-xs text-mira-muted leading-relaxed line-clamp-2">
+                General partnership deed governing capital accounts, profit ratios, and voting.
+              </p>
+            </div>
+            <div className="pt-4">
+              <button
+                onClick={() => navigate('/create?type=PARTNERSHIP')}
+                className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-semibold rounded-lg transition-all cursor-pointer"
+              >
+                Draft Partnership <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
+
+          {/* Internship Agreement */}
+          <div className="bg-white rounded-xl p-5 border border-mira-border shadow-2xs hover:border-cyan-300 transition-all flex flex-col justify-between">
+            <div className="space-y-2">
+              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-cyan-50 text-cyan-700 text-[11px] font-medium">
+                <FileText className="w-3 h-3 text-cyan-600" />
+                Training & HR
+              </div>
+              <h3 className="text-base font-bold text-mira-dark">Internship Agreement</h3>
+              <p className="text-xs text-mira-muted leading-relaxed line-clamp-2">
+                Educational engagement terms with curriculum, stipend, IP ownership, and conduct.
+              </p>
+            </div>
+            <div className="pt-4">
+              <button
+                onClick={() => navigate('/create?type=INTERNSHIP')}
+                className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-cyan-50 hover:bg-cyan-100 text-cyan-800 text-xs font-semibold rounded-lg transition-all cursor-pointer"
+              >
+                Draft Internship <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
+
+          {/* Commercial Lease Agreement */}
+          <div className="bg-white rounded-xl p-5 border border-mira-border shadow-2xs hover:border-rose-300 transition-all flex flex-col justify-between">
+            <div className="space-y-2">
+              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 text-[11px] font-medium">
+                <MapPin className="w-3 h-3 text-rose-600" />
+                Real Estate
+              </div>
+              <h3 className="text-base font-bold text-mira-dark">Commercial Lease</h3>
+              <p className="text-xs text-mira-muted leading-relaxed line-clamp-2">
+                Property tenancy contract with demised premises, monthly rent, deposit, and lock-in.
+              </p>
+            </div>
+            <div className="pt-4">
+              <button
+                onClick={() => navigate('/create?type=LEASE')}
+                className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-800 text-xs font-semibold rounded-lg transition-all cursor-pointer"
+              >
+                Draft Lease <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -290,7 +513,7 @@ export const Dashboard: React.FC = () => {
                           ? 'bg-purple-100 text-purple-700 border border-purple-200' 
                           : 'bg-gray-100 text-gray-600 border border-gray-200'
                       }`}>
-                        {doc.generationMode}
+                        {doc.generationMode === 'MIRA' ? 'Atharv Legal AI' : 'Baseline LLM'}
                       </span>
                     </td>
                     <td className="py-3.5 px-6">

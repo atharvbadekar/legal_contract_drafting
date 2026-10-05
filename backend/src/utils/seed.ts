@@ -55,27 +55,37 @@ async function main() {
   console.log('✓ Users seeded (admin@atharv.legal / user@atharv.legal & aliases)');
 
   // 2. Document Types
-  const ndaType = await prisma.documentType.upsert({
-    where: { code: 'NDA' },
-    update: {},
-    create: {
-      code: 'NDA',
-      name: 'Non-Disclosure Agreement',
-      description: 'Mutual or unilateral agreement safeguarding proprietary assets, confidential technical disclosures, and commercial secrets.'
-    }
-  });
+  const typesToSeed = [
+    { code: 'NDA', name: 'Non-Disclosure Agreement', category: 'COMMERCIAL', description: 'Mutual or unilateral agreement safeguarding proprietary assets, confidential technical disclosures, and commercial secrets.' },
+    { code: 'LEGAL_NOTICE', name: 'Formal Legal Notice', category: 'LITIGATION', description: 'Statutory or contractual demand notice alleging contractual breach, outstanding defaults, or demanding performance under threat of litigation.' },
+    { code: 'EMPLOYMENT', name: 'Employment Agreement', category: 'HUMAN_RESOURCES', description: 'Comprehensive employment agreement defining role, compensation, probation, notice period, IP ownership, and confidentiality.' },
+    { code: 'SERVICE', name: 'Master Services Agreement', category: 'COMMERCIAL', description: 'Commercial contract governing the provision of professional engineering, IT, or corporate services, deliverables, and payment terms.' },
+    { code: 'SAAS', name: 'SaaS Subscription Agreement', category: 'TECHNOLOGY', description: 'Software-as-a-Service customer subscription agreement covering cloud licensing, SLA uptime, data processing, and subscription renewals.' },
+    { code: 'CONSULTING', name: 'Consulting Agreement', category: 'COMMERCIAL', description: 'Independent contractor agreement governing specialized advisory, strategic consulting, compensation, and deliverables.' },
+    { code: 'MOU', name: 'Memorandum of Understanding', category: 'PARTNERSHIP', description: 'Formal statement of intent documenting the preliminary terms of collaboration and shared objectives between two organizations.' },
+    { code: 'VENDOR', name: 'Vendor / Supply Agreement', category: 'COMMERCIAL', description: 'Master vendor contract governing procurement of products, materials, supply warranties, and inspection terms.' },
+    { code: 'PARTNERSHIP', name: 'Partnership Agreement', category: 'CORPORATE', description: 'General business partnership deed establishing capital contributions, governance, profit distributions, and liability sharing.' },
+    { code: 'INTERNSHIP', name: 'Internship Agreement', category: 'HUMAN_RESOURCES', description: 'Educational and practical internship training agreement stipulating learning objectives, supervisor duties, and monthly stipend.' },
+    { code: 'LEASE', name: 'Commercial Lease Agreement', category: 'REAL_ESTATE', description: 'Real property lease agreement defining tenancy terms, premises use, rent escalation, maintenance covenants, and security deposits.' }
+  ];
 
-  const noticeType = await prisma.documentType.upsert({
-    where: { code: 'LEGAL_NOTICE' },
-    update: {},
-    create: {
-      code: 'LEGAL_NOTICE',
-      name: 'Formal Legal Notice',
-      description: 'Statutory or contractual demand notice alleging contractual breach, outstanding defaults, or demanding performance under threat of litigation.'
-    }
-  });
+  for (const t of typesToSeed) {
+    await prisma.documentType.upsert({
+      where: { code: t.code },
+      update: { name: t.name, description: t.description, category: t.category },
+      create: {
+        code: t.code,
+        name: t.name,
+        description: t.description,
+        category: t.category,
+        isActive: true
+      }
+    });
+  }
 
-  console.log('✓ Document types seeded (NDA, LEGAL_NOTICE)');
+  const ndaType = await prisma.documentType.findUniqueOrThrow({ where: { code: 'NDA' } });
+  const noticeType = await prisma.documentType.findUniqueOrThrow({ where: { code: 'LEGAL_NOTICE' } });
+  console.log('✓ All 10 contract types seeded (NDA, LEGAL_NOTICE, EMPLOYMENT, SERVICE, SAAS, CONSULTING, MOU, VENDOR, PARTNERSHIP, INTERNSHIP, LEASE)');
 
   // 3. Templates & Template Sections
   const ndaTemplate = await prisma.template.upsert({

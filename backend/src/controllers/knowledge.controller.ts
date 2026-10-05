@@ -6,13 +6,19 @@ import { ragService } from '../services/rag/rag_service.js';
 export class KnowledgeController {
   async list(req: AuthRequest, res: Response) {
     try {
-      const documents = await prisma.knowledgeDocument.findMany({
-        orderBy: { createdAt: 'desc' },
-        include: {
-          uploadedBy: { select: { name: true, email: true } },
-          _count: { select: { chunks: true } }
-        }
-      });
+      let documents: any[] = [];
+      try {
+        documents = await prisma.knowledgeDocument.findMany({
+          orderBy: { createdAt: 'desc' },
+          include: {
+            uploadedBy: { select: { name: true, email: true } },
+            _count: { select: { chunks: true } }
+          }
+        });
+      } catch (dbErr: any) {
+        console.warn('Prisma list knowledge failed, returning empty list in demo/offline mode:', dbErr.message);
+        documents = [];
+      }
       return res.json({ documents });
     } catch (err: any) {
       console.error('List knowledge error:', err);

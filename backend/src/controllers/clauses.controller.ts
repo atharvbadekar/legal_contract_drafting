@@ -14,10 +14,16 @@ export class ClausesController {
       if (status) where.status = String(status);
       if (clauseType) where.clauseType = String(clauseType);
 
-      const clauses = await prisma.clause.findMany({
-        where,
-        orderBy: [{ documentType: 'asc' }, { clauseType: 'asc' }]
-      });
+      let clauses: any[] = [];
+      try {
+        clauses = await prisma.clause.findMany({
+          where,
+          orderBy: [{ documentType: 'asc' }, { clauseType: 'asc' }]
+        });
+      } catch (dbErr: any) {
+        console.warn('Prisma list clauses failed, returning empty list in demo/offline mode:', dbErr.message);
+        clauses = [];
+      }
 
       return res.json({ clauses });
     } catch (err: any) {

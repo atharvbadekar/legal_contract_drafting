@@ -30,6 +30,15 @@ export const Register: React.FC = () => {
     setTimeout(() => setConfigSuccess(''), 4000);
   };
 
+  const handleResetLocal = () => {
+    localStorage.removeItem('atharv_api_url');
+    localStorage.removeItem('mira_api_url');
+    setApiUrl('/api');
+    setConfigSuccess('✓ Switched to local backend proxy (/api)');
+    setError('');
+    setTimeout(() => setConfigSuccess(''), 4000);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -98,6 +107,14 @@ export const Register: React.FC = () => {
                   className="px-3 py-1.5 bg-mira-primary hover:bg-mira-accent text-white rounded text-xs font-semibold shadow-2xs whitespace-nowrap"
                 >
                   Save & Connect
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResetLocal}
+                  className="px-2.5 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded text-xs font-semibold whitespace-nowrap"
+                  title="Use local backend proxy (/api)"
+                >
+                  Local (/api)
                 </button>
               </div>
               {configSuccess && (

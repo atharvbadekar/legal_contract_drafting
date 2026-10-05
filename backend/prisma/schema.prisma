@@ -59,7 +59,8 @@ model Document {
   userId            String
   user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   title             String
-  documentType      String             // NDA, LEGAL_NOTICE
+  documentType      String             // NDA, LEGAL_NOTICE, EMPLOYMENT, etc.
+  contractTypeCode  String             @default("NDA")
   status            DocumentStatus     @default(DRAFT)
   generationMode    GenerationMode     @default(MIRA)
   structuredFacts   Json               @default("{}")
@@ -92,12 +93,17 @@ model DocumentVersion {
 }
 
 model DocumentType {
-  id          String     @id @default(uuid())
-  code        String     @unique // NDA, LEGAL_NOTICE
-  name        String
-  description String
-  createdAt   DateTime   @default(now())
-  templates   Template[]
+  id           String     @id @default(uuid())
+  code         String     @unique // NDA, LEGAL_NOTICE, EMPLOYMENT, etc.
+  name         String
+  description  String
+  category     String     @default("COMMERCIAL")
+  isActive     Boolean    @default(true)
+  version      String     @default("1.0")
+  schemaJson   Json       @default("{}")
+  ontologyJson Json       @default("[]")
+  createdAt    DateTime   @default(now())
+  templates    Template[]
 
   @@map("document_types")
 }
@@ -132,20 +138,37 @@ model TemplateSection {
 }
 
 model Clause {
-  id           String                   @id @default(uuid())
-  title        String
-  documentType String                   // NDA, LEGAL_NOTICE
-  clauseType   String                   // confidentiality, remedies, etc.
-  content      String                   @db.Text
-  jurisdiction String                   @default("India")
-  status       ClauseStatus             @default(DRAFT)
-  version      Int                      @default(1)
-  source       String?
-  embedding    Unsupported("vector(384)")?
-  createdAt    DateTime                 @default(now())
-  updatedAt    DateTime                 @updatedAt
+  id            String                   @id @default(uuid())
+  clauseCode    String?
+  title         String
+  documentType  String                   // NDA, LEGAL_NOTICE, etc.
+  clauseType    String                   // confidentiality, remedies, etc.
+  category      String                   @default("GENERAL")
+  requiredLevel String                   @default("RECOMMENDED")
+  content       String                   @db.Text
+  jurisdiction  String                   @default("India")
+  status        ClauseStatus             @default(DRAFT)
+  version       Int                      @default(1)
+  source        String?
+  embedding     Unsupported("vector(384)")?
+  variants      ClauseVariant[]
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt
 
   @@map("clauses")
+}
+
+model ClauseVariant {
+  id          String   @id @default(uuid())
+  clauseId    String
+  clause      Clause   @relation(fields: [clauseId], references: [id], onDelete: Cascade)
+  variantKey  String
+  name        String
+  content     String   @db.Text
+  riskLevel   String   @default("LOW")
+  createdAt   DateTime @default(now())
+
+  @@map("clause_variants")
 }
 
 model KnowledgeDocument {

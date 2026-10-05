@@ -78,7 +78,7 @@ npm run dev
 Execute the complete automated test suites:
 
 ```bash
-# Backend test suite (32/32 tests pass)
+# Backend test suite (46/46 tests pass across 5 test suites)
 cd backend
 npm test
 
@@ -90,3 +90,49 @@ cd ../services/legal-nlp
 cd ../frontend
 npm run build
 ```
+
+---
+
+## 5. Cloud Deployment & Working Links
+
+Atharv Legal AI is architected for seamless cloud deployment on Render (Backend & NLP services) and Vercel (Frontend application).
+
+### 5.1 Repository
+- **GitHub Repository**: [https://github.com/atharvbadekar/legal_contract_drafting](https://github.com/atharvbadekar/legal_contract_drafting)
+- **Primary Branch**: `main`
+
+### 5.2 Frontend Deployment (Vercel)
+- **Deployment Platform**: [Vercel](https://vercel.com)
+- **Root Directory**: `frontend`
+- **Framework Preset**: Vite
+- **Build Command**: `npm run build`
+- **Output Directory**: `dist`
+- **Environment Variables**:
+  - `VITE_API_URL`: Your Render Backend URL (e.g. `https://atharv-legal-ai-backend.onrender.com/api`)
+
+### 5.3 Backend API Deployment (Render)
+- **Deployment Platform**: [Render](https://render.com)
+- **Service Type**: Web Service (Node)
+- **Root Directory**: `backend`
+- **Build Command**: `npm install && npm run build && npx prisma generate`
+- **Start Command**: `npm start`
+- **Environment Variables**:
+  - `PORT`: `5000`
+  - `NODE_ENV`: `production`
+  - `JWT_SECRET`: `<secure-jwt-secret>`
+  - `DATABASE_URL`: Your PostgreSQL connection string (e.g., Neon or Render PostgreSQL with `pgvector`)
+  - `LEGAL_NLP_URL`: Your Render Legal NLP Service URL (optional, defaults to local fallback)
+  - `FRONTEND_URL`: Your Vercel frontend URL (e.g. `https://atharv-legal-ai.vercel.app`)
+
+### 5.4 10 Supported Contract Generation Types
+1. **Non-Disclosure Agreement (NDA)** — Mutual & Unilateral
+2. **Employment Agreement** — Full-time, Part-time, & Contract
+3. **Master Service Agreement (MSA)** — Deliverables, Milestones & Retainers
+4. **SaaS Subscription Agreement** — Tiers, SLA, & Uptime Guarantees
+5. **Independent Consulting Agreement** — Retainers, Hourly & IP Assignment
+6. **Memorandum of Understanding (MOU)** — Institutional Partnerships
+7. **Vendor / Procurement Agreement** — Supply, Warranties & Indemnification
+8. **Partnership Agreement** — Profit-sharing & Governance
+9. **Internship Agreement** — Stipend, Mentorship & Confidentiality
+10. **Statutory Legal Notice** — Recovery & Compliance Notice
+

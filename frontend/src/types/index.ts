@@ -7,10 +7,80 @@ export interface User {
   role: UserRole;
 }
 
-export type DocumentType = 'NDA' | 'LEGAL_NOTICE';
+export type DocumentType = 'NDA' | 'LEGAL_NOTICE' | 'EMPLOYMENT' | 'SERVICE' | 'SAAS' | 'CONSULTING' | 'MOU' | 'VENDOR' | 'PARTNERSHIP' | 'INTERNSHIP' | 'LEASE' | string;
 export type DocumentStatus = 'DRAFT' | 'VALIDATING' | 'COMPLETED' | 'NEEDS_REVIEW';
 export type GenerationMode = 'BASELINE' | 'MIRA';
 export type ClauseStatus = 'DRAFT' | 'APPROVED' | 'ARCHIVED';
+
+export type FieldType = 'text' | 'textarea' | 'date' | 'select' | 'multiselect' | 'toggle' | 'number' | 'email' | 'phone';
+export type RequiredLevel = 'REQUIRED' | 'RECOMMENDED' | 'OPTIONAL';
+
+export interface QuestionnaireField {
+  key: string;
+  label: string;
+  type: FieldType;
+  required: RequiredLevel;
+  placeholder?: string;
+  helpText?: string;
+  options?: Array<{ value: string; label: string }>;
+  section: string;
+  defaultValue?: any;
+  dependsOn?: { field: string; value: any };
+}
+
+export interface OntologyCategory {
+  categoryKey: string;
+  name: string;
+  description: string;
+  required: boolean;
+  order: number;
+}
+
+export interface ContractTypeSummary {
+  code: string;
+  name: string;
+  description: string;
+  version: string;
+  jurisdiction: string;
+  icon: string;
+  color: string;
+  category: string;
+  isActive: boolean;
+  isFullyFunctional: boolean;
+  fieldsCount: number;
+  categoriesCount: number;
+}
+
+export interface ContractTypeSchema {
+  code: string;
+  name: string;
+  description: string;
+  version: string;
+  jurisdiction: string;
+  isFullyFunctional: boolean;
+  ontologyCategories: OntologyCategory[];
+  questionnaire: QuestionnaireField[];
+  requiredFacts: string[];
+  optionalFacts: string[];
+}
+
+export interface LintError {
+  id: string;
+  code: 'UNRESOLVED_PLACEHOLDER' | 'EMPTY_SECTION' | 'BROKEN_CROSS_REFERENCE' | 'MISSING_SIGNATURE_BLOCK' | 'TOO_SHORT_DOCUMENT';
+  message: string;
+  severity: 'ERROR' | 'WARNING';
+  line?: number;
+  section?: string;
+  snippet?: string;
+  suggestion?: string;
+}
+
+export interface LintResult {
+  valid: boolean;
+  errorsCount: number;
+  warningsCount: number;
+  errors: LintError[];
+}
 
 export interface DocumentLocation {
   sectionId?: string;

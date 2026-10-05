@@ -1,9 +1,20 @@
-import { Document, Paragraph, TextRun, HeadingLevel, AlignmentType, BorderStyle, Table, TableRow, TableCell, WidthType, Packer } from 'docx';
+import {
+  Document,
+  Paragraph,
+  TextRun,
+  HeadingLevel,
+  AlignmentType,
+  Header,
+  Footer,
+  PageNumber,
+  Packer
+} from 'docx';
 import PDFDocument from 'pdfkit';
 
 export class ExportService {
   /**
-   * Generates a professionally styled DOCX document.
+   * Generates a professionally styled legal DOCX document.
+   * Includes running header, dynamic page footer, and legal heading typography.
    */
   async generateDocx(title: string, content: string): Promise<Buffer> {
     const lines = content.split('\n');
@@ -15,7 +26,7 @@ export class ExportService {
         text: title.toUpperCase(),
         heading: HeadingLevel.TITLE,
         alignment: AlignmentType.CENTER,
-        spacing: { before: 200, after: 400 }
+        spacing: { before: 240, after: 400 }
       })
     );
 
@@ -49,6 +60,21 @@ export class ExportService {
             spacing: { before: 240, after: 120 }
           })
         );
+      } else if (line.startsWith('### ')) {
+        docChildren.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: line.replace('### ', ''),
+                bold: true,
+                italics: true,
+                size: 22 // 11pt
+              })
+            ],
+            heading: HeadingLevel.HEADING_3,
+            spacing: { before: 180, after: 100 }
+          })
+        );
       } else if (line.startsWith('---')) {
         docChildren.push(
           new Paragraph({
@@ -66,7 +92,7 @@ export class ExportService {
                 size: 22 // 11pt
               })
             ],
-            spacing: { after: 140 },
+            spacing: { after: 140, line: 276 },
             alignment: AlignmentType.JUSTIFIED
           })
         );
@@ -86,6 +112,54 @@ export class ExportService {
               }
             }
           },
+          headers: {
+            default: new Header({
+              children: [
+                new Paragraph({
+                  alignment: AlignmentType.RIGHT,
+                  children: [
+                    new TextRun({
+                      text: title.toUpperCase(),
+                      size: 16,
+                      color: '888888',
+                      italics: true
+                    })
+                  ]
+                })
+              ]
+            })
+          },
+          footers: {
+            default: new Footer({
+              children: [
+                new Paragraph({
+                  alignment: AlignmentType.CENTER,
+                  children: [
+                    new TextRun({
+                      text: 'Atharv Legal AI — Safe Multi-Contract Legal Intelligence  |  Page ',
+                      size: 16,
+                      color: '888888'
+                    }),
+                    new TextRun({
+                      children: [PageNumber.CURRENT],
+                      size: 16,
+                      color: '888888'
+                    }),
+                    new TextRun({
+                      text: ' of ',
+                      size: 16,
+                      color: '888888'
+                    }),
+                    new TextRun({
+                      children: [PageNumber.TOTAL_PAGES],
+                      size: 16,
+                      color: '888888'
+                    })
+                  ]
+                })
+              ]
+            })
+          },
           children: docChildren
         }
       ]
@@ -96,12 +170,14 @@ export class ExportService {
 
   /**
    * Generates a clean, professionally formatted legal PDF document.
+   * Includes running header, dynamic page footer with page numbers, and legal typography.
    */
   async generatePdf(title: string, content: string): Promise<Buffer> {
     return new Promise((resolve, reject) => {
       const doc = new PDFDocument({
         margin: 54, // 0.75 inch
-        size: 'A4'
+        size: 'A4',
+        bufferPages: true
       });
       const buffers: Buffer[] = [];
 
@@ -134,12 +210,16 @@ export class ExportService {
           doc.moveDown(0.8);
           doc.font('Helvetica-Bold').fontSize(12).text(line.replace('## ', ''));
           doc.moveDown(0.4);
+        } else if (line.startsWith('### ')) {
+          doc.moveDown(0.6);
+          doc.font('Helvetica-BoldOblique').fontSize(11).text(line.replace('### ', ''));
+          doc.moveDown(0.3);
         } else if (line.startsWith('---')) {
           doc.moveDown(0.5);
           doc.strokeColor('#cccccc').lineWidth(1).moveTo(54, doc.y).lineTo(540, doc.y).stroke();
           doc.moveDown(0.5);
         } else {
-          doc.font('Helvetica').fontSize(10.5).text(line, {
+          doc.font('Helvetica').fontSize(10).text(line, {
             align: 'justify',
             lineGap: 2
           });
@@ -147,12 +227,29 @@ export class ExportService {
         }
       }
 
-      // Legal disclaimer footer
-      doc.moveDown(2);
-      doc.font('Helvetica-Oblique').fontSize(8).fillColor('#666666').text(
-        'Generated via Atharv Legal AI Document Drafting & Validation System. Informational research output — subject to qualified legal review.',
-        { align: 'center' }
-      );
+      // Add running headers & footers across all buffered pages
+      const range = doc.bufferedPageRange();
+      for (let i = 0; i < range.count; i++) {
+        doc.switchToPage(i);
+
+        // Running Header on pages after page 1
+        if (i > 0) {
+          doc.font('Helvetica-Oblique').fontSize(8).fillColor('#888888').text(
+            title.toUpperCase(),
+            54,
+            24,
+            { width: doc.page.width - 108, align: 'right' }
+          );
+        }
+
+        // Running Footer on all pages
+        doc.font('Helvetica').fontSize(8).fillColor('#777777').text(
+          `Atharv Legal AI — Safe Multi-Contract Legal Intelligence  |  Page ${i + 1} of ${range.count}`,
+          54,
+          doc.page.height - 36,
+          { width: doc.page.width - 108, align: 'center' }
+        );
+      }
 
       doc.end();
     });

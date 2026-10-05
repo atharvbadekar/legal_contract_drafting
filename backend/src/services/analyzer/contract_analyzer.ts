@@ -161,62 +161,113 @@ export class ContractAnalyzer {
   }
 
   /**
-   * Zero-dependency fallback PDF text stream extractor
+   * Zero-dependency robust PDF text stream extractor
    */
   fallbackPdfExtract(buffer: Buffer): string {
-    const content = buffer.toString('binary');
-    const streamRegex = /stream[\r\n]+([\s\S]*?)[\r\n]+endstream/g;
-    let match;
-    const textChunks: string[] = [];
+    const streamMarker = Buffer.from('stream');
+    const endStreamMarker = Buffer.from('endstream');
+    const textBlocks: string[] = [];
 
-    while ((match = streamRegex.exec(content)) !== null) {
-      const rawStream = Buffer.from(match[1], 'binary');
+    let pos = 0;
+    while (pos < buffer.length) {
+      const sIdx = buffer.indexOf(streamMarker, pos);
+      if (sIdx === -1) break;
+
+      let dataStart = sIdx + 6;
+      if (buffer[dataStart] === 0x0d && buffer[dataStart + 1] === 0x0a) dataStart += 2;
+      else if (buffer[dataStart] === 0x0a || buffer[dataStart] === 0x0d) dataStart += 1;
+
+      const eIdx = buffer.indexOf(endStreamMarker, dataStart);
+      if (eIdx === -1) break;
+
+      let dataEnd = eIdx;
+      if (buffer[dataEnd - 2] === 0x0d && buffer[dataEnd - 1] === 0x0a) dataEnd -= 2;
+      else if (buffer[dataEnd - 1] === 0x0a || buffer[dataEnd - 1] === 0x0d) dataEnd -= 1;
+
+      const streamData = buffer.subarray(dataStart, dataEnd);
       let decompressed: Buffer | null = null;
       try {
-        decompressed = zlib.inflateSync(rawStream);
+        decompressed = zlib.inflateSync(streamData);
       } catch {
         try {
-          decompressed = zlib.inflateRawSync(rawStream);
+          decompressed = zlib.inflateRawSync(streamData);
         } catch {
-          decompressed = rawStream;
+          decompressed = streamData;
         }
       }
 
       if (decompressed) {
         const streamText = decompressed.toString('latin1');
-        const btRegex = /BT[\s\S]*?ET/g;
+        const btRegex = /BT([\s\S]*?)ET/g;
         let btMatch;
         while ((btMatch = btRegex.exec(streamText)) !== null) {
-          const block = btMatch[0];
-          const strRegex = /\(([^)]*)\)\s*(?:Tj|'|")/g;
-          let strMatch;
-          while ((strMatch = strRegex.exec(block)) !== null) {
-            textChunks.push(strMatch[1]);
+          const body = btMatch[1];
+          let lineAcc = '';
+
+          // 1. Handle TJ array operators: [ ... ] TJ
+          const tjRegex = /\[([\s\S]*?)\]\s*TJ/g;
+          let tjMatch;
+          let hasTJ = false;
+          while ((tjMatch = tjRegex.exec(body)) !== null) {
+            hasTJ = true;
+            const inner = tjMatch[1];
+            const tokenRegex = /<([0-9a-fA-F]+)>|\(([^)]*)\)|(-?\d+(?:\.\d+)?)/g;
+            let tok;
+            while ((tok = tokenRegex.exec(inner)) !== null) {
+              if (tok[1] !== undefined) {
+                // Hex-encoded string
+                const hex = tok[1];
+                try {
+                  lineAcc += Buffer.from(hex, 'hex').toString('utf8');
+                } catch {
+                  lineAcc += Buffer.from(hex, 'hex').toString('latin1');
+                }
+              } else if (tok[2] !== undefined) {
+                // Literal string
+                lineAcc += tok[2].replace(/\\([()\\])/g, '$1').replace(/\\n/g, '\n');
+              } else if (tok[3] !== undefined) {
+                const num = parseFloat(tok[3]);
+                if (num <= -150) {
+                  lineAcc += ' ';
+                }
+              }
+            }
+            lineAcc += '\n';
           }
 
-          const arrayRegex = /\[([\s\S]*?)\]\s*TJ/g;
-          let arrMatch;
-          while ((arrMatch = arrayRegex.exec(block)) !== null) {
-            const inner = arrMatch[1];
-            const innerStrRegex = /\(([^)]*)\)/g;
-            let inMatch;
-            while ((inMatch = innerStrRegex.exec(inner)) !== null) {
-              textChunks.push(inMatch[1]);
+          // 2. Handle single string Tj / ' / " operators
+          if (!hasTJ) {
+            const strRegex = /(?:\(([^)]*)\)|<([0-9a-fA-F]+)>)\s*(?:Tj|'|")/g;
+            let sMatch;
+            while ((sMatch = strRegex.exec(body)) !== null) {
+              if (sMatch[1] !== undefined) {
+                lineAcc += sMatch[1].replace(/\\([()\\])/g, '$1').replace(/\\n/g, '\n') + ' ';
+              } else if (sMatch[2] !== undefined) {
+                try {
+                  lineAcc += Buffer.from(sMatch[2], 'hex').toString('utf8') + ' ';
+                } catch {
+                  lineAcc += Buffer.from(sMatch[2], 'hex').toString('latin1') + ' ';
+                }
+              }
             }
+          }
+
+          if (lineAcc.trim().length > 0) {
+            textBlocks.push(lineAcc.trim());
           }
         }
       }
+
+      pos = eIdx + 9;
     }
 
-    if (textChunks.length === 0) {
-      return buffer.toString('utf-8').replace(/[^\x20-\x7E\n\r\t]/g, ' ').trim();
+    if (textBlocks.length === 0) {
+      // Fallback: search for readable text strings if no compressed BT/ET matched
+      const raw = buffer.toString('utf-8').replace(/[^\x20-\x7E\n\r\t]/g, ' ').replace(/\s+/g, ' ').trim();
+      return raw;
     }
 
-    return textChunks
-      .map(t => t.replace(/\\([()\\])/g, '$1').replace(/\\n/g, '\n'))
-      .join(' ')
-      .replace(/\s+/g, ' ')
-      .trim();
+    return textBlocks.join('\n\n');
   }
 
   /**
