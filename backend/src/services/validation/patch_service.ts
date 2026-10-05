@@ -45,9 +45,12 @@ export class PatchService {
     }
 
     // ==========================================
-    // 1. DURATION MISMATCH (SAFE AUTO FIX)
+    // 1. DURATION MISMATCH OR MISSING (SAFE AUTO FIX)
     // ==========================================
-    if (issueType === 'FACT_MISMATCH' && (section.toLowerCase().includes('duration') || desc.toLowerCase().includes('duration'))) {
+    if (
+      (issueType === 'FACT_MISMATCH' || issueType === 'MISSING_REQUIRED_FIELD') &&
+      (section.toLowerCase().includes('duration') || desc.toLowerCase().includes('duration') || (issue.field && issue.field.toLowerCase().includes('duration')))
+    ) {
       const factDuration = structuredFacts.duration || '3 years';
       const docMatch = content.match(/(\d+)\s*(?:years?|months?)/i);
       const targetSnippet = docMatch ? docMatch[0] : 'duration term';
@@ -70,29 +73,69 @@ export class PatchService {
     }
 
     // ==========================================
-    // 2. PARTY NAME MISMATCH (SAFE AUTO FIX)
+    // 2. PARTY NAME MISMATCH OR MISSING (SAFE AUTO FIX)
     // ==========================================
-    if (issueType === 'FACT_MISMATCH' && (section.toLowerCase().includes('part') || desc.toLowerCase().includes('party') || desc.toLowerCase().includes('disclosing') || desc.toLowerCase().includes('receiving'))) {
-      const isDisclosing = desc.toLowerCase().includes('disclosing');
+    if (
+      (issueType === 'FACT_MISMATCH' || issueType === 'MISSING_REQUIRED_FIELD') &&
+      (section.toLowerCase().includes('part') || desc.toLowerCase().includes('party') || desc.toLowerCase().includes('disclosing') || desc.toLowerCase().includes('receiving') || (issue.field && issue.field.toLowerCase().includes('party')))
+    ) {
+      const isDisclosing = desc.toLowerCase().includes('disclosing') || (issue.field && issue.field.toLowerCase().includes('disclosing'));
       const canonicalName = isDisclosing
         ? (structuredFacts.disclosingParty?.name || structuredFacts.disclosingParty || 'Disclosing Party Inc.')
         : (structuredFacts.receivingParty?.name || structuredFacts.receivingParty || 'Receiving Party LLC');
 
       const targetWord = isDisclosing ? 'Disclosing Party' : 'Receiving Party';
-      const located = locateTextInDocument(content, targetWord, 'Parties');
+      
+      let targetSnippet = targetWord;
+      if (isDisclosing) {
+        const discMatch = content.match(/(?:the\s+undersigned\s+)?Disclosing\s+Party/i);
+        if (discMatch) targetSnippet = discMatch[0];
+      } else {
+        const recMatch = content.match(/(?:the\s+receiving\s+(?:company|party)|Receiving\s+Party)/i);
+        if (recMatch) targetSnippet = recMatch[0];
+      }
+
+      const located = locateTextInDocument(content, targetSnippet, 'Parties');
 
       return {
         id: `patch_party_${Date.now()}`,
         issueId: issue.id || issue.issueId || 'det_party',
         action: 'REPLACE_TEXT',
         target: located.location,
-        originalText: targetWord,
+        originalText: targetSnippet,
         replacementText: `${canonicalName} ("${targetWord}")`,
         reason: `Binds authoritative registered corporate entity '${canonicalName}' to establish legal privity.`,
         preserve: ['dates', 'duration', 'governing law'],
         canAutoFix: true,
         mode: 'SAFE_AUTO',
         confidence: 0.96,
+        requiresUserInput: false
+      };
+    }
+
+    // ==========================================
+    // 2b. EFFECTIVE DATE MISSING (SAFE AUTO FIX)
+    // ==========================================
+    if (
+      (issueType === 'FACT_MISMATCH' || issueType === 'MISSING_REQUIRED_FIELD') &&
+      (section.toLowerCase().includes('date') || desc.toLowerCase().includes('date') || (issue.field && issue.field.toLowerCase().includes('date')))
+    ) {
+      const dateVal = structuredFacts.effectiveDate || new Date().toISOString().split('T')[0];
+      const dateMatch = content.match(/dated\s+as\s+of|as\s+of|entered\s+into\s+on|entered\s+into\s+as\s+of/i);
+      const targetSnippet = dateMatch ? dateMatch[0] : 'entered into';
+      const located = locateTextInDocument(content, targetSnippet, 'Parties');
+
+      return {
+        id: `patch_date_${Date.now()}`,
+        issueId: issue.id || issue.issueId || 'det_date',
+        action: 'REPLACE_TEXT',
+        target: located.location,
+        originalText: targetSnippet,
+        replacementText: `${targetSnippet} ${dateVal} ("Effective Date")`,
+        reason: `Inserts formal effective date '${dateVal}' into agreement preamble.`,
+        canAutoFix: true,
+        mode: 'SAFE_AUTO',
+        confidence: 0.95,
         requiresUserInput: false
       };
     }

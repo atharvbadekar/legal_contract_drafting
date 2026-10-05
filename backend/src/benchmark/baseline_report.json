@@ -1,0 +1,236 @@
+{
+  "timestamp": "2026-10-05T06:29:33.896Z",
+  "qualityGate": "RED",
+  "overallScore": 70.45,
+  "summary": {
+    "totalTestCases": 44,
+    "passedCases": 31,
+    "failedCases": 13,
+    "overallAccuracy": 70.45
+  },
+  "metrics": {
+    "placeholderDetection": {
+      "tp": 10,
+      "fp": 9,
+      "tn": 1,
+      "fn": 0,
+      "precision": 52.63,
+      "recall": 100,
+      "f1": 68.97,
+      "accuracy": 55,
+      "fpr": 90,
+      "fnr": 0
+    },
+    "clauseCompleteness": {
+      "tp": 0,
+      "fp": 0,
+      "tn": 5,
+      "fn": 0,
+      "precision": 100,
+      "recall": 100,
+      "f1": 100,
+      "accuracy": 100,
+      "fpr": 0,
+      "fnr": 0
+    },
+    "contradictionDetection": {
+      "tp": 1,
+      "fp": 0,
+      "tn": 1,
+      "fn": 3,
+      "precision": 100,
+      "recall": 25,
+      "f1": 40,
+      "accuracy": 40,
+      "fpr": 0,
+      "fnr": 75
+    },
+    "riskDetection": {
+      "tp": 4,
+      "fp": 0,
+      "tn": 0,
+      "fn": 0,
+      "precision": 100,
+      "recall": 100,
+      "f1": 100,
+      "accuracy": 100,
+      "fpr": 0,
+      "fnr": 0
+    },
+    "overallContractAnalysis": {
+      "tp": 15,
+      "fp": 9,
+      "tn": 7,
+      "fn": 3,
+      "precision": 62.5,
+      "recall": 83.33,
+      "f1": 71.43,
+      "accuracy": 64.71,
+      "fpr": 56.25,
+      "fnr": 16.67
+    }
+  },
+  "factPreservationRate": 100,
+  "hallucinationRate": 0,
+  "aiFixSuccessRate": 0,
+  "negationAccuracyRate": 100,
+  "securityPromptInjectionPassRate": 100,
+  "latencyMs": {
+    "avgOverviewExtraction": 12,
+    "avgValidation": 38,
+    "avgLinting": 5,
+    "avgFullAnalysis": 1
+  },
+  "errorTaxonomy": [
+    {
+      "category": "FP_PLACEHOLDER",
+      "count": 9,
+      "description": "Falsely detected placeholder in clean contract",
+      "examples": [
+        "Complete Mutual NDA (Tech Strategic Partnership)",
+        "Complete Unilateral NDA (Fintech Evaluation)",
+        "Complete Employment Agreement (Senior Counsel)"
+      ]
+    },
+    {
+      "category": "FN_CONTRADICTION",
+      "count": 3,
+      "description": "Failed to detect real contract contradiction",
+      "examples": [
+        "Section 3 Term 2 Years vs Section 8 Indefinite/Perpetual",
+        "Effective Date January 1, 2027 vs Begins February 1, 2027",
+        "Preamble ABC Private Limited vs Signature Block XYZ Private Limited"
+      ]
+    },
+    {
+      "category": "AI_FIX_FAILURE",
+      "count": 1,
+      "description": "Failed to generate actionable fix patch",
+      "examples": [
+        "PatchService"
+      ]
+    }
+  ],
+  "failureDetails": [
+    {
+      "testId": "A1_STANDARD_MUTUAL_NDA",
+      "testName": "Complete Mutual NDA (Tech Strategic Partnership)",
+      "category": "CATEGORY_A_CORRECT",
+      "expected": "No placeholders",
+      "actual": "Placeholder flagged",
+      "divergencePoint": "Placeholder classifier incorrectly matched legitimate text or brackets",
+      "rootCause": "Over-eager regex matching citations or standard punctuation",
+      "recommendedFix": "Add exclusions for standard legal syntax and citation brackets"
+    },
+    {
+      "testId": "A2_UNILATERAL_FINTECH_NDA",
+      "testName": "Complete Unilateral NDA (Fintech Evaluation)",
+      "category": "CATEGORY_A_CORRECT",
+      "expected": "No placeholders",
+      "actual": "Placeholder flagged",
+      "divergencePoint": "Placeholder classifier incorrectly matched legitimate text or brackets",
+      "rootCause": "Over-eager regex matching citations or standard punctuation",
+      "recommendedFix": "Add exclusions for standard legal syntax and citation brackets"
+    },
+    {
+      "testId": "A3_EMPLOYMENT_AGREEMENT",
+      "testName": "Complete Employment Agreement (Senior Counsel)",
+      "category": "CATEGORY_A_CORRECT",
+      "expected": "No placeholders",
+      "actual": "Placeholder flagged",
+      "divergencePoint": "Placeholder classifier incorrectly matched legitimate text or brackets",
+      "rootCause": "Over-eager regex matching citations or standard punctuation",
+      "recommendedFix": "Add exclusions for standard legal syntax and citation brackets"
+    },
+    {
+      "testId": "A4_CONSULTING_AGREEMENT",
+      "testName": "Complete Consulting Agreement",
+      "category": "CATEGORY_A_CORRECT",
+      "expected": "No placeholders",
+      "actual": "Placeholder flagged",
+      "divergencePoint": "Placeholder classifier incorrectly matched legitimate text or brackets",
+      "rootCause": "Over-eager regex matching citations or standard punctuation",
+      "recommendedFix": "Add exclusions for standard legal syntax and citation brackets"
+    },
+    {
+      "testId": "A5_SAAS_SUBSCRIPTION_AGREEMENT",
+      "testName": "Complete SaaS Subscription Agreement",
+      "category": "CATEGORY_A_CORRECT",
+      "expected": "No placeholders",
+      "actual": "Placeholder flagged",
+      "divergencePoint": "Placeholder classifier incorrectly matched legitimate text or brackets",
+      "rootCause": "Over-eager regex matching citations or standard punctuation",
+      "recommendedFix": "Add exclusions for standard legal syntax and citation brackets"
+    },
+    {
+      "testId": "A6_VENDOR_AGREEMENT",
+      "testName": "Complete Vendor Supply Agreement",
+      "category": "CATEGORY_A_CORRECT",
+      "expected": "No placeholders",
+      "actual": "Placeholder flagged",
+      "divergencePoint": "Placeholder classifier incorrectly matched legitimate text or brackets",
+      "rootCause": "Over-eager regex matching citations or standard punctuation",
+      "recommendedFix": "Add exclusions for standard legal syntax and citation brackets"
+    },
+    {
+      "testId": "A7_PARTNERSHIP_DEED",
+      "testName": "Complete Partnership Agreement",
+      "category": "CATEGORY_A_CORRECT",
+      "expected": "No placeholders",
+      "actual": "Placeholder flagged",
+      "divergencePoint": "Placeholder classifier incorrectly matched legitimate text or brackets",
+      "rootCause": "Over-eager regex matching citations or standard punctuation",
+      "recommendedFix": "Add exclusions for standard legal syntax and citation brackets"
+    },
+    {
+      "testId": "A8_COMMERCIAL_LEASE",
+      "testName": "Complete Commercial Lease Agreement",
+      "category": "CATEGORY_A_CORRECT",
+      "expected": "No placeholders",
+      "actual": "Placeholder flagged",
+      "divergencePoint": "Placeholder classifier incorrectly matched legitimate text or brackets",
+      "rootCause": "Over-eager regex matching citations or standard punctuation",
+      "recommendedFix": "Add exclusions for standard legal syntax and citation brackets"
+    },
+    {
+      "testId": "A9_MEMORANDUM_OF_UNDERSTANDING",
+      "testName": "Complete Academic Research MOU",
+      "category": "CATEGORY_A_CORRECT",
+      "expected": "No placeholders",
+      "actual": "Placeholder flagged",
+      "divergencePoint": "Placeholder classifier incorrectly matched legitimate text or brackets",
+      "rootCause": "Over-eager regex matching citations or standard punctuation",
+      "recommendedFix": "Add exclusions for standard legal syntax and citation brackets"
+    },
+    {
+      "testId": "F1_TERM_DURATION_CONTRADICTION",
+      "testName": "Section 3 Term 2 Years vs Section 8 Indefinite/Perpetual",
+      "category": "CATEGORY_F_CONTRADICTION",
+      "expected": "Contradiction detected",
+      "actual": "No contradiction detected",
+      "divergencePoint": "Cross-section consistency checker",
+      "rootCause": "System lacks cross-section term vs indefinite, date chronology, or party mismatch check",
+      "recommendedFix": "Implement generalized contradiction scanner across sections"
+    },
+    {
+      "testId": "F2_DATE_INCONSISTENCY",
+      "testName": "Effective Date January 1, 2027 vs Begins February 1, 2027",
+      "category": "CATEGORY_F_CONTRADICTION",
+      "expected": "Contradiction detected",
+      "actual": "No contradiction detected",
+      "divergencePoint": "Cross-section consistency checker",
+      "rootCause": "System lacks cross-section term vs indefinite, date chronology, or party mismatch check",
+      "recommendedFix": "Implement generalized contradiction scanner across sections"
+    },
+    {
+      "testId": "F3_PARTY_INCONSISTENCY",
+      "testName": "Preamble ABC Private Limited vs Signature Block XYZ Private Limited",
+      "category": "CATEGORY_F_CONTRADICTION",
+      "expected": "Contradiction detected",
+      "actual": "No contradiction detected",
+      "divergencePoint": "Cross-section consistency checker",
+      "rootCause": "System lacks cross-section term vs indefinite, date chronology, or party mismatch check",
+      "recommendedFix": "Implement generalized contradiction scanner across sections"
+    }
+  ]
+}

@@ -1,6 +1,11 @@
 import { Request, Response } from 'express';
+import fs from 'fs';
+import path from 'path';
 import { prisma } from '../utils/prisma.js';
 import { inMemoryDocuments } from './documents.controller.js';
+import { benchmarkEvaluator } from '../benchmark/evaluator.js';
+
+const baseDir = typeof __dirname !== 'undefined' ? __dirname : path.resolve(process.cwd(), 'src/controllers');
 
 export class ResearchController {
   async getMetrics(req: Request, res: Response) {
@@ -126,6 +131,57 @@ export class ResearchController {
       return res.json({ runs });
     } catch (err: any) {
       return res.status(500).json({ error: 'Failed to retrieve audit logs' });
+    }
+  }
+
+  async getBenchmarkReport(req: Request, res: Response) {
+    try {
+      const benchmarkPath = path.resolve(baseDir, '../benchmark/latest_benchmark.json');
+      const baselinePath = path.resolve(baseDir, '../benchmark/baseline_report.json');
+
+      let latest: any = null;
+      let baseline: any = null;
+
+      if (fs.existsSync(benchmarkPath)) {
+        latest = JSON.parse(await fs.promises.readFile(benchmarkPath, 'utf8'));
+      } else {
+        latest = await benchmarkEvaluator.runCompleteBenchmark();
+        await fs.promises.writeFile(benchmarkPath, JSON.stringify(latest, null, 2), 'utf8');
+      }
+
+      if (fs.existsSync(baselinePath)) {
+        baseline = JSON.parse(await fs.promises.readFile(baselinePath, 'utf8'));
+      }
+
+      const improvement = (latest && baseline) ? {
+        overallScoreDelta: `+${(latest.overallScore - baseline.overallScore).toFixed(2)}%`,
+        placeholderRecallDelta: `+${(latest.metrics.placeholderDetection.recall - baseline.metrics.placeholderDetection.recall).toFixed(2)}%`,
+        placeholderPrecisionDelta: `+${(latest.metrics.placeholderDetection.precision - baseline.metrics.placeholderDetection.precision).toFixed(2)}%`,
+        contradictionRecallDelta: `+${(latest.metrics.contradictionDetection.recall - baseline.metrics.contradictionDetection.recall).toFixed(2)}%`,
+        aiFixSuccessRateDelta: `+${(latest.aiFixSuccessRate - baseline.aiFixSuccessRate).toFixed(2)}%`,
+        qualityGateTransition: `${baseline.qualityGate} ➔ ${latest.qualityGate}`
+      } : null;
+
+      return res.json({
+        latest,
+        baseline,
+        improvement
+      });
+    } catch (err: any) {
+      console.error('Benchmark report error:', err);
+      return res.status(500).json({ error: 'Failed to retrieve benchmark report' });
+    }
+  }
+
+  async runBenchmark(req: Request, res: Response) {
+    try {
+      const benchmarkPath = path.resolve(baseDir, '../benchmark/latest_benchmark.json');
+      const report = await benchmarkEvaluator.runCompleteBenchmark();
+      await fs.promises.writeFile(benchmarkPath, JSON.stringify(report, null, 2), 'utf8');
+      return res.json({ success: true, report });
+    } catch (err: any) {
+      console.error('Run benchmark error:', err);
+      return res.status(500).json({ error: 'Failed to execute benchmark' });
     }
   }
 }

@@ -424,9 +424,11 @@ export function stripTemplateInstructions(text: string): string {
     // Remove bracketed instructions: e.g. "[Specify the exact consideration...]", "[Insert payment schedule...]", "[Describe ...]"
     .replace(/\[\s*(?:specify|insert|enter|define|describe|select|choose|optional|note|tbd|to be determined|e\.g\.)\b[^\]]*\]/gi, '')
     // Remove angle bracket placeholders: e.g. "<insert ...>", "<specify ...>"
-    .replace(/<\s*(?:specify|insert|enter|define|describe)\b[^>]*>/gi, '')
+    .replace(/<\s*(?:specify|insert|enter|define|describe|[A-Za-z0-9_\-\s]{2,35})\b[^>]*>/gi, '')
     // Remove curly brace placeholders: e.g. "{insert ...}"
-    .replace(/\{\s*(?:specify|insert|enter|define|describe)\b[^}]*\}/gi, '')
+    .replace(/\{\s*(?:specify|insert|enter|define|describe|[A-Za-z0-9_\-\s]{2,35})\b[^}]*\}/gi, '')
+    // Remove bare instruction lines: e.g. "Specify the exact consideration...", "Enter the address..."
+    .replace(/^\s*(?:Specify\s+the|Enter\s+the|Insert\s+the|Provide\s+the)\s+[^\n]*$/gim, '')
     // Clean multiple consecutive blank lines
     .replace(/\n\s*\n\s*\n/g, '\n\n')
     .trim();
@@ -440,6 +442,12 @@ export function isInstructionOrPlaceholder(text: string): boolean {
   const t = text.trim();
   if (/^#{1,4}\s+/.test(t)) return false;
   if (/^\[\s*(?:specify|insert|enter|define|describe|select|optional|note|tbd|to be determined|e\.g\.)\b/i.test(t)) return true;
+  if (/^\[\s*(?:[A-Za-z0-9_\-\s]{2,40})\s*\]$/.test(t)) return true;
+  if (/^<\s*(?:[A-Za-z0-9_\-\s]{2,35})\s*>$/.test(t)) return true;
+  if (/^\{\{\s*(?:[A-Za-z0-9_\-\s]{2,35})\s*\}\}$/.test(t)) return true;
+  if (/^(?:Specify\s+the|Enter\s+the|Insert\s+the|Provide\s+the)\s+/i.test(t)) return true;
+  if (/^(?:TBD|N\/A|INSERT\s+HERE|YOUR\s+NAME)$/i.test(t)) return true;
+  if (/^_{3,}$/.test(t)) return true;
   if (/^>\s*(?:note|instructions?|guidance|prompt|tip|important|warning):?/i.test(t)) return true;
   if (/^(?:prompt(?:\s*guide)?|instructions?|guidance|drafting\s*notes?):?/i.test(t)) return true;
   if (/^<!--[\s\S]*?-->$/.test(t)) return true;

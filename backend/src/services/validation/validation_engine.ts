@@ -577,6 +577,105 @@ export class ValidationEngine {
       });
     }
 
+    // D. Fixed Term vs Indefinite / Perpetual Duration Contradiction
+    const fixedTermMatch = cleanText.match(/(?:term\s+of\s+this\s+agreement\s+is|effective\s+for\s+a\s+period\s+of|term\s+shall\s+be)\s*(\d+\s*(?:years?|months?))/i);
+    const indefiniteMatch = cleanText.match(/(?:remains\s+effective\s+indefinitely|continue\s+in\s+perpetuity|perpetual\s+duration|shall\s+not\s+expire)/i);
+    if (fixedTermMatch && indefiniteMatch) {
+      const located = locateTextInDocument(fullText, indefiniteMatch[0], 'Duration');
+      issues.push({
+        id: 'det_conflicting_term_indefinite',
+        issueId: 'det_conflicting_term_indefinite',
+        type: 'CONFLICTING_TERMS',
+        category: 'FACTUAL',
+        severity: 'HIGH',
+        section: 'Duration',
+        title: 'Conflicting Agreement Term & Indefinite Duration',
+        message: `Contradiction in agreement duration: Section specifies a fixed term of ${fixedTermMatch[1]} while another provision asserts the agreement remains effective indefinitely.`,
+        description: `Contradiction in agreement duration: Section specifies a fixed term of ${fixedTermMatch[1]} while another provision asserts the agreement remains effective indefinitely.`,
+        location: located.location,
+        evidence: `${fixedTermMatch[0]} vs ${indefiniteMatch[0]}`,
+        reason: 'Stipulating both a fixed expiration date and perpetual duration creates fatal contractual ambiguity over agreement validity.',
+        suggestion: 'Harmonize the agreement term to either the definite period or clarify that perpetual terms apply solely to survival of trade secrets.',
+        canAutoFix: false,
+        mode: 'MANUAL',
+        confidence: 0.94
+      });
+    }
+
+    // E. Conflicting Operative Dates (Commencement / Effective)
+    const datePattern = /(?:effective\s+date:?|effective\s+as\s+of|agreement\s+begins\s+on|commencing\s+on)\s*([A-Za-z]+\s+\d{1,2},?\s+\d{4}|\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+,?\s+\d{4}|\d{4}-\d{2}-\d{2})/gi;
+    const dateMatches = Array.from(cleanText.matchAll(datePattern));
+    const distinctDateStrings = Array.from(new Set(dateMatches.map(m => m[1].replace(/,/g, '').trim().toLowerCase())));
+    if (distinctDateStrings.length >= 2) {
+      const located = locateTextInDocument(fullText, dateMatches[1][0], 'Effective Date');
+      issues.push({
+        id: 'det_conflicting_effective_dates',
+        issueId: 'det_conflicting_effective_dates',
+        type: 'CONFLICTING_TERMS',
+        category: 'FACTUAL',
+        severity: 'HIGH',
+        section: 'Effective Date',
+        title: 'Conflicting Effective Dates',
+        message: `Internal inconsistency: Agreement specifies effective/commencement dates as '${dateMatches[0][1]}' and '${dateMatches[1][1]}'.`,
+        description: `Internal inconsistency: Agreement specifies effective/commencement dates as '${dateMatches[0][1]}' and '${dateMatches[1][1]}'.`,
+        location: located.location,
+        evidence: `${dateMatches[0][1]} vs ${dateMatches[1][1]}`,
+        reason: 'Discrepancies in effective commencement dates render performance benchmarks, renewal windows, and breach allegations indeterminate.',
+        suggestion: `Align the agreement to a single authoritative effective date (${dateMatches[0][1]}).`,
+        canAutoFix: false,
+        mode: 'MANUAL',
+        confidence: 0.95
+      });
+    }
+
+    // F. Conflicting Parties (Preamble vs Signature Execution Block)
+    const sigIdx = cleanText.search(/(?:in\s+witness\s+whereof|##\s*signatures?|##\s*execution|\n\s*(?:for|by)[:\s]+_{3,})/i);
+    if (sigIdx !== -1) {
+      const preambleText = cleanText.substring(0, sigIdx);
+      const signatureText = cleanText.substring(sigIdx);
+      const entityRegex = /\b([A-Z][a-zA-Z0-9&.\-']*(?:\s+[A-Z][a-zA-Z0-9&.\-']*)*\s+(?:Pvt\.?\s*Ltd\.?|Private\s+Limited|LLC|Inc\.?|LLP|Corporation|Corp\.?|Company))\b/g;
+
+      const preambleEntities: string[] = [];
+      let pe;
+      while ((pe = entityRegex.exec(preambleText)) !== null) {
+        if (!preambleEntities.includes(pe[1])) preambleEntities.push(pe[1]);
+      }
+
+      const sigEntities: string[] = [];
+      let se;
+      while ((se = entityRegex.exec(signatureText)) !== null) {
+        if (!sigEntities.includes(se[1])) sigEntities.push(se[1]);
+      }
+
+      if (preambleEntities.length >= 1 && sigEntities.length >= 1) {
+        for (const sigEnt of sigEntities) {
+          const matchesAny = preambleEntities.some(pe => pe.toLowerCase().includes(sigEnt.toLowerCase().slice(0, 6)) || sigEnt.toLowerCase().includes(pe.toLowerCase().slice(0, 6)));
+          if (!matchesAny) {
+            const located = locateTextInDocument(fullText, sigEnt, 'Signatures');
+            issues.push({
+              id: 'det_conflicting_parties_sig',
+              issueId: 'det_conflicting_parties_sig',
+              type: 'CONFLICTING_TERMS',
+              category: 'FACTUAL',
+              severity: 'HIGH',
+              section: 'Signatures',
+              title: 'Conflicting Contracting Parties',
+              message: `Internal party inconsistency: Signature block designates entity '${sigEnt}' which was not identified as a contracting party in the preamble (${preambleEntities.join(', ')}).`,
+              description: `Internal party inconsistency: Signature block designates entity '${sigEnt}' which was not identified as a contracting party in the preamble (${preambleEntities.join(', ')}).`,
+              location: located.location,
+              evidence: `${preambleEntities.join(', ')} vs ${sigEnt}`,
+              reason: 'Execution by an entity not in privity of contract creates severe enforceability and legal validity defects.',
+              suggestion: `Align the signature execution block with the designated preamble party names (${preambleEntities[0]}).`,
+              canAutoFix: false,
+              mode: 'MANUAL',
+              confidence: 0.95
+            });
+            break;
+          }
+        }
+      }
+    }
+
     // ==========================================
     // 6. MISSING PAYMENT AMOUNT
     // ==========================================
@@ -601,7 +700,8 @@ export class ValidationEngine {
       // - "each party shall bear its own expenses/fees"
       // - "without payment of any royalty or fee"
       // - "no compensation or fee is payable"
-      if (/damages\s+(?:alone\s+)?(?:would|may|shall)?\s*(?:not\s+be|be\s+inadequate)\s+compensation|inadequate\s+compensation|reasonable\s+attorney(?:'s)?\s*fees|bear\s+(?:its|their)\s+own\s+(?:costs|expenses|fees)|without\s+(?:any\s+)?(?:payment|fee|compensation|remuneration|royalty)|no\s+(?:payment|fee|compensation|remuneration|royalty)\s+shall\s+be\s+due|free\s+of\s+charge/i.test(t)) {
+      // - "no payment or consideration is required"
+      if (/damages\s+(?:alone\s+)?(?:would|may|shall)?\s*(?:not\s+be|be\s+inadequate)\s+compensation|inadequate\s+compensation|reasonable\s+attorney(?:'s)?\s*fees|bear\s+(?:its|their)\s+own\s+(?:costs|expenses|fees)|without\s+(?:any\s+)?(?:payment|fee|compensation|remuneration|royalty)|no\s+(?:payment|fee|compensation|remuneration|royalty|financial\s+consideration)\s+(?:shall\s+be\s+due|is\s+required|is\s+payable)|free\s+of\s+charge|pro\s+bono/i.test(t)) {
         continue;
       }
 

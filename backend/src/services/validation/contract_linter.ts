@@ -94,6 +94,31 @@ export function lintContract(content: string, documentType?: string): LintResult
       continue;
     }
 
+    if (/in\s+witness\s+whereof|signatures?:?|execution:?/i.test(trimmed)) {
+      currentSection = 'Execution & Signatures';
+    }
+
+    const isSignatureSection = /signature|execution|in\s+witness/i.test(currentSection);
+    const isSignatureExecutionLine =
+      isSignatureSection ||
+      /(?:by|signature|name|title|date|authorized\s*signatory|for\s+and\s+on\s+behalf\s+of|for|employee|employer|client|contractor|provider|company)[:\s]+_{3,}/i.test(trimmed) ||
+      /:\s*_{3,}/.test(trimmed);
+
+    // Bare instruction prompts e.g. "Specify the exact consideration...", "Enter the address..."
+    const bareInstructionMatch = trimmed.match(/\b(?:Specify\s+the|Enter\s+the|Insert\s+the|Provide\s+the)\s+(?:exact|party|address|amount|fee|sum|consideration|name|date|details)[^\.\n]*/i);
+    if (bareInstructionMatch) {
+      errors.push({
+        id: `lint_ph_inst_${lineNum}`,
+        code: 'UNRESOLVED_PLACEHOLDER',
+        message: `Drafting prompt instruction '${bareInstructionMatch[0]}' detected in section '${currentSection}'.`,
+        severity: 'ERROR',
+        line: lineNum,
+        section: currentSection,
+        snippet: trimmed,
+        suggestion: `Replace '${bareInstructionMatch[0]}' with authoritative contractual terms.`
+      });
+    }
+
     // Check placeholders
     for (const pattern of placeholderPatterns) {
       pattern.lastIndex = 0;
@@ -105,6 +130,11 @@ export function lintContract(content: string, documentType?: string): LintResult
         if (/^\[\s*[xX]?\s*\]$/.test(fullMatch)) continue;
         // Ignore citation or legal reference brackets e.g. [2021] 1 SCC 12
         if (/^\[\s*\d{4}\s*\]$/.test(fullMatch)) continue;
+
+        // Ignore standard signature lines
+        if (/^_{3,}$/.test(fullMatch) && isSignatureExecutionLine) {
+          continue;
+        }
 
         errors.push({
           id: `lint_ph_${lineNum}_${match.index}`,

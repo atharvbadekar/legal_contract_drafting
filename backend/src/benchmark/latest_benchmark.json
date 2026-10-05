@@ -1,0 +1,86 @@
+{
+  "timestamp": "2026-10-05T06:40:58.968Z",
+  "qualityGate": "GREEN",
+  "overallScore": 100,
+  "summary": {
+    "totalTestCases": 44,
+    "passedCases": 44,
+    "failedCases": 0,
+    "overallAccuracy": 100
+  },
+  "metrics": {
+    "placeholderDetection": {
+      "tp": 10,
+      "fp": 0,
+      "tn": 10,
+      "fn": 0,
+      "precision": 100,
+      "recall": 100,
+      "f1": 100,
+      "accuracy": 100,
+      "fpr": 0,
+      "fnr": 0
+    },
+    "clauseCompleteness": {
+      "tp": 0,
+      "fp": 0,
+      "tn": 5,
+      "fn": 0,
+      "precision": 100,
+      "recall": 100,
+      "f1": 100,
+      "accuracy": 100,
+      "fpr": 0,
+      "fnr": 0
+    },
+    "contradictionDetection": {
+      "tp": 4,
+      "fp": 0,
+      "tn": 1,
+      "fn": 0,
+      "precision": 100,
+      "recall": 100,
+      "f1": 100,
+      "accuracy": 100,
+      "fpr": 0,
+      "fnr": 0
+    },
+    "riskDetection": {
+      "tp": 4,
+      "fp": 0,
+      "tn": 0,
+      "fn": 0,
+      "precision": 100,
+      "recall": 100,
+      "f1": 100,
+      "accuracy": 100,
+      "fpr": 0,
+      "fnr": 0
+    },
+    "overallContractAnalysis": {
+      "tp": 18,
+      "fp": 0,
+      "tn": 16,
+      "fn": 0,
+      "precision": 100,
+      "recall": 100,
+      "f1": 100,
+      "accuracy": 100,
+      "fpr": 0,
+      "fnr": 0
+    }
+  },
+  "factPreservationRate": 100,
+  "hallucinationRate": 0,
+  "aiFixSuccessRate": 100,
+  "negationAccuracyRate": 100,
+  "securityPromptInjectionPassRate": 100,
+  "latencyMs": {
+    "avgOverviewExtraction": 12,
+    "avgValidation": 38,
+    "avgLinting": 5,
+    "avgFullAnalysis": 1
+  },
+  "errorTaxonomy": [],
+  "failureDetails": []
+}

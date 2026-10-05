@@ -398,6 +398,14 @@ export const researchService = {
   getAuditLogs: async () => {
     const res = await api.get<{ runs: any[] }>('/research/audit');
     return res.data.runs;
+  },
+  getBenchmark: async () => {
+    const res = await api.get<{ latest: any; baseline: any; improvement: any }>('/research/benchmark');
+    return res.data;
+  },
+  runBenchmark: async () => {
+    const res = await api.post<{ success: boolean; report: any }>('/research/benchmark/run');
+    return res.data;
   }
 };
 

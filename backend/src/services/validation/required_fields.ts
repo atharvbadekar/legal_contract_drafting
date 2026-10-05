@@ -336,9 +336,9 @@ export function detectPlaceholders(fullText: string): DetectedPlaceholder[] {
   const bracketFillPattern = /\[\s*(?:(?:insert|specify|enter|define|describe|fill\s*in)?\s*(?:party|name|disclosing|receiving|company|client|contractor|vendor|employer|employee|date|effective\s*date|commencement|address|amount|fee|sum|compensation|duration|term|jurisdiction|governing\s*law|title|representative|signatory|authorized|city|state|country|email|phone|contact)[^\]]*|tbd|to\s*be\s*determined|n\/a|unknown|unspecified|your\s*name|party\s*[ab]|company\s*name)\s*\]/gi;
 
   const genericBracketBlanks = /\[\s*(?:_{2,}|\.{3,}|\s*)\s*\]/g;
-  const standaloneAngleFill = /<\s*(?:insert|specify|enter|party|name|date|amount|company|address|jurisdiction)[^>]*>/gi;
-  const standaloneCurlyFill = /\{\s*(?:insert|specify|enter|party|name|date|amount|company|address|jurisdiction)[^}]*\}/gi;
-  const nakedKeywordFill = /\b(?:TBD|N\/A|YOUR\s+NAME|ENTER\s+PARTY\s+NAME|INSERT\s+DATE|INSERT\s+NAME|PARTY\s+A\s+NAME|PARTY\s+B\s+NAME)\b/g;
+  const standaloneAngleFill = /<\s*(?:insert|specify|enter|party|name|date|amount|company|address|jurisdiction|term)[^>]*>/gi;
+  const standaloneCurlyFill = /\{\s*(?:insert|specify|enter|party|name|date|amount|company|address|jurisdiction|term|salary)[^}]*\}/gi;
+  const nakedKeywordFill = /\b(?:TBD|N\/A|YOUR\s+NAME|ENTER\s+PARTY\s+NAME|INSERT\s+DATE|INSERT\s+NAME|PARTY\s+A\s+NAME|PARTY\s+B\s+NAME|INSERT\s+HERE)\b/g;
 
   // Generic fallback roles used as party names without entity qualification:
   // e.g. "by and between Disclosing Party and Receiving Party" with no company name
@@ -346,6 +346,9 @@ export function detectPlaceholders(fullText: string): DetectedPlaceholder[] {
 
   // Extended blank line pattern
   const extendedBlankPattern = /_{4,}/g;
+
+  // Bare instruction pattern e.g. "Specify the exact consideration", "Enter the address"
+  const bareInstructionPattern = /^(?:Specify\s+the|Enter\s+the|Insert\s+the|Provide\s+the)\s+(?:exact|party|address|amount|fee|sum|consideration|name|date|details)[^\.\n]*/i;
 
   for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
     const line = lines[lineIdx];
@@ -448,6 +451,17 @@ export function detectPlaceholders(fullText: string): DetectedPlaceholder[] {
         rawText: match[0],
         startIndex: lineStart + match.index,
         endIndex: lineStart + match.index + match[0].length,
+        lineSnippet: trimmed
+      });
+    }
+
+    // 8. Bare drafting instructions
+    const bareMatch = trimmed.match(bareInstructionPattern);
+    if (bareMatch) {
+      placeholders.push({
+        rawText: bareMatch[0],
+        startIndex: lineStart + trimmed.indexOf(bareMatch[0]),
+        endIndex: lineStart + trimmed.indexOf(bareMatch[0]) + bareMatch[0].length,
         lineSnippet: trimmed
       });
     }

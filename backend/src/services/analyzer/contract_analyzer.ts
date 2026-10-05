@@ -340,7 +340,7 @@ export class ContractAnalyzer {
 
     // Extract Parties
     const parties: ContractPartyInfo[] = [];
-    const partyRegex = /\b([A-Z][A-Za-z0-9&.,'\s]{2,45}\s+(?:Pvt\.?\s*Ltd\.?|Private\s+Limited|LLC|Inc\.?|LLP|Corporation|Corp\.?|Company|Technologies|Solutions|Enterprises))\b/g;
+    const partyRegex = /\b([A-Z][a-zA-Z0-9&.\-']*(?:\s+[A-Z][a-zA-Z0-9&.\-']*)*\s+(?:Pvt\.?\s*Ltd\.?|Private\s+Limited|LLC|Inc\.?|LLP|Corporation|Corp\.?|Company|Technologies|Solutions|Enterprises))\b/g;
     const foundNames: string[] = [];
     let pMatch;
     while ((pMatch = partyRegex.exec(text)) !== null) {
@@ -365,7 +365,7 @@ export class ContractAnalyzer {
 
     // Fallback party detection from "between X and Y"
     if (parties.length < 2) {
-      const betweenMatch = text.match(/(?:between|by\s+and\s+between)\s+([A-Z][A-Za-z0-9&.,\s]{3,50}?)\s+(?:and|with)\s+([A-Z][A-Za-z0-9&.,\s]{3,50}?)(?=[,.]|\s+dated|\s+effective|\s+having)/i);
+      const betweenMatch = text.match(/(?:between|by\s+and\s+between)\s+([A-Z][A-Za-z0-9&.,' ]{3,50}?)\s+(?:and|with)\s+([A-Z][A-Za-z0-9&.,' ]{3,50}?)(?=[,.]|\s+dated|\s+effective|\s+having)/i);
       if (betweenMatch) {
         if (!parties.some(p => p.name === betweenMatch[1].trim())) {
           parties.push({ name: betweenMatch[1].trim(), role: 'First Party' });
@@ -437,10 +437,11 @@ export class ContractAnalyzer {
   /**
    * Generates Clause Completeness Map for the contract type
    */
-  private evaluateClauseMap(text: string, contractType: string): ContractClauseMapItem[] {
+  evaluateClauseMap(content: string, contractType: string): ContractClauseMapItem[] {
+    const text = content || '';
     const lower = text.toLowerCase();
-
-    // Standard institutional clauses checklist
+    // Standard institutional clauses checklist (21 canonical categories for full legal coverage)
+    const isNDA = contractType === 'NDA' || /non-disclosure|confidentiality/i.test(contractType);
     const standardClauses: Array<{
       id: string;
       name: string;
@@ -451,66 +452,178 @@ export class ContractAnalyzer {
     }> = [
       {
         id: 'parties_preamble',
-        name: 'Parties & Recitals',
+        name: 'Parties & Preamble',
         category: 'Preamble',
         isRequired: true,
-        keywords: ['by and between', 'entered into', 'parties', 'whereas', 'recitals', 'disclosing party', 'receiving party', 'employer', 'employee'],
+        keywords: ['by and between', 'entered into', 'parties', 'disclosing party', 'receiving party', 'employer', 'employee', 'client', 'contractor'],
+        minWords: 15
+      },
+      {
+        id: 'effective_date',
+        name: 'Effective Date',
+        category: 'Preamble',
+        isRequired: true,
+        keywords: ['effective as of', 'effective date', 'dated as of', 'entered into on', 'commencing on'],
+        minWords: 5
+      },
+      {
+        id: 'recitals_purpose',
+        name: 'Recitals & Purpose',
+        category: 'Preamble',
+        isRequired: false,
+        keywords: ['whereas', 'recitals', 'purpose', 'prospective commercial', 'business discussions', 'background', 'desire to explore'],
         minWords: 15
       },
       {
         id: 'definitions',
-        name: 'Definitions & Interpretation',
+        name: 'Definition of Confidential Information',
         category: 'Interpretation',
-        isRequired: contractType === 'NDA' || contractType === 'SERVICE_AGREEMENT' || contractType === 'COMMERCIAL_CONTRACT',
-        keywords: ['definition', 'defined terms', 'shall mean', 'confidential information includes', 'for the purposes of this'],
+        isRequired: isNDA || contractType === 'SERVICE_AGREEMENT' || contractType === 'COMMERCIAL_CONTRACT',
+        keywords: ['definition', 'defined terms', 'shall mean', 'confidential information includes', 'confidential information means', 'proprietary information'],
         minWords: 20
-      },
-      {
-        id: 'core_obligations',
-        name: contractType === 'NDA' ? 'Non-Disclosure Obligations' : contractType === 'SERVICE_AGREEMENT' ? 'Scope of Services & Deliverables' : 'Core Obligations & Duties',
-        category: 'Operative',
-        isRequired: true,
-        keywords: ['shall not disclose', 'maintain in confidence', 'duty of care', 'scope of work', 'services to be performed', 'obligations of', 'shall perform', 'covenants'],
-        minWords: 25
       },
       {
         id: 'exceptions_exclusions',
         name: 'Exceptions & Carve-Outs',
         category: 'Operative',
-        isRequired: contractType === 'NDA',
-        keywords: ['exceptions', 'exclusions', 'shall not apply', 'public domain', 'prior lawful possession', 'independently developed'],
+        isRequired: isNDA,
+        keywords: ['exceptions', 'exclusions', 'shall not apply', 'public domain', 'publicly known', 'prior lawful possession', 'independently developed'],
         minWords: 20
+      },
+      {
+        id: 'core_obligations',
+        name: isNDA ? 'Non-Disclosure Obligations' : contractType === 'SERVICE_AGREEMENT' ? 'Scope of Services & Deliverables' : 'Core Obligations & Duties',
+        category: 'Operative',
+        isRequired: true,
+        keywords: ['shall not disclose', 'maintain in confidence', 'duty of care', 'reasonable care', 'strict confidence', 'scope of work', 'services to be performed', 'obligations of', 'shall perform', 'covenants'],
+        minWords: 20
+      },
+      {
+        id: 'permitted_disclosures',
+        name: 'Permitted Disclosures',
+        category: 'Operative',
+        isRequired: false,
+        keywords: ['permitted disclosure', 'need to know', 'directors, officers', 'employees and advisors', 'representatives who have a need', 'written confidentiality'],
+        minWords: 15
+      },
+      {
+        id: 'compelled_process',
+        name: 'Compelled Process / Court Order',
+        category: 'Operative',
+        isRequired: false,
+        keywords: ['compelled by', 'subpoena', 'court order', 'applicable law', 'protective order', 'administrative body', 'prior written notice to disclosing'],
+        minWords: 15
+      },
+      {
+        id: 'term_duration',
+        name: 'Term & Duration',
+        category: 'Term',
+        isRequired: true,
+        keywords: ['term of this agreement', 'effective period', 'duration of', 'in effect for a period', 'shall remain in effect for', 'term'],
+        minWords: 10
+      },
+      {
+        id: 'survival_provisions',
+        name: 'Survival of Obligations',
+        category: 'Term',
+        isRequired: false,
+        keywords: ['survival', 'survive', 'shall survive', 'trade secrets', 'following expiration or termination'],
+        minWords: 10
+      },
+      {
+        id: 'return_destruction',
+        name: 'Return or Destruction of Materials',
+        category: 'Enforcement',
+        isRequired: false,
+        keywords: ['return or destroy', 'return of materials', 'surrender', 'destroy all', 'written certification', 'upon written request', 'within seven'],
+        minWords: 15
+      },
+      {
+        id: 'remedies_injunction',
+        name: 'Remedies & Injunctive Relief',
+        category: 'Enforcement',
+        isRequired: isNDA,
+        keywords: ['remedies', 'injunctive relief', 'irreparable harm', 'damages alone', 'specific performance', 'restraining order', 'equitable relief'],
+        minWords: 15
+      },
+      {
+        id: 'governing_law',
+        name: 'Governing Law',
+        category: 'Legal',
+        isRequired: true,
+        keywords: ['governing law', 'governed by', 'laws of', 'accordance with the laws'],
+        minWords: 10
+      },
+      {
+        id: 'jurisdiction_forum',
+        name: 'Jurisdiction & Dispute Resolution',
+        category: 'Legal',
+        isRequired: false,
+        keywords: ['jurisdiction', 'courts of', 'exclusive jurisdiction', 'arbitration', 'dispute resolution', 'venue'],
+        minWords: 10
+      },
+      {
+        id: 'notices_communication',
+        name: 'Notices & Communication',
+        category: 'Formalities',
+        isRequired: false,
+        keywords: ['notices', 'deemed served', 'certified mail', 'written notice', 'addresses set forth'],
+        minWords: 10
+      },
+      {
+        id: 'assignment_sublicensing',
+        name: 'Assignment Restrictions',
+        category: 'Formalities',
+        isRequired: false,
+        keywords: ['assignment', 'assign', 'neither party may assign', 'without the prior written consent'],
+        minWords: 10
+      },
+      {
+        id: 'amendment_modification',
+        name: 'Written Amendment',
+        category: 'Formalities',
+        isRequired: false,
+        keywords: ['amendment', 'modified', 'in writing', 'signed by authorized', 'written instrument'],
+        minWords: 10
+      },
+      {
+        id: 'severability',
+        name: 'Severability',
+        category: 'Boilerplate',
+        isRequired: false,
+        keywords: ['severability', 'held invalid', 'unenforceable', 'remainder shall remain in full force'],
+        minWords: 10
+      },
+      {
+        id: 'non_waiver',
+        name: 'Non-Waiver',
+        category: 'Boilerplate',
+        isRequired: false,
+        keywords: ['waiver', 'no failure or delay', 'operate as a waiver'],
+        minWords: 10
+      },
+      {
+        id: 'entire_agreement',
+        name: 'Entire Agreement',
+        category: 'Boilerplate',
+        isRequired: false,
+        keywords: ['entire agreement', 'supersedes all prior', 'merger clause'],
+        minWords: 10
       },
       {
         id: 'consideration_payment',
         name: 'Consideration & Payment Terms',
         category: 'Commercial',
         isRequired: contractType === 'SERVICE_AGREEMENT' || contractType === 'EMPLOYMENT_AGREEMENT' || contractType === 'COMMERCIAL_CONTRACT' || contractType === 'LEASE_AGREEMENT',
-        keywords: ['consideration', 'payment', 'invoicing', 'compensation', 'salary', 'fees', 'remuneration', 'hourly rate', 'invoice'],
-        minWords: 15
-      },
-      {
-        id: 'term_termination',
-        name: 'Term, Duration & Termination',
-        category: 'Term',
-        isRequired: true,
-        keywords: ['term', 'duration', 'termination', 'terminate', 'effective period', 'notice period', 'survival'],
-        minWords: 20
+        keywords: ['consideration', 'payment', 'invoicing', 'compensation', 'salary', 'fees', 'remuneration', 'hourly rate', 'invoice', 'pro bono', 'no payment'],
+        minWords: 10
       },
       {
         id: 'intellectual_property',
         name: 'Intellectual Property Rights',
         category: 'IP & Ownership',
         isRequired: contractType === 'SERVICE_AGREEMENT' || contractType === 'EMPLOYMENT_AGREEMENT',
-        keywords: ['intellectual property', 'work for hire', 'work made for hire', 'ip rights', 'proprietary rights', 'assignment of inventions', 'ownership of deliverables'],
-        minWords: 20
-      },
-      {
-        id: 'remedies_injunction',
-        name: 'Remedies & Injunctive Relief',
-        category: 'Enforcement',
-        isRequired: contractType === 'NDA',
-        keywords: ['remedies', 'injunctive relief', 'irreparable harm', 'damages alone', 'specific performance', 'restraining order'],
+        keywords: ['intellectual property', 'work for hire', 'work made for hire', 'ip rights', 'proprietary rights', 'assignment of inventions', 'ownership of deliverables', 'remains the property of that party'],
         minWords: 15
       },
       {
@@ -519,22 +632,6 @@ export class ContractAnalyzer {
         category: 'Risk Allocation',
         isRequired: contractType === 'SERVICE_AGREEMENT' || contractType === 'COMMERCIAL_CONTRACT',
         keywords: ['limitation of liability', 'indemnif', 'hold harmless', 'consequential damages', 'liability cap', 'aggregate liability'],
-        minWords: 20
-      },
-      {
-        id: 'governing_law_dispute',
-        name: 'Governing Law & Dispute Resolution',
-        category: 'Legal',
-        isRequired: true,
-        keywords: ['governing law', 'jurisdiction', 'laws of', 'arbitration', 'courts of', 'dispute resolution'],
-        minWords: 15
-      },
-      {
-        id: 'miscellaneous_boilerplate',
-        name: 'Severability & Entire Agreement',
-        category: 'Boilerplate',
-        isRequired: false,
-        keywords: ['severability', 'entire agreement', 'counterparts', 'amendment in writing', 'waiver', 'notices'],
         minWords: 15
       },
       {
@@ -560,18 +657,16 @@ export class ContractAnalyzer {
         const idx = lower.indexOf(kw);
         if (idx !== -1) {
           matched = true;
-          // Capture surrounding snippet (approx 180 chars)
           const start = Math.max(0, idx - 20);
           const end = Math.min(text.length, idx + 160);
           matchedSnippet = text.substring(start, end).replace(/\n+/g, ' ').trim();
 
-          // Check if truncated or ambiguous
           const surrounding = text.substring(idx, Math.min(text.length, idx + 400));
           const wordCount = surrounding.split(/\s+/).length;
           if (wordCount < sc.minWords) {
             isIncomplete = true;
           }
-          if (surrounding.includes('...') || surrounding.includes('TBD') || surrounding.includes('[') || surrounding.includes('to be agreed')) {
+          if (surrounding.includes('...') || surrounding.includes('TBD') || surrounding.includes('to be agreed')) {
             isAmbiguous = true;
           }
           break;
@@ -629,14 +724,76 @@ export class ContractAnalyzer {
     };
 
     // 1. Unresolved Placeholders / Template Artifacts
-    const placeholderRegex = /(\[[A-Z\s_-]{3,35}\]|TBD|<insert[^>]*>|__________|Specify\s+the\s+exact)/gi;
-    let phMatch;
+    // Scan line by line to respect signature lines and protect valid brackets
+    const lines = text.split('\n');
     const detectedPhs: string[] = [];
-    while ((phMatch = placeholderRegex.exec(text)) !== null) {
-      if (!detectedPhs.includes(phMatch[0])) {
-        detectedPhs.push(phMatch[0]);
+    let inSigBlock = false;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmed = line.trim();
+
+      if (/^#{1,4}\s+.*(?:signature|execution)/i.test(trimmed) || /in\s+witness\s+whereof/i.test(trimmed)) {
+        inSigBlock = true;
+      }
+
+      // Check if this line is an execution line (e.g. By: _______, Date: _______, Employee: _______)
+      const isSigLine = inSigBlock ||
+        /(?:by|signature|name|title|date|authorized\s*signatory|for\s+and\s+on\s+behalf\s+of|for|employee|employer|client|contractor|provider|company)[:\s]+_{3,}/i.test(trimmed) ||
+        /:\s*_{3,}/.test(trimmed);
+
+      // (a) Bare instruction prompts e.g. "Specify the exact consideration", "Enter the address"
+      const bareInstruction = trimmed.match(/\b(?:Specify\s+the|Enter\s+the|Insert\s+the|Provide\s+the)\s+(?:exact|party|address|amount|fee|sum|consideration|name|date|details)[^\.\n]*/i);
+      if (bareInstruction && !detectedPhs.includes(bareInstruction[0])) {
+        detectedPhs.push(bareInstruction[0]);
+      }
+
+      // (b) Mixed-case bracket placeholders e.g. [Party Name], [Date], [Company Name], [Amount], [Term], [   ]
+      const bracketMatches = Array.from(line.matchAll(/\[(?![\^])([^\]\n]+)\](?!\()/g));
+      for (const bm of bracketMatches) {
+        const full = bm[0];
+        // Ignore checkbox and citations e.g. [x], [X], [2024]
+        if (/^\[\s*[xX]?\s*\]$/.test(full) || /^\[\s*\d{4}\s*\]$/.test(full)) continue;
+        if (!detectedPhs.includes(full)) {
+          detectedPhs.push(full);
+        }
+      }
+
+      // (c) Standalone angle brackets <Term>, <Amount>, <Jurisdiction>
+      const angleMatches = Array.from(line.matchAll(/<([A-Za-z0-9_\-\s]{2,35})>/g));
+      for (const am of angleMatches) {
+        if (!detectedPhs.includes(am[0])) {
+          detectedPhs.push(am[0]);
+        }
+      }
+
+      // (d) Standalone curly brackets {{company_name}}
+      const curlyMatches = Array.from(line.matchAll(/\{\{([^}\n]+)\}\}/g));
+      for (const cm of curlyMatches) {
+        if (!detectedPhs.includes(cm[0])) {
+          detectedPhs.push(cm[0]);
+        }
+      }
+
+      // (e) Naked placeholder keywords
+      const nakedMatches = Array.from(line.matchAll(/\b(?:TBD|N\/A|INSERT\s+HERE|YOUR\s+NAME|ENTER\s+PARTY\s+NAME|PARTY\s+[AB]\s+NAME)\b/g));
+      for (const nm of nakedMatches) {
+        if (!detectedPhs.includes(nm[0])) {
+          detectedPhs.push(nm[0]);
+        }
+      }
+
+      // (f) Non-signature extended blanks e.g. ________
+      if (!isSigLine) {
+        const blankMatches = Array.from(line.matchAll(/_{4,}/g));
+        for (const bl of blankMatches) {
+          if (!detectedPhs.includes(bl[0])) {
+            detectedPhs.push(bl[0]);
+          }
+        }
       }
     }
+
     if (detectedPhs.length > 0) {
       const samplePh = detectedPhs[0];
       risks.push({
@@ -656,7 +813,7 @@ export class ContractAnalyzer {
     // 2. Uncapped Liability Exposure
     if (contractType === 'SERVICE_AGREEMENT' || contractType === 'COMMERCIAL_CONTRACT') {
       const hasLiability = lower.includes('liability') || lower.includes('indemnif');
-      const hasCap = lower.includes('aggregate liability') || lower.includes('shall not exceed') || lower.includes('cap on liability') || lower.includes('limited to the total fees');
+      const hasCap = lower.includes('aggregate liability') || lower.includes('shall not exceed') || lower.includes('cap on liability') || lower.includes('limited to the total fees') || lower.includes('capped at purchase order');
       if (hasLiability && !hasCap) {
         risks.push({
           id: 'uncapped_liability',
@@ -694,7 +851,16 @@ export class ContractAnalyzer {
     // 4. Missing IP Assignment in Services Agreement
     if (contractType === 'SERVICE_AGREEMENT') {
       const hasCustomWork = lower.includes('deliverables') || lower.includes('custom software') || lower.includes('develop') || lower.includes('create');
-      const hasIpAssignment = lower.includes('work for hire') || lower.includes('work made for hire') || lower.includes('assigns all right, title and interest') || lower.includes('exclusive property of client');
+      const hasIpAssignment = lower.includes('work for hire') ||
+        lower.includes('work made for hire') ||
+        lower.includes('assigns all right, title and interest') ||
+        lower.includes('exclusive property of client') ||
+        lower.includes('exclusive property of employer') ||
+        lower.includes('remains the property of that party') ||
+        lower.includes('retains all right') ||
+        lower.includes('background intellectual property') ||
+        lower.includes('independently created');
+
       if (hasCustomWork && !hasIpAssignment) {
         risks.push({
           id: 'missing_ip_assignment',
@@ -713,8 +879,10 @@ export class ContractAnalyzer {
     // 5. Payment Obligation Without Definite Amount (Only if payment obligation exists!)
     if (contractType !== 'NDA') {
       const hasPaymentCovenant = lower.includes('shall pay') || lower.includes('agrees to pay') || lower.includes('in consideration of the services, client shall pay');
+      const hasPaymentWaiver = /no\s+(?:payment|fee|compensation|remuneration|financial\s+consideration)|without\s+(?:any\s+)?(?:payment|fee|compensation|royalty)|pro\s+bono|free\s+of\s+charge/i.test(text);
       const hasAmount = /(?:₹|\$|€|£|INR|USD|EUR)\s*[\d,]+/i.test(text) || /\b\d+\s*(?:dollars|rupees|euros)\b/i.test(text);
-      if (hasPaymentCovenant && !hasAmount) {
+
+      if (hasPaymentCovenant && !hasPaymentWaiver && !hasAmount) {
         const covenantSnippet = text.match(/[^\n.]{0,80}(?:shall\s+pay|agrees\s+to\s+pay)[^\n.]{0,80}/i);
         risks.push({
           id: 'missing_payment_amount',
@@ -756,7 +924,6 @@ export class ContractAnalyzer {
       }
     }
     for (const ref of referencedSections) {
-      // Check if this section header exists in document
       const headerPattern = new RegExp(`(?:#+\\s*(?:Section\\s+)?${ref}\\b|^\\s*${ref}\\.?\\s+[A-Z])`, 'm');
       if (!headerPattern.test(text) && ref !== '1' && ref !== '2') {
         risks.push({
@@ -803,22 +970,43 @@ export class ContractAnalyzer {
     // 1. Party Name Consistency
     let partiesMatch = true;
     if (overview.parties.length >= 2) {
-      const p1 = overview.parties[0].name.toLowerCase();
-      const p2 = overview.parties[1].name.toLowerCase();
+      const p1 = overview.parties[0].name.toLowerCase().replace(/^(?:this\s+agreement\s+is\s+entered\s+into\s+between\s+|by\s+and\s+between\s+)/i, '').trim();
+      const p2 = overview.parties[1].name.toLowerCase().replace(/^(?:this\s+agreement\s+is\s+entered\s+into\s+between\s+|by\s+and\s+between\s+)/i, '').trim();
 
-      // Check if party names appear in both preamble and signature area
-      const lastQuarter = lower.substring(Math.floor(lower.length * 0.75));
-      const p1InEnd = lastQuarter.includes(p1.slice(0, 8));
-      const p2InEnd = lastQuarter.includes(p2.slice(0, 8));
+      // Check if signature block designates contradictory foreign entities
+      const sigIndex = text.search(/(?:in\s+witness\s+whereof|##\s*signatures?|##\s*execution|\n\s*(?:for|by)[:\s]+_{3,})/i);
+      const sigText = sigIndex !== -1 ? text.substring(sigIndex) : text.substring(Math.floor(text.length * 0.70));
+      const hasSigContext = /in\s+witness\s+whereof|signatures?|execution|\n\s*(?:for|by|employee|employer)[:\s]+_{3,}/i.test(sigText);
 
-      if (!p1InEnd && !p2InEnd && lastQuarter.includes('signature')) {
-        partiesMatch = false;
-        findings.push(`Party names "${overview.parties[0].name}" or "${overview.parties[1].name}" do not clearly recur in the signature execution block.`);
+      if (hasSigContext) {
+        // Scan for explicitly named corporate entities in signature execution block
+        const sigParties = sigText.match(/(?:for|on\s+behalf\s+of|by:)\s*([A-Z][a-zA-Z0-9&.\-']*(?:\s+[A-Z][a-zA-Z0-9&.\-']*)*\s+(?:Pvt\.?\s*Ltd\.?|Private\s+Limited|LLC|Inc\.?|LLP|Corporation|Corp\.?|Company))/gi) || [];
+        for (const sp of sigParties) {
+          const cleanSp = sp.replace(/^(?:for|on\s+behalf\s+of|by:)\s*/i, '').trim().toLowerCase();
+          const matchesP1 = p1.includes(cleanSp.slice(0, 6)) || cleanSp.includes(p1.slice(0, 6));
+          const matchesP2 = p2.includes(cleanSp.slice(0, 6)) || cleanSp.includes(p2.slice(0, 6));
+
+          if (!matchesP1 && !matchesP2) {
+            partiesMatch = false;
+            findings.push(`Party discrepancy: Signature execution block designates foreign entity "${sp.replace(/^(?:for|on\s+behalf\s+of|by:)\s*/i, '').trim()}" not established in preamble parties.`);
+            break;
+          }
+        }
       }
     }
 
-    // 2. Date Chronology
+    // 2. Date Chronology & Date Consistency
     let dateChronologyValid = true;
+
+    // Check for multiple conflicting effective/commencement dates in plain English
+    const effectiveDateMatches = Array.from(text.matchAll(/(?:effective\s+date:?|effective\s+as\s+of|agreement\s+begins\s+on|commencing\s+on)\s*([A-Za-z]+\s+\d{1,2},?\s+\d{4}|\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+,?\s+\d{4}|\d{4}-\d{2}-\d{2})/gi));
+    const distinctDates = Array.from(new Set(effectiveDateMatches.map(m => m[1].replace(/,/g, '').trim().toLowerCase())));
+    if (distinctDates.length >= 2) {
+      dateChronologyValid = false;
+      findings.push(`Conflicting operative dates: Agreement specifies effective/commencement dates as '${effectiveDateMatches[0][1]}' and '${effectiveDateMatches[1][1]}'.`);
+    }
+
+    // ISO dates chronology check
     const allDates = text.match(/\b\d{4}-\d{2}-\d{2}\b/g) || [];
     if (allDates.length >= 2 && allDates[0] && allDates[1]) {
       const d1 = new Date(allDates[0]);
@@ -829,7 +1017,14 @@ export class ContractAnalyzer {
       }
     }
 
-    // 3. Defined Terms
+    // 3. Term Duration Contradiction (Fixed Term vs Indefinite/Perpetual)
+    const fixedTermMatch = text.match(/(?:term\s+of\s+this\s+agreement\s+is|effective\s+for\s+a\s+period\s+of|term\s+shall\s+be)\s*(\d+\s*(?:years?|months?))/i);
+    const indefiniteMatch = text.match(/(?:remains\s+effective\s+indefinitely|continue\s+in\s+perpetuity|perpetual\s+duration|shall\s+not\s+expire)/i);
+    if (fixedTermMatch && indefiniteMatch) {
+      findings.push(`Term duration contradiction: Section specifies fixed term of ${fixedTermMatch[1]} while another provision asserts the agreement remains effective indefinitely.`);
+    }
+
+    // 4. Defined Terms Consistency
     let definedTermsConsistent = true;
     const definedTermsMatches = text.match(/"([A-Z][A-Za-z\s]{2,30})"\s*(?:means|shall mean|refers to)/g) || [];
     if (definedTermsMatches.length > 0) {
