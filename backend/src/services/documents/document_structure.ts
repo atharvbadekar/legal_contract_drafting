@@ -1,3 +1,5 @@
+import { findNormalizedMatch, normalizeForMatching } from '../../utils/text_normalizer';
+
 /**
  * ATHARV Legal AI - Structured Document Engine
  * Parses raw legal markdown into a hierarchical, addressable model (Sections -> Paragraphs -> Ranges),
@@ -34,12 +36,21 @@ export interface StructuredDocument {
 export interface DocumentLocation {
   sectionId?: string;
   sectionTitle?: string;
+  sectionIndex?: number;
   clauseId?: string;
   paragraphId?: string;
+  paragraphIndex?: number;
   textRange?: {
     start: number;
     end: number;
   };
+  contextBefore?: string;
+  contextAfter?: string;
+  isMissing?: boolean;
+  insertionOffset?: number;
+  insertionAnchor?: string;
+  locationConfidence?: number;
+  nature?: 'DEFECTIVE_TEXT' | 'MISSING_CLAUSE' | 'MISSING_FIELD' | 'PLACEHOLDER' | 'STRUCTURAL';
 }
 
 export interface DocumentPatch {
@@ -91,12 +102,16 @@ export function parseDocumentStructure(content: string): StructuredDocument {
 
   for (let sIdx = 0; sIdx < rawBlocks.length; sIdx++) {
     const rawBlock = rawBlocks[sIdx];
-    const sectionStart = fullText.indexOf(rawBlock, globalOffset);
-    const sectionEnd = sectionStart + rawBlock.length;
-    globalOffset = sectionEnd;
+    const rawStart = fullText.indexOf(rawBlock, globalOffset);
+    globalOffset = rawStart + rawBlock.length;
+
+    const trimmedContent = rawBlock.trim();
+    const leadingWhitespaceLen = rawBlock.length - rawBlock.trimStart().length;
+    const sectionStart = rawStart + leadingWhitespaceLen;
+    const sectionEnd = sectionStart + trimmedContent.length;
 
     // Detect section heading
-    const lines = rawBlock.trim().split('\n');
+    const lines = trimmedContent.split('\n');
     const headingLine = lines.find(l => /^#{1,3}\s+/.test(l.trim()));
     const title = headingLine ? headingLine.replace(/^#{1,3}\s+/, '').trim() : `Section ${sIdx + 1}`;
     const sectionType = title.toLowerCase().replace(/[^a-z0-9]/g, '_');
@@ -105,7 +120,7 @@ export function parseDocumentStructure(content: string): StructuredDocument {
     const paragraphs: DocumentParagraph[] = [];
 
     // Parse paragraphs within section
-    const rawParagraphs = rawBlock.split(/\n\s*\n+/);
+    const rawParagraphs = trimmedContent.split(/\n\s*\n+/);
     let pOffset = sectionStart;
 
     for (let pIdx = 0; pIdx < rawParagraphs.length; pIdx++) {
@@ -131,7 +146,7 @@ export function parseDocumentStructure(content: string): StructuredDocument {
       order: sIdx,
       title,
       sectionType,
-      content: rawBlock.trim(),
+      content: trimmedContent,
       startIndex: sectionStart,
       endIndex: sectionEnd,
       paragraphs
@@ -147,13 +162,102 @@ export function parseDocumentStructure(content: string): StructuredDocument {
 }
 
 /**
+ * Identifies the logical insertion point in a document for a missing clause or section.
+ */
+export function findLogicalInsertionPoint(
+  content: string,
+  clauseTypeOrTitle: string,
+  parsedDoc?: StructuredDocument
+): { insertionOffset: number; anchorTitle: string } {
+  const doc = parsedDoc || parseDocumentStructure(content);
+  const normalizedTarget = (clauseTypeOrTitle || '').toLowerCase();
+
+  // 1. Parties / Preamble / Effective Date items belong in the preamble/parties block
+  if (
+    normalizedTarget.includes('party') ||
+    normalizedTarget.includes('parties') ||
+    normalizedTarget.includes('date') ||
+    normalizedTarget.includes('preamble')
+  ) {
+    const preambleSec = doc.sections.find(s =>
+      /preamble|parties|between/i.test(s.title) || s.sectionType === 'PREAMBLE'
+    );
+    if (preambleSec) {
+      return {
+        insertionOffset: preambleSec.endIndex,
+        anchorTitle: preambleSec.title
+      };
+    }
+    const firstSec = doc.sections[0];
+    if (firstSec && firstSec.paragraphs.length > 0) {
+      return {
+        insertionOffset: firstSec.paragraphs[0].endIndex,
+        anchorTitle: firstSec.title
+      };
+    }
+  }
+
+  // 2. Definitions / Scope items belong after preamble
+  if (normalizedTarget.includes('definition') || normalizedTarget.includes('scope') || normalizedTarget.includes('purpose')) {
+    const preambleIdx = doc.sections.findIndex(s => /preamble|parties/i.test(s.title) || s.sectionType === 'PREAMBLE');
+    if (preambleIdx !== -1 && doc.sections[preambleIdx]) {
+      return {
+        insertionOffset: doc.sections[preambleIdx].endIndex,
+        anchorTitle: doc.sections[preambleIdx].title
+      };
+    }
+  }
+
+  // 3. Execution / Signatures items belong at the very end
+  if (normalizedTarget.includes('signature') || normalizedTarget.includes('execution') || normalizedTarget.includes('witness')) {
+    return {
+      insertionOffset: content.length,
+      anchorTitle: 'End of Document (Execution & Signatures)'
+    };
+  }
+
+  // 4. General clauses: insert before the Signature / Execution block if it exists
+  const sigSec = doc.sections.find(s =>
+    /signature|execution|in\s+witness/i.test(s.title) ||
+    /in\s+witness\s+whereof/i.test(s.content)
+  );
+  if (sigSec) {
+    return {
+      insertionOffset: sigSec.startIndex,
+      anchorTitle: `Before ${sigSec.title}`
+    };
+  }
+
+  // 5. Fallback: before the last section or end of document
+  if (doc.sections.length > 1) {
+    const lastSec = doc.sections[doc.sections.length - 1];
+    return {
+      insertionOffset: lastSec.startIndex,
+      anchorTitle: `Before ${lastSec.title}`
+    };
+  }
+
+  return {
+    insertionOffset: content.length,
+    anchorTitle: 'End of Document'
+  };
+}
+
+/**
  * Locates a text token, phrase, or pattern within the structured document,
  * identifying the exact sectionId, paragraphId, and character boundaries.
+ * Uses normalized matching to tolerate quotes/dashes/whitespace variations,
+ * and extracts surrounding context to disambiguate repeated phrases.
  */
 export function locateTextInDocument(
   content: string,
   targetTokenOrPattern: string | RegExp,
-  preferredSectionKeyword?: string
+  preferredSectionKeyword?: string,
+  options?: {
+    contextBefore?: string;
+    contextAfter?: string;
+    nature?: 'DEFECTIVE_TEXT' | 'MISSING_CLAUSE' | 'MISSING_FIELD' | 'PLACEHOLDER' | 'STRUCTURAL';
+  }
 ): {
   location: DocumentLocation;
   evidence: string;
@@ -162,78 +266,165 @@ export function locateTextInDocument(
   const doc = parseDocumentStructure(content);
 
   // 1. If preferred section specified, search within matching section first
+  let targetSec: DocumentSection | undefined;
   if (preferredSectionKeyword) {
-    const targetSec = doc.sections.find(s =>
+    targetSec = doc.sections.find(s =>
       s.title.toLowerCase().includes(preferredSectionKeyword.toLowerCase()) ||
       s.sectionType.toLowerCase().includes(preferredSectionKeyword.toLowerCase())
     );
+  }
 
-    if (targetSec) {
-      for (const p of targetSec.paragraphs) {
-        const match = findMatchInText(p.text, targetTokenOrPattern);
-        if (match) {
-          const absoluteStart = p.startIndex + match.start;
-          const absoluteEnd = p.startIndex + match.end;
+  // 2. Perform normalized matching if target is a string
+  if (typeof targetTokenOrPattern === 'string') {
+    const cleanToken = targetTokenOrPattern.trim();
+    if (cleanToken.length > 0) {
+      // 2a. If preferred section exists, search within it first
+      if (targetSec) {
+        const secMatch = findNormalizedMatch(targetSec.content, cleanToken, {
+          contextBefore: options?.contextBefore,
+          contextAfter: options?.contextAfter
+        });
+        if (secMatch) {
+          const absStart = targetSec.startIndex + secMatch.start;
+          const absEnd = targetSec.startIndex + secMatch.end;
+          const p = targetSec.paragraphs.find(para => absStart >= para.startIndex && absEnd <= para.endIndex) ||
+            targetSec.paragraphs.find(para => absStart >= para.startIndex && absStart <= para.endIndex) ||
+            targetSec.paragraphs[0];
+
+          const ctxBefore = content.substring(Math.max(0, absStart - 40), absStart);
+          const ctxAfter = content.substring(absEnd, Math.min(content.length, absEnd + 40));
+
           return {
             location: {
               sectionId: targetSec.id,
               sectionTitle: targetSec.title,
+              sectionIndex: targetSec.order,
+              paragraphId: p?.id,
+              paragraphIndex: p?.order,
+              textRange: { start: absStart, end: absEnd },
+              contextBefore: ctxBefore,
+              contextAfter: ctxAfter,
+              locationConfidence: secMatch.confidence,
+              nature: options?.nature || 'DEFECTIVE_TEXT',
+              isMissing: false
+            },
+            evidence: secMatch.matchSnippet,
+            found: true
+          };
+        }
+      }
+
+      // 2b. Global search with context disambiguation
+      const globalMatch = findNormalizedMatch(content, cleanToken, {
+        contextBefore: options?.contextBefore,
+        contextAfter: options?.contextAfter,
+        searchRange: targetSec ? { start: targetSec.startIndex, end: targetSec.endIndex } : undefined
+      });
+
+      if (globalMatch) {
+        const absStart = globalMatch.start;
+        const absEnd = globalMatch.end;
+
+        const sec = doc.sections.find(s => absStart >= s.startIndex && absStart <= s.endIndex) || doc.sections[0];
+        const p = sec?.paragraphs.find(para => absStart >= para.startIndex && absEnd <= para.endIndex) ||
+          sec?.paragraphs.find(para => absStart >= para.startIndex && absStart <= para.endIndex);
+
+        const ctxBefore = content.substring(Math.max(0, absStart - 40), absStart);
+        const ctxAfter = content.substring(absEnd, Math.min(content.length, absEnd + 40));
+
+        return {
+          location: {
+            sectionId: sec?.id,
+            sectionTitle: sec?.title,
+            sectionIndex: sec?.order,
+            paragraphId: p?.id,
+            paragraphIndex: p?.order,
+            textRange: { start: absStart, end: absEnd },
+            contextBefore: ctxBefore,
+            contextAfter: ctxAfter,
+            locationConfidence: globalMatch.confidence,
+            nature: options?.nature || 'DEFECTIVE_TEXT',
+            isMissing: false
+          },
+          evidence: globalMatch.matchSnippet,
+          found: true
+        };
+      }
+    }
+  } else {
+    // 3. Regular Expression search
+    if (targetSec) {
+      for (const p of targetSec.paragraphs) {
+        const match = findMatchInText(p.text, targetTokenOrPattern);
+        if (match) {
+          const absStart = p.startIndex + match.start;
+          const absEnd = p.startIndex + match.end;
+          return {
+            location: {
+              sectionId: targetSec.id,
+              sectionTitle: targetSec.title,
+              sectionIndex: targetSec.order,
               paragraphId: p.id,
-              textRange: { start: absoluteStart, end: absoluteEnd }
+              paragraphIndex: p.order,
+              textRange: { start: absStart, end: absEnd },
+              contextBefore: content.substring(Math.max(0, absStart - 40), absStart),
+              contextAfter: content.substring(absEnd, Math.min(content.length, absEnd + 40)),
+              locationConfidence: 0.95,
+              nature: options?.nature || 'DEFECTIVE_TEXT',
+              isMissing: false
             },
             evidence: extractSentenceOrLine(p.text, match.start, match.end),
             found: true
           };
         }
       }
+    }
 
-      // If token not matched inside section, return the section paragraph
-      if (targetSec.paragraphs.length > 0) {
-        const firstP = targetSec.paragraphs[0];
-        return {
-          location: {
-            sectionId: targetSec.id,
-            sectionTitle: targetSec.title,
-            paragraphId: firstP.id,
-            textRange: { start: firstP.startIndex, end: firstP.endIndex }
-          },
-          evidence: firstP.text.slice(0, 160),
-          found: true
-        };
+    for (const s of doc.sections) {
+      for (const p of s.paragraphs) {
+        const match = findMatchInText(p.text, targetTokenOrPattern);
+        if (match) {
+          const absStart = p.startIndex + match.start;
+          const absEnd = p.startIndex + match.end;
+          return {
+            location: {
+              sectionId: s.id,
+              sectionTitle: s.title,
+              sectionIndex: s.order,
+              paragraphId: p.id,
+              paragraphIndex: p.order,
+              textRange: { start: absStart, end: absEnd },
+              contextBefore: content.substring(Math.max(0, absStart - 40), absStart),
+              contextAfter: content.substring(absEnd, Math.min(content.length, absEnd + 40)),
+              locationConfidence: 0.9,
+              nature: options?.nature || 'DEFECTIVE_TEXT',
+              isMissing: false
+            },
+            evidence: extractSentenceOrLine(p.text, match.start, match.end),
+            found: true
+          };
+        }
       }
     }
   }
 
-  // 2. Global search across all paragraphs
-  for (const s of doc.sections) {
-    for (const p of s.paragraphs) {
-      const match = findMatchInText(p.text, targetTokenOrPattern);
-      if (match) {
-        const absoluteStart = p.startIndex + match.start;
-        const absoluteEnd = p.startIndex + match.end;
-        return {
-          location: {
-            sectionId: s.id,
-            sectionTitle: s.title,
-            paragraphId: p.id,
-            textRange: { start: absoluteStart, end: absoluteEnd }
-          },
-          evidence: extractSentenceOrLine(p.text, match.start, match.end),
-          found: true
-        };
-      }
-    }
-  }
+  // 4. NOT FOUND: Do NOT invent a location or evidence!
+  const insertion = findLogicalInsertionPoint(
+    content,
+    preferredSectionKeyword || (typeof targetTokenOrPattern === 'string' ? targetTokenOrPattern : 'General'),
+    doc
+  );
 
-  // 3. Fallback: Beginning of document
   return {
     location: {
-      sectionId: doc.sections[0]?.id || 'sec_0',
-      sectionTitle: doc.sections[0]?.title || 'Document Header',
-      paragraphId: doc.sections[0]?.paragraphs[0]?.id || 'sec_0_p_0',
-      textRange: { start: 0, end: Math.min(content.length, 100) }
+      sectionTitle: insertion.anchorTitle,
+      isMissing: true,
+      insertionOffset: insertion.insertionOffset,
+      insertionAnchor: insertion.anchorTitle,
+      locationConfidence: 0.85,
+      nature: options?.nature || (preferredSectionKeyword ? 'MISSING_CLAUSE' : 'MISSING_FIELD')
     },
-    evidence: content.slice(0, 100),
+    evidence: '',
     found: false
   };
 }
@@ -290,21 +481,14 @@ export function applyDocumentPatch(
       matchIdx = directIdx;
       matchLen = cleanOrig.length;
     } else {
-      // Try case-insensitive search
-      const lowerContent = currentContent.toLowerCase();
-      const lowerOrig = cleanOrig.toLowerCase();
-      const lowerIdx = lowerContent.indexOf(lowerOrig);
-      if (lowerIdx !== -1) {
-        matchIdx = lowerIdx;
-        matchLen = cleanOrig.length;
-      } else {
-        // Try regex with whitespace tolerance
-        const escaped = cleanOrig.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
-        const regexMatch = currentContent.match(new RegExp(escaped, 'i'));
-        if (regexMatch && regexMatch.index !== undefined) {
-          matchIdx = regexMatch.index;
-          matchLen = regexMatch[0].length;
-        }
+      const normMatch = findNormalizedMatch(currentContent, cleanOrig, {
+        contextBefore: target?.contextBefore,
+        contextAfter: target?.contextAfter,
+        searchRange: target?.textRange
+      });
+      if (normMatch) {
+        matchIdx = normMatch.start;
+        matchLen = normMatch.end - normMatch.start;
       }
     }
 

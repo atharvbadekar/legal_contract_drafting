@@ -21,6 +21,9 @@ export interface ValidationFinding extends ValidationIssue {
   description: string; // for backward compatibility
   location: DocumentLocation;
   evidence: string;
+  isMissing?: boolean;
+  deduplicationKey?: string;
+  nature?: 'DEFECTIVE_TEXT' | 'MISSING_CLAUSE' | 'MISSING_FIELD' | 'PLACEHOLDER' | 'STRUCTURAL';
   reason: string;
   suggestion: string;
   canAutoFix: boolean;
@@ -33,6 +36,12 @@ export interface ValidationFinding extends ValidationIssue {
 export interface ComprehensiveValidationResult {
   overallScore: number;
   status: 'PASSED' | 'NEEDS_REVIEW' | 'FAILED';
+  scoreBreakdown?: {
+    baseScore: number;
+    deductions: Array<{ category: string; points: number; reason: string }>;
+    capsApplied: string[];
+    finalScore: number;
+  };
   summaryCounts: {
     passedChecks: number;
     needsAttention: number;
@@ -149,7 +158,7 @@ export class ValidationEngine {
 
     // Add deterministic issues first
     for (const issue of deterministicIssues) {
-      const normSection = (issue.section || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const normSection = (issue.section || '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]/g, '');
       const key = `${issue.type}_${normSection}_${(issue.title || '').toLowerCase()}`;
       if (!seenIssueKeys.has(key)) {
         seenIssueKeys.add(key);
@@ -162,7 +171,7 @@ export class ValidationEngine {
 
     // Add BERT issues if not already covered
     for (const issue of legalBertIssues) {
-      const normSection = (issue.section || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const normSection = (issue.section || '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]/g, '');
       const isDuplicateMissing = issue.type === 'MISSING_SECTION' && (
         seenMissingSections.has(normSection) ||
         Array.from(seenMissingSections).some(s => s.includes(normSection) || normSection.includes(s))
@@ -213,29 +222,112 @@ export class ValidationEngine {
     const semanticConsistency = Math.max(25, Math.min(100, Math.round(bertScore - (conflictingTermsCount * 15))));
     const legalKnowledgeSupport = approvedClauses.length > 0 ? 95 : 85;
 
-    // Dynamic Composite Score Calculation
-    // Base 100 with penalties for detected issues:
-    // HIGH: -18, MEDIUM: -5, LOW: -2
-    const totalPenalty = (highSeverityCount * 18) + (medSeverityCount * 5) + (lowSeverityCount * 2);
-    let calculatedScore = Math.max(15, Math.min(100, 100 - totalPenalty));
+    // Score Deduplication: Group findings by root subject/entity
+    // to prevent penalizing multiple times for the same underlying omission
+    const defectGroups = new Map<string, ValidationFinding[]>();
+    for (const issue of allIssues) {
+      const explicitKey = (issue as any).deduplicationKey || '';
+      const normSec = (issue.section || '').toLowerCase();
+      const normTitle = (issue.title || '').toLowerCase();
+      const normCombined = `${explicitKey} ${normSec} ${normTitle} ${issue.type}`.toLowerCase();
 
-    // HARD CAP RULES:
-    // A document with missing required information, placeholders, or high-severity defects
-    // must NEVER receive ~100% or be marked as passed.
-    if (highSeverityCount >= 4) {
+      let gKey = '';
+      if (normCombined.includes('govern') || normCombined.includes('jurisdiction')) gKey = 'group_governing_law';
+      else if (normCombined.includes('party') || issue.type === 'PARTY_MISMATCH') gKey = 'group_parties';
+      else if (normCombined.includes('date') || issue.type === 'DATE_CHRONOLOGY_ERROR') gKey = 'group_dates';
+      else if (normCombined.includes('purpose')) gKey = 'group_purpose';
+      else if (normCombined.includes('confidential') || normCombined.includes('non_disclosure') || normCombined.includes('non-disclosure')) gKey = 'group_confidentiality';
+      else if (normCombined.includes('payment') || normCombined.includes('fee') || normCombined.includes('consideration')) gKey = 'group_payment';
+      else if (normCombined.includes('signature') || normCombined.includes('execution')) gKey = 'group_signatures';
+      else if (normCombined.includes('return') || normCombined.includes('destruct')) gKey = 'group_return_materials';
+      else if (normCombined.includes('remed') || normCombined.includes('injunct')) gKey = 'group_remedies';
+      else if (normCombined.includes('exception') || normCombined.includes('exclusion')) gKey = 'group_exceptions';
+      else if (normCombined.includes('permitted')) gKey = 'group_permitted_disclosures';
+      else if (normCombined.includes('term') || normCombined.includes('duration') || normCombined.includes('survival')) gKey = 'group_term';
+      else if (normCombined.includes('liability') || normCombined.includes('indemn')) gKey = 'group_liability';
+      else if (normCombined.includes('notice_period') || normCombined.includes('notice timeframe')) gKey = 'group_notice_period';
+      else if (issue.type === 'UNRESOLVED_PLACEHOLDER') gKey = 'group_placeholders';
+      else gKey = explicitKey || `group_${issue.id || issue.type}`;
+
+      if (!defectGroups.has(gKey)) {
+        defectGroups.set(gKey, []);
+      }
+      defectGroups.get(gKey)!.push(issue);
+    }
+
+    let deduplicatedHighCount = 0;
+    let deduplicatedMedCount = 0;
+    let deduplicatedLowCount = 0;
+    let totalDeduction = 0;
+    const scoreDeductions: Array<{ category: string; points: number; reason: string }> = [];
+
+    defectGroups.forEach((issuesInGroup, groupKey) => {
+      const hasHigh = issuesInGroup.some(i => i.severity === 'HIGH');
+      const hasMed = issuesInGroup.some(i => i.severity === 'MEDIUM');
+      const hasLow = issuesInGroup.some(i => i.severity === 'LOW');
+
+      let groupPoints = 0;
+      const primaryIssue = issuesInGroup.find(i => i.severity === 'HIGH') || issuesInGroup[0];
+      const primaryReason = primaryIssue?.title || groupKey;
+
+      if (hasHigh) {
+        deduplicatedHighCount++;
+        groupPoints = 18;
+        scoreDeductions.push({
+          category: 'High Severity Defect',
+          points: groupPoints,
+          reason: primaryReason
+        });
+      } else if (hasMed) {
+        deduplicatedMedCount++;
+        groupPoints = 4;
+        scoreDeductions.push({
+          category: 'Medium Severity Defect',
+          points: groupPoints,
+          reason: primaryReason
+        });
+      } else if (hasLow) {
+        deduplicatedLowCount++;
+        groupPoints = 1;
+        scoreDeductions.push({
+          category: 'Minor / Low Severity Item',
+          points: groupPoints,
+          reason: primaryReason
+        });
+      }
+
+      totalDeduction += groupPoints;
+    });
+
+    // Base score is 98 for clean documents (never claim 100% automated perfection)
+    const baseScore = 98;
+    let calculatedScore = Math.max(15, Math.min(98, baseScore - totalDeduction));
+    const capsApplied: string[] = [];
+
+    // HARD CAP RULES based on deduplicated defect groups:
+    if (deduplicatedHighCount >= 4) {
       calculatedScore = Math.min(calculatedScore, 35);
-    } else if (highSeverityCount >= 2) {
+      capsApplied.push('Score capped at 35% due to 4+ high-severity defect groups');
+    } else if (deduplicatedHighCount >= 2) {
       calculatedScore = Math.min(calculatedScore, 55);
-    } else if (highSeverityCount === 1) {
+      capsApplied.push('Score capped at 55% due to multiple high-severity defect groups');
+    } else if (deduplicatedHighCount === 1) {
       calculatedScore = Math.min(calculatedScore, 74);
+      capsApplied.push('Score capped at 74% due to high-severity defect');
     }
 
     const overallScore = calculatedScore;
+    const scoreBreakdown = {
+      baseScore,
+      deductions: scoreDeductions,
+      capsApplied,
+      finalScore: overallScore
+    };
 
     let status: 'PASSED' | 'NEEDS_REVIEW' | 'FAILED' = 'PASSED';
-    if (overallScore < 30 || highSeverityCount >= 5) {
+    if (overallScore < 30 || deduplicatedHighCount >= 4) {
       status = 'FAILED';
-    } else if (highSeverityCount > 0 || medSeverityCount > 2 || overallScore < 80) {
+    } else if (deduplicatedHighCount > 0 || deduplicatedMedCount > 2 || overallScore < 80) {
       status = 'NEEDS_REVIEW';
     } else {
       status = 'PASSED';
@@ -247,6 +339,7 @@ export class ValidationEngine {
     return {
       overallScore,
       status,
+      scoreBreakdown,
       summaryCounts: {
         passedChecks,
         needsAttention: medSeverityCount + lowSeverityCount,
@@ -701,7 +794,7 @@ export class ValidationEngine {
       // - "without payment of any royalty or fee"
       // - "no compensation or fee is payable"
       // - "no payment or consideration is required"
-      if (/damages\s+(?:alone\s+)?(?:would|may|shall)?\s*(?:not\s+be|be\s+inadequate)\s+compensation|inadequate\s+compensation|reasonable\s+attorney(?:'s)?\s*fees|bear\s+(?:its|their)\s+own\s+(?:costs|expenses|fees)|without\s+(?:any\s+)?(?:payment|fee|compensation|remuneration|royalty)|no\s+(?:payment|fee|compensation|remuneration|royalty|financial\s+consideration)\s+(?:shall\s+be\s+due|is\s+required|is\s+payable)|free\s+of\s+charge|pro\s+bono/i.test(t)) {
+      if (/damages\s+(?:alone\s+)?(?:would|may|shall)?\s*(?:not\s+be|be\s+inadequate)\s+compensation|inadequate\s+compensation|reasonable\s+attorney(?:'s)?\s*fees|bear\s+(?:its|their)\s+own\s+(?:costs|expenses|fees)|without\s+(?:any\s+)?(?:payment|fee|compensation|remuneration|royalty)|no\s+(?:payment|fee|compensation|remuneration|royalty|financial\s+consideration)(?:\s+or\s+(?:payment|fee|compensation|remuneration|consideration))?\s+(?:shall\s+be\s+due|is\s+required|is\s+payable|is\s+due)|free\s+of\s+charge|pro\s+bono/i.test(t)) {
         continue;
       }
 
@@ -716,12 +809,15 @@ export class ValidationEngine {
       }
     }
 
+    // Check for express affirmative waiver of payment/consideration
+    const hasExpressPaymentWaiver = /(?:no\s+(?:payment|fee|compensation|remuneration|financial\s+consideration)(?:\s+or\s+(?:payment|fee|compensation|remuneration|consideration))?\s+(?:shall\s+be\s+due|is\s+required|is\s+payable|is\s+due)|free\s+of\s+charge|pro\s+bono|without\s+(?:any\s+)?(?:payment|fee|compensation)\s+(?:being\s+due|required)?)/i.test(cleanText);
+
     // Determine if payment check should trigger:
     // For NDA: Only if facts specify an amount OR an affirmative payment covenant actually exists in text
     // For Services / Consulting: If affirmative payment covenant exists without an amount, OR if facts specify payment, OR if a payment section exists without an amount
-    const shouldCheckPayment = isNDA
+    const shouldCheckPayment = !hasExpressPaymentWaiver && (isNDA
       ? (hasFactAmount || !!affirmativePaymentClause)
-      : (isServicesOrConsulting || hasFactAmount || !!affirmativePaymentClause);
+      : (isServicesOrConsulting || hasFactAmount || !!affirmativePaymentClause));
 
     if (shouldCheckPayment && !hasNumericAmount && !hasFactAmount) {
       const paymentSec = sections.find(s =>
@@ -844,7 +940,7 @@ export class ValidationEngine {
 
     if (!isExcludedFromIPCheck) {
       const commissionsCustomWork = /(?:shall\s*(?:create|develop|author|deliver|provide|build)\s*(?:custom\s*)?(?:software|deliverables|work\s*product|source\s*code|inventions)|custom\s*software\s*modules|deliverables\s*and\s*deliverables|commissioned\s*work)\b/i.test(cleanText);
-      const definesOwnership = /hereby\s*assigns|exclusive\s*property\s*of|sole\s*and\s*exclusive\s*owner|retains\s*all\s*right|all\s*rights.*shall\s*belong|work\s*(?:made\s*)?for\s*hire|ownership\s*of\s*(?:ip|intellectual\s*property|deliverables)|assignment\s*of\s*rights|title\s*and\s*interest\s*in/i.test(cleanText);
+      const definesOwnership = /hereby\s*assigns|exclusive\s*property\s*of|sole\s*and\s*exclusive\s*owner|retains\s*all\s*right|all\s*rights.*shall\s*belong|work\s*(?:made\s*)?for\s*hire|ownership\s*of\s*(?:ip|intellectual\s*property|deliverables)|assignment\s*of\s*rights|title\s*and\s*interest\s*in|remains\s+the\s+property\s+of|independently\s+created|no\s+intellectual\s+property\s+is\s+transferred|no\s+transfer\s+of\s+intellectual\s+property|retains\s+ownership|independent\s+ip/i.test(cleanText);
 
       if (commissionsCustomWork && !definesOwnership) {
         const located = locateTextInDocument(fullText, /custom software|deliverables|work product|inventions/i, 'Intellectual Property');

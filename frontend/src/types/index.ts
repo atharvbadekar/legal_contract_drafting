@@ -85,14 +85,23 @@ export interface LintResult {
 export interface DocumentLocation {
   sectionId?: string;
   sectionTitle?: string;
+  sectionIndex?: number;
   clauseId?: string;
   paragraphId?: string;
+  paragraphIndex?: number;
   startOffset?: number;
   endOffset?: number;
   textRange?: {
     start: number;
     end: number;
   };
+  contextBefore?: string;
+  contextAfter?: string;
+  isMissing?: boolean;
+  insertionOffset?: number;
+  insertionAnchor?: string;
+  nature?: string;
+  locationConfidence?: number;
 }
 
 export interface DocumentPatch {
@@ -122,6 +131,9 @@ export interface ValidationIssue {
   description: string;
   location?: DocumentLocation;
   evidence?: string;
+  isMissing?: boolean;
+  nature?: string;
+  deduplicationKey?: string;
   reason?: string;
   suggestion?: string;
   canAutoFix?: boolean;

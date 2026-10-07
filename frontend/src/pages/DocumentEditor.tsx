@@ -28,6 +28,7 @@ import {
   Search,
   RotateCcw,
   Zap,
+  Plus,
   PlusCircle,
   Bold,
   Italic,
@@ -39,6 +40,7 @@ import {
   BookOpen,
   Lightbulb
 } from 'lucide-react';
+import { findNormalizedMatch, normalizeForMatching } from '../utils/textNormalizer';
 
 const CLAUSE_LIBRARY: { title: string; category: string; text: string }[] = [
   {
@@ -146,6 +148,19 @@ export const DocumentEditor: React.FC = () => {
   const [selectedText, setSelectedText] = useState('');
   const [saveSuccessMsg, setSaveSuccessMsg] = useState('');
 
+  // Navigation & Dirty State Tracking
+  const [isContentDirty, setIsContentDirty] = useState(false);
+  const [activeNavFinding, setActiveNavFinding] = useState<{
+    issueId: string;
+    title: string;
+    section: string;
+    isMissing?: boolean;
+    suggestedTemplate?: string;
+    start?: number;
+    end?: number;
+    insertionOffset?: number;
+  } | null>(null);
+
   // Keyboard shortcut Ctrl+F / Cmd+F to open Search & Replace
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -158,66 +173,160 @@ export const DocumentEditor: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const scrollToSection = (sectionName?: string, evidence?: string, textRange?: { start: number; end: number }) => {
+  // 1-Click insert missing clause template directly into editor
+  const handleInsertMissingClause = (templateText: string, insertionOffset?: number) => {
+    if (!templateText) return;
+    const el = textareaRef.current;
+    const offset = insertionOffset ?? (el ? el.selectionStart : content.length);
+    const before = content.substring(0, offset).trimEnd();
+    const after = content.substring(offset).trimStart();
+    const newText = before ? `${before}\n\n${templateText.trim()}\n\n${after}` : `${templateText.trim()}\n\n${after}`;
+    setContent(newText);
+    setIsContentDirty(true);
+    setActiveNavFinding(null);
+    setSaveSuccessMsg('✓ Inserted suggested clause template into editor.');
+    setTimeout(() => setSaveSuccessMsg(''), 3000);
+  };
+
+  /**
+   * Layered Location Resolver:
+   * 1. Missing clause / field: Navigates to logical insertion point without fabricating bad text.
+   * 2. Exact character range matching.
+   * 3. Section-scoped normalized search with context disambiguation.
+   * 4. Global normalized search tolerating quotes, dashes, newlines, and whitespace variations.
+   * 5. Section Header fallback.
+   */
+  const navigateToIssue = (issue: {
+    id?: string;
+    issueId?: string;
+    title?: string;
+    section?: string;
+    evidence?: string;
+    isMissing?: boolean;
+    location?: {
+      sectionId?: string;
+      sectionTitle?: string;
+      paragraphId?: string;
+      textRange?: { start: number; end: number };
+      contextBefore?: string;
+      contextAfter?: string;
+      isMissing?: boolean;
+      insertionOffset?: number;
+      insertionAnchor?: string;
+      nature?: string;
+    };
+    suggestion?: string;
+  }) => {
     if (!textareaRef.current) return;
     const el = textareaRef.current;
     const text = el.value;
 
-    let idx = -1;
-    let matchLen = 0;
+    const isMissingClause = issue.isMissing ||
+      issue.location?.isMissing ||
+      (issue.id || '').includes('missing') ||
+      (issue.issueId || '').includes('missing') ||
+      (issue.location?.nature === 'MISSING_CLAUSE' || issue.location?.nature === 'MISSING_FIELD');
 
-    // 1. Precise character range if provided
-    if (textRange && typeof textRange.start === 'number' && typeof textRange.end === 'number' && textRange.end > textRange.start) {
-      if (textRange.start >= 0 && textRange.end <= text.length) {
-        idx = textRange.start;
-        matchLen = textRange.end - textRange.start;
+    // 1. Missing clause / field: Navigate to insertion point, do NOT highlight arbitrary text!
+    if (isMissingClause) {
+      let insertOffset = issue.location?.insertionOffset;
+      if (typeof insertOffset !== 'number' || insertOffset < 0 || insertOffset > text.length) {
+        // Fallback: before signature block or end of document
+        const sigMatch = text.search(/#{1,3}\s*(?:execution|signatures?)|in\s+witness\s+whereof/i);
+        insertOffset = sigMatch !== -1 ? sigMatch : text.length;
       }
+
+      el.focus();
+      el.setSelectionRange(insertOffset, insertOffset);
+      const linesBefore = text.substring(0, insertOffset).split('\n').length;
+      el.scrollTop = Math.max(0, (linesBefore - 3) * 24);
+
+      setActiveNavFinding({
+        issueId: issue.id || issue.issueId || '',
+        title: issue.title || 'Missing Legal Requirement',
+        section: issue.section || issue.location?.sectionTitle || '',
+        isMissing: true,
+        suggestedTemplate: issue.suggestion,
+        insertionOffset: insertOffset
+      });
+      return;
     }
 
-    // 2. Exact evidence quote search
-    if (idx === -1 && evidence && evidence.trim().length > 1) {
-      const evClean = evidence.trim().toLowerCase();
-      idx = text.toLowerCase().indexOf(evClean);
-      if (idx !== -1) matchLen = evidence.trim().length;
-    }
+    // 2. Exact character range if provided and text matches
+    let startSel = -1;
+    let endSel = -1;
 
-    // 3. Section header search fallback
-    if (idx === -1 && sectionName) {
-      const cleanSec = sectionName.toLowerCase().replace(/^(?:section|\d+\.?)\s*/i, '').trim();
-      idx = text.toLowerCase().indexOf(cleanSec);
-      if (idx !== -1) {
-        matchLen = cleanSec.length;
-      } else {
-        idx = text.toLowerCase().indexOf(sectionName.toLowerCase());
-        if (idx !== -1) matchLen = sectionName.length;
-      }
-    }
-
-    if (idx !== -1) {
-      let startSel = idx;
-      let endSel = idx + matchLen;
-
-      // If we matched a section header without specific textRange or evidence, select the full section block
-      if (!textRange && (!evidence || evidence.trim().length <= 1) && sectionName && text.substring(idx, idx + matchLen).toLowerCase().includes(sectionName.toLowerCase().slice(0, 8))) {
-        const nextHeader = text.indexOf('\n## ', idx + matchLen);
-        const nextDivider = text.indexOf('---', idx + matchLen);
-        let endOfBlock = text.length;
-        if (nextHeader !== -1 && nextDivider !== -1) {
-          endOfBlock = Math.min(nextHeader, nextDivider);
-        } else if (nextHeader !== -1) {
-          endOfBlock = nextHeader;
-        } else if (nextDivider !== -1) {
-          endOfBlock = nextDivider;
+    if (issue.location?.textRange && typeof issue.location.textRange.start === 'number' && typeof issue.location.textRange.end === 'number') {
+      const { start, end } = issue.location.textRange;
+      if (start >= 0 && end <= text.length && end > start) {
+        const slice = text.substring(start, end);
+        if (!issue.evidence || normalizeForMatching(slice).includes(normalizeForMatching(issue.evidence).slice(0, 15))) {
+          startSel = start;
+          endSel = end;
         }
-        endSel = endOfBlock;
+      }
+    }
+
+    // 3. Section-scoped normalized search with context disambiguation
+    if (startSel === -1 && issue.evidence && issue.evidence.trim().length > 1) {
+      let secRange: { start: number; end: number } | undefined;
+      if (issue.section) {
+        const secHeaderIdx = text.toLowerCase().indexOf(issue.section.toLowerCase().replace(/^(?:section|\d+\.?)\s*/i, '').trim());
+        if (secHeaderIdx !== -1) {
+          const nextSecIdx = text.indexOf('\n## ', secHeaderIdx + 10);
+          secRange = {
+            start: secHeaderIdx,
+            end: nextSecIdx !== -1 ? nextSecIdx : Math.min(text.length, secHeaderIdx + 3000)
+          };
+        }
       }
 
+      const normMatch = findNormalizedMatch(text, issue.evidence, {
+        contextBefore: issue.location?.contextBefore,
+        contextAfter: issue.location?.contextAfter,
+        searchRange: secRange
+      });
+
+      if (normMatch) {
+        startSel = normMatch.start;
+        endSel = normMatch.end;
+      }
+    }
+
+    // 4. Section Header Fallback
+    if (startSel === -1 && issue.section) {
+      const cleanSec = issue.section.toLowerCase().replace(/^(?:section|\d+\.?)\s*/i, '').trim();
+      const idx = text.toLowerCase().indexOf(cleanSec);
+      if (idx !== -1) {
+        startSel = idx;
+        endSel = idx + cleanSec.length;
+      }
+    }
+
+    if (startSel !== -1 && endSel !== -1) {
       el.focus();
       el.setSelectionRange(startSel, endSel);
       const linesBefore = text.substring(0, startSel).split('\n').length;
       el.scrollTop = Math.max(0, (linesBefore - 3) * 24);
       setSelectedText(text.substring(startSel, endSel));
+
+      setActiveNavFinding({
+        issueId: issue.id || issue.issueId || '',
+        title: issue.title || 'Legal Defect',
+        section: issue.section || '',
+        isMissing: false,
+        start: startSel,
+        end: endSel
+      });
     }
+  };
+
+  const scrollToSection = (sectionName?: string, evidence?: string, textRange?: { start: number; end: number }) => {
+    navigateToIssue({
+      section: sectionName,
+      evidence,
+      location: textRange ? { textRange } : undefined
+    });
   };
 
   useEffect(() => {
@@ -932,12 +1041,59 @@ export const DocumentEditor: React.FC = () => {
             </div>
           )}
 
+          {/* Active Finding Navigation Bar */}
+          {activeNavFinding && (
+            <div className={`mx-5 mt-4 p-2.5 rounded-lg border text-xs flex items-center justify-between gap-3 ${
+              activeNavFinding.isMissing
+                ? 'bg-amber-50/80 border-amber-200 text-amber-950'
+                : 'bg-purple-50/80 border-purple-200 text-purple-950'
+            }`}>
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="flex-shrink-0 text-sm">
+                  {activeNavFinding.isMissing ? '➕' : '📍'}
+                </span>
+                <div className="truncate">
+                  <span className="font-semibold">{activeNavFinding.isMissing ? 'Missing Requirement' : 'Inspecting Finding'}:</span>{' '}
+                  <span className="font-medium text-gray-800">{activeNavFinding.title}</span>
+                  {activeNavFinding.section && (
+                    <span className="text-gray-500 ml-1.5 text-[11px]">({activeNavFinding.section})</span>
+                  )}
+                  {activeNavFinding.start !== undefined && activeNavFinding.end !== undefined && (
+                    <span className="text-purple-700 ml-2 font-mono text-[10px]">
+                      [Chars {activeNavFinding.start}–{activeNavFinding.end}]
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {activeNavFinding.isMissing && activeNavFinding.suggestedTemplate && (
+                  <button
+                    onClick={() => handleInsertMissingClause(activeNavFinding.suggestedTemplate!, activeNavFinding.insertionOffset)}
+                    className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-[11px] font-semibold flex items-center gap-1 shadow-2xs cursor-pointer"
+                  >
+                    <Plus className="w-3 h-3" />
+                    Insert Suggested Clause
+                  </button>
+                )}
+                <button
+                  onClick={() => setActiveNavFinding(null)}
+                  className="px-2 py-1 bg-white hover:bg-gray-100 text-gray-600 border border-gray-300 rounded text-[11px] font-medium cursor-pointer"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Textarea Editor */}
           <div className="p-5 flex-1 flex flex-col">
             <textarea
               ref={textareaRef}
               value={content}
-              onChange={(e) => setContent(e.target.value)}
+              onChange={(e) => {
+                setContent(e.target.value);
+                setIsContentDirty(true);
+              }}
               onSelect={(e: any) => {
                 const sel = e.target.value.substring(e.target.selectionStart, e.target.selectionEnd);
                 if (sel) setSelectedText(sel);
@@ -1112,6 +1268,26 @@ export const DocumentEditor: React.FC = () => {
                       {activeIssues.length} active • {resolvedIssues.length} resolved
                     </span>
                   </div>
+
+                  {/* Stale Findings Notice */}
+                  {isContentDirty && (
+                    <div className="p-2 bg-amber-50 rounded-lg border border-amber-200 flex items-center justify-between text-xs text-amber-900">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <RefreshCw className={`w-3.5 h-3.5 text-amber-600 flex-shrink-0 ${validating ? 'animate-spin' : ''}`} />
+                        <span className="truncate text-[10px] font-semibold">Document modified since validation</span>
+                      </div>
+                      <button
+                        onClick={() => {
+                          handleRevalidate();
+                          setIsContentDirty(false);
+                        }}
+                        disabled={validating}
+                        className="px-2 py-0.5 bg-amber-600 text-white font-semibold rounded text-[10px] hover:bg-amber-700 cursor-pointer disabled:opacity-50 flex-shrink-0"
+                      >
+                        {validating ? 'Validating...' : 'Re-validate'}
+                      </button>
+                    </div>
+                  )}
 
                   {/* Filter Pills */}
                   <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg text-xs font-semibold">
@@ -1384,14 +1560,37 @@ export const DocumentEditor: React.FC = () => {
 
                           {/* Action Button: Jump & Highlight Section in Editor */}
                           <div className="pt-1">
-                            <button
-                              onClick={() => scrollToSection(issue.section, issue.evidence, issue.location?.textRange)}
-                              className="w-full py-1.5 px-2 bg-white hover:bg-gray-100 text-gray-800 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1.5 border border-gray-300 shadow-2xs transition-colors cursor-pointer"
-                              title="Scroll editor to this exact section and highlight text for editing"
-                            >
-                              <ExternalLink className="w-3.5 h-3.5 text-gray-500" />
-                              Jump to Section in Editor
-                            </button>
+                            {issue.isMissing || issue.location?.isMissing || (issue.type || '').startsWith('MISSING_') ? (
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  onClick={() => navigateToIssue(issue)}
+                                  className="flex-1 py-1.5 px-2 bg-amber-50 hover:bg-amber-100 text-amber-900 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1.5 border border-amber-300 shadow-2xs transition-colors cursor-pointer"
+                                  title="Scroll editor to insertion location for this missing clause"
+                                >
+                                  <ExternalLink className="w-3.5 h-3.5 text-amber-600" />
+                                  Go to Insertion Point
+                                </button>
+                                {issue.suggestion && (
+                                  <button
+                                    onClick={() => handleInsertMissingClause(issue.suggestion!, issue.location?.insertionOffset)}
+                                    className="py-1.5 px-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 shadow-2xs transition-colors cursor-pointer"
+                                    title="Insert suggested clause template into editor"
+                                  >
+                                    <Plus className="w-3.5 h-3.5" />
+                                    Insert Clause
+                                  </button>
+                                )}
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => navigateToIssue(issue)}
+                                className="w-full py-1.5 px-2 bg-white hover:bg-gray-100 text-gray-800 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1.5 border border-gray-300 shadow-2xs transition-colors cursor-pointer"
+                                title="Scroll editor to this exact section and highlight text for editing"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5 text-gray-500" />
+                                Jump to Section in Editor
+                              </button>
+                            )}
                           </div>
                         </div>
                       );

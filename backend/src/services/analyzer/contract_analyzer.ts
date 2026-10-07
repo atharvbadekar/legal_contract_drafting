@@ -1123,6 +1123,9 @@ export class ContractAnalyzer {
     } else if (highRisks >= 2) {
       score = Math.min(score, 65);
       scoreBreakdown.push(`[Hard Cap] Capped at 65% due to 2+ high-severity legal risks`);
+    } else if (highRisks === 1 || missingCount === 1) {
+      score = Math.min(score, 74);
+      scoreBreakdown.push(`[Hard Cap] Capped at 74% due to high-severity defect or missing required clause`);
     }
 
     // Bound final score between 10 and 98 (never claim 100% automated perfection)

@@ -1026,7 +1026,9 @@ export function validateRequiredFields(
       const type = field.requirement === 'REQUIRED' ? 'MISSING_REQUIRED_FIELD' : 'MISSING_RECOMMENDED_FIELD';
       const issueId = `det_missing_${field.key}`;
 
-      const located = locateTextInDocument(fullText, field.label);
+      const located = locateTextInDocument(fullText, field.label, 'Parties', {
+        nature: 'MISSING_FIELD'
+      });
 
       issues.push({
         id: issueId,
@@ -1038,14 +1040,20 @@ export function validateRequiredFields(
         title: `${field.requirement === 'REQUIRED' ? 'Missing Required Field' : 'Missing Recommended Field'}: ${field.label}`,
         message: `${field.label} is missing from both document structured facts and agreement text. ${field.description}`,
         description: `${field.label} is missing from both document structured facts and agreement text. ${field.description}`,
-        location: located.location,
-        evidence: `Missing: ${field.label}`,
+        location: {
+          ...located.location,
+          nature: 'MISSING_FIELD',
+          isMissing: true
+        },
+        evidence: '',
+        isMissing: true,
         reason: field.missingReason,
         suggestion: field.suggestion,
         canAutoFix: false,
         mode: 'MANUAL',
-        confidence: 0.94
-      });
+        confidence: 0.94,
+        deduplicationKey: `field_${field.key}`
+      } as any);
     }
   }
 

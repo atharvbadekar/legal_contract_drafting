@@ -268,6 +268,7 @@ export class DocumentsController {
           issues: validationResult.allIssues,
           summaryCounts: validationResult.summaryCounts,
           semanticStatus: validationResult.semanticStatus,
+          scoreBreakdown: validationResult.scoreBreakdown,
           disclaimer: validationResult.disclaimer
         };
 
@@ -603,6 +604,7 @@ export class DocumentsController {
         issues: validationResult.allIssues,
         summaryCounts: validationResult.summaryCounts,
         semanticStatus: validationResult.semanticStatus,
+        scoreBreakdown: validationResult.scoreBreakdown,
         disclaimer: validationResult.disclaimer
       };
 

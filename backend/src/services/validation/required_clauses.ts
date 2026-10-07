@@ -50,7 +50,7 @@ export const NDA_CLAUSES: ClauseDefinition[] = [
     minWordCount: 8,
     headingPatterns: [/non-disclosure\s+obligations/i, /confidentiality\s+obligations/i, /obligations\s+of\s+the\s+receiving\s+party/i, /confidentiality/i],
     substantivePatterns: [
-      /(?:maintain|protect|hold|keep)\s+(?:in\s+)?(?:strict\s+)?confiden|shall\s+not\s+disclose|agrees?\s+not\s+to\s+disclose|without\s+(?:prior\s+)?written\s+(?:consent|permission)|confidentiality\s+and\s+not\s+disclose/i
+      /(?:maintain|protect|hold|keep)[^\.\n]*?(?:in\s+)?(?:strict\s+)?confiden|shall\s+not\s+disclose|agrees?\s+not\s+to\s+disclose|without\s+(?:prior\s+)?written\s+(?:consent|permission)|confidentiality\s+and\s+not\s+disclose/i
     ],
     missingReason: 'The covenant not to disclose and duty to protect confidential information is the core consideration of an NDA.',
     suggestion: 'Incorporate clear non-disclosure covenants stipulating standard of care and restrictions against unauthorized use.'
@@ -796,7 +796,9 @@ export function validateRequiredClauses(
       const type = isRequired ? 'MISSING_REQUIRED_CLAUSE' : 'MISSING_RECOMMENDED_CLAUSE';
       const issueId = `det_missing_clause_${clause.key.toLowerCase()}`;
 
-      const located = locateTextInDocument(fullText, clause.title);
+      const located = locateTextInDocument(fullText, clause.title, clause.title, {
+        nature: 'MISSING_CLAUSE'
+      });
 
       issues.push({
         id: issueId,
@@ -808,17 +810,23 @@ export function validateRequiredClauses(
         title: `${isRequired ? 'Missing Required Clause' : 'Missing Recommended Clause'}: ${clause.title}`,
         message: `Agreement lacks the substantive '${clause.title}' clause required for legal sufficiency.`,
         description: `Agreement lacks the substantive '${clause.title}' clause required for legal sufficiency.`,
-        location: located.location,
-        evidence: `Missing: ${clause.title}`,
+        location: {
+          ...located.location,
+          nature: 'MISSING_CLAUSE',
+          isMissing: true
+        },
+        evidence: '',
+        isMissing: true,
         reason: clause.missingReason,
         suggestion: clause.suggestion,
         canAutoFix: false,
         mode: 'MANUAL',
-        confidence: 0.93
-      });
+        confidence: 0.93,
+        deduplicationKey: `clause_${clause.key.toLowerCase()}`
+      } as any);
     } else if (status === 'INCOMPLETE') {
       const issueId = `det_incomplete_clause_${clause.key.toLowerCase()}`;
-      const located = locateTextInDocument(fullText, matchedText || clause.title);
+      const located = locateTextInDocument(fullText, matchedText || clause.title, clause.title);
 
       issues.push({
         id: issueId,
@@ -831,13 +839,15 @@ export function validateRequiredClauses(
         message: `The '${clause.title}' clause appears abbreviated or lacks necessary operative conditions and standards.`,
         description: `The '${clause.title}' clause appears abbreviated or lacks necessary operative conditions and standards.`,
         location: located.location,
-        evidence: matchedText.slice(0, 140) || located.evidence,
+        evidence: matchedText ? matchedText.slice(0, 140) : (located.found ? located.evidence : ''),
+        isMissing: false,
         reason: clause.missingReason,
         suggestion: clause.suggestion,
         canAutoFix: false,
         mode: 'MANUAL',
-        confidence: 0.88
-      });
+        confidence: 0.88,
+        deduplicationKey: `clause_${clause.key.toLowerCase()}`
+      } as any);
     }
   }
 
