@@ -790,10 +790,41 @@ export function validateRequiredClauses(
       }
     }
 
+    // Skip optional clauses if missing from document
+    if (clause.requirement === 'OPTIONAL') {
+      continue;
+    }
+
+    // Check for express waiver or negation that legally satisfies the requirement:
+    // 1. Payment waiver: "no payment shall be due", "free of charge", "pro bono", "neither party shall owe any fee"
+    if (clause.key === 'FEES_PAYMENT' || clause.key === 'FEES_BILLING' || /payment|fee|compensation/i.test(clause.title)) {
+      const hasPaymentWaiver = /(?:no\s+(?:monetary\s+)?(?:payment|fee|compensation|remuneration|financial\s+consideration|charge|royalty)(?:\s+or\s+(?:payment|fee|compensation|remuneration|consideration|charge|royalty))?\s+(?:shall\s+be\s+(?:due|payable|owed)|is\s+(?:required|payable|due|owed)|will\s+be\s+(?:due|payable|owed))|neither\s+party\s+shall\s+(?:owe|pay|be\s+obligated\s+to\s+pay|be\s+required\s+to\s+pay)\s+(?:any\s+)?(?:fee|payment|compensation|remuneration|consideration)|free\s+of\s+charge|pro\s+bono|without\s+(?:any\s+)?(?:monetary\s+)?(?:payment|fee|compensation|charge)\s*(?:being\s+due|required|payable|owed)?|no\s+fees?\s+(?:shall\s+be\s+due|are\s+payable|are\s+owed))/i.test(cleanFullText);
+      if (hasPaymentWaiver) {
+        status = 'PRESENT';
+      }
+    }
+
+    // 2. IP waiver / negative covenant: "no intellectual property rights are transferred", "no license or transfer of IP"
+    if (clause.key === 'IP_RIGHTS' || /intellectual\s+property|work\s+product/i.test(clause.title)) {
+      const hasIPWaiver = /(?:no\s+(?:intellectual\s+property|ip|work\s+product|deliverables)\s*(?:rights?)?\s*(?:are|is|shall\s+be)\s*(?:transferred|assigned|granted|licensed)|no\s+(?:license|transfer)\s+(?:or\s+(?:license|transfer)\s+)?of\s+(?:intellectual\s+property|ip)|neither\s+party\s+transfers\s+(?:any\s+)?(?:intellectual\s+property|ip)|no\s+ip\s+rights\s+are\s+transferred)/i.test(cleanFullText);
+      if (hasIPWaiver) {
+        status = 'PRESENT';
+      }
+    }
+
+    // 3. Termination restriction: "Termination is not permitted during the initial term"
+    if (clause.key === 'TERM_TERMINATION' || /termination/i.test(clause.title)) {
+      const hasTerminationProhibition = /(?:termination\s+is\s+not\s+permitted|cannot\s+be\s+terminated|no\s+(?:party\s+may\s+terminate|early\s+termination)|neither\s+party\s+(?:shall|may)\s+terminate)/i.test(cleanFullText);
+      if (hasTerminationProhibition && /initial\s+term|duration|period|fixed\s+term/i.test(cleanFullText)) {
+        status = 'PRESENT';
+      }
+    }
+
     if (status === 'MISSING') {
       const isRequired = clause.requirement === 'REQUIRED';
       const severity = isRequired ? 'HIGH' : 'MEDIUM';
       const type = isRequired ? 'MISSING_REQUIRED_CLAUSE' : 'MISSING_RECOMMENDED_CLAUSE';
+      const findingType = isRequired ? 'MISSING_REQUIRED_CLAUSE' : 'OPTIONAL_RECOMMENDATION';
       const issueId = `det_missing_clause_${clause.key.toLowerCase()}`;
 
       const located = locateTextInDocument(fullText, clause.title, clause.title, {
@@ -804,6 +835,7 @@ export function validateRequiredClauses(
         id: issueId,
         issueId,
         type,
+        findingType,
         category: 'STRUCTURAL',
         severity,
         section: clause.title,
@@ -817,6 +849,8 @@ export function validateRequiredClauses(
         },
         evidence: '',
         isMissing: true,
+        whyItMatters: clause.missingReason,
+        howToResolve: clause.suggestion,
         reason: clause.missingReason,
         suggestion: clause.suggestion,
         canAutoFix: false,
@@ -832,6 +866,7 @@ export function validateRequiredClauses(
         id: issueId,
         issueId,
         type: 'INCOMPLETE_CLAUSE',
+        findingType: 'AMBIGUOUS_PROVISION',
         category: 'STRUCTURAL',
         severity: 'MEDIUM',
         section: clause.title,
@@ -841,6 +876,8 @@ export function validateRequiredClauses(
         location: located.location,
         evidence: matchedText ? matchedText.slice(0, 140) : (located.found ? located.evidence : ''),
         isMissing: false,
+        whyItMatters: clause.missingReason,
+        howToResolve: clause.suggestion,
         reason: clause.missingReason,
         suggestion: clause.suggestion,
         canAutoFix: false,

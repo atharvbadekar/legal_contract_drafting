@@ -760,16 +760,6 @@ export const DocumentEditor: React.FC = () => {
           </button>
 
           <button
-            onClick={handleUndoLastFix}
-            disabled={undoing}
-            className="px-3 py-1.5 bg-white border border-mira-border hover:border-amber-400 hover:bg-amber-50/40 text-xs font-semibold rounded-lg text-mira-dark flex items-center gap-1.5 shadow-2xs cursor-pointer"
-            title="Undo last applied legal patch and revert to previous revision"
-          >
-            <RotateCcw className={`w-3.5 h-3.5 text-amber-600 ${undoing ? 'animate-spin' : ''}`} />
-            {undoing ? 'Reverting...' : 'Undo Fix'}
-          </button>
-
-          <button
             onClick={handleRevalidate}
             disabled={validating}
             className="px-3 py-1.5 bg-white border border-mira-border hover:border-mira-primary text-xs font-semibold rounded-lg text-mira-dark flex items-center gap-1.5 shadow-2xs"
@@ -1177,36 +1167,6 @@ export const DocumentEditor: React.FC = () => {
                 </span>
               </div>
 
-              {/* Auto-Fix All Safe Issues Banner */}
-              {safeFixableCount > 0 && (
-                <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 shadow-2xs flex items-center justify-between gap-2 animate-in fade-in">
-                  <div className="flex items-center gap-2">
-                    <div className="p-1.5 bg-emerald-100 text-emerald-700 rounded-lg">
-                      <Zap className="w-4 h-4 text-emerald-700 fill-emerald-700" />
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold text-emerald-950">
-                        {safeFixableCount} Safe Fix{safeFixableCount === 1 ? '' : 'es'} Ready
-                      </div>
-                      <div className="text-[10px] text-emerald-800">
-                        Deterministic legal patches with safety guarantees
-                      </div>
-                    </div>
-                  </div>
-                  <button
-                    onClick={handleBatchFixSafe}
-                    disabled={batchFixing}
-                    className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
-                  >
-                    {batchFixing ? (
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <Zap className="w-3.5 h-3.5 fill-current" />
-                    )}
-                    {batchFixing ? 'Fixing...' : `Fix All (${safeFixableCount})`}
-                  </button>
-                </div>
-              )}
 
               {/* Multi-tier Layer Checks */}
               <div className="space-y-2">
@@ -1419,104 +1379,63 @@ export const DocumentEditor: React.FC = () => {
                             </span>
                           </div>
 
-                          {/* 1. CLEARLY DEFINED FLAG / PROBLEM */}
-                          <div className="space-y-1 bg-white/90 p-2.5 rounded-lg border border-black/5 shadow-2xs">
+                          {/* 1. WHAT IS WRONG (Defect & Evidence) */}
+                          <div className="space-y-1.5 bg-white/90 p-2.5 rounded-lg border border-black/5 shadow-2xs">
                             <div className="flex items-center gap-1 font-bold text-[10px] text-red-800 uppercase tracking-wider">
-                              <span>🚩 Flag / Problem Detected:</span>
+                              <span>🚩 What is Wrong:</span>
                             </div>
                             <p className="text-[11px] font-medium leading-relaxed text-gray-800">
-                              {issue.description || issue.message || 'Issue detected in section wording or factual alignment.'}
+                              {issue.description || issue.message || 'Issue detected in section wording or contractual terms.'}
                             </p>
 
-                            {/* Quoted Evidence */}
+                            {/* Quoted Document Evidence */}
                             {issue.evidence && issue.evidence.trim().length > 0 && (
-                              <div className="mt-1 pt-1 border-t border-gray-100 text-[10px] text-gray-600 font-mono bg-gray-50/80 p-1.5 rounded">
-                                <span className="font-semibold text-gray-500">Quoted text: </span>
-                                "{issue.evidence}"
+                              <div className="mt-1.5 pt-1.5 border-t border-gray-100 text-[10px] text-gray-700 bg-gray-50/80 p-2 rounded border border-gray-200">
+                                <span className="font-semibold text-gray-500 block text-[9px] uppercase tracking-wider mb-0.5">Verified Document Evidence:</span>
+                                <span className="font-mono italic">"{issue.evidence}"</span>
                               </div>
                             )}
 
-                            {/* Why ATHARV flags this */}
-                            {issue.reason && (
-                              <div className="mt-1 text-[10px] text-gray-600 leading-snug">
-                                <span className="font-semibold text-gray-700">Legal rationale: </span>
-                                {issue.reason}
-                              </div>
-                            )}
+                            {/* Location Reference */}
+                            <div className="mt-1 pt-1 border-t border-gray-100 text-[10px] text-gray-500 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                              <span>📍 Section: <strong className="text-gray-700">{issue.section || 'General'}</strong></span>
+                              {issue.location?.paragraphIndex !== undefined && (
+                                <span>• Para: <strong className="text-gray-700">{issue.location.paragraphIndex + 1}</strong></span>
+                              )}
+                              {issue.location?.lineStart !== undefined && (
+                                <span>• Line: <strong className="text-gray-700">{issue.location.lineStart}</strong></span>
+                              )}
+                            </div>
                           </div>
 
-                          {/* 2. CLEARLY DEFINED HOW TO RESOLVE IT */}
-                          <div className="space-y-1 bg-emerald-50/90 p-2.5 rounded-lg border border-emerald-200 shadow-2xs">
-                            <div className="flex items-center gap-1 font-bold text-[10px] text-emerald-900 uppercase tracking-wider">
-                              <span>💡 How to Resolve:</span>
+                          {/* 2. WHY THIS MATTERS (Legal / Risk Rationale) */}
+                          <div className="space-y-1 bg-amber-50/90 p-2.5 rounded-lg border border-amber-200/80 shadow-2xs">
+                            <div className="flex items-center gap-1 font-bold text-[10px] text-amber-900 uppercase tracking-wider">
+                              <HelpCircle className="w-3 h-3 text-amber-700 flex-shrink-0" />
+                              <span>⚖️ Why This Matters:</span>
                             </div>
-                            <p className="text-[11px] text-emerald-950 font-medium leading-relaxed">
-                              {issue.suggestion || (
+                            <p className="text-[11px] font-medium leading-relaxed text-amber-950">
+                              {issue.whyItMatters || issue.reason || (
                                 isHigh
-                                  ? 'Correct this section to align with verified project facts and standard legal obligations.'
-                                  : 'Review and refine wording to eliminate contractual ambiguity.'
+                                  ? 'Creates significant legal exposure, ambiguity, or dispute liability under standard contract law.'
+                                  : 'Reduces contractual clarity and may lead to conflicting interpretations between parties.'
                               )}
                             </p>
                           </div>
 
-                          {/* 1-CLICK QUICK FIX BUTTON (Only for active auto-fixable issues) */}
-                          {isAutoFixable && !isResolved && (
-                            <div className="pt-0.5">
-                              <button
-                                onClick={() => {
-                                  if (issue.type === 'UNRESOLVED_PLACEHOLDER') {
-                                    setPlaceholderModal({
-                                      isOpen: true,
-                                      placeholder: issue.evidence || '[Party Name]',
-                                      issueId: issueKey,
-                                      targetSection: issue.section,
-                                      replacementValue: document.structuredFacts?.disclosingParty?.name || ''
-                                    });
-                                  } else {
-                                    handleApplyQuickFix(issue);
-                                  }
-                                }}
-                                disabled={fixingIssueId === issueKey}
-                                className="w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer"
-                                title={issue.type === 'UNRESOLVED_PLACEHOLDER' ? 'Open interactive placeholder resolver' : 'Apply verified legal patch immediately to document'}
-                              >
-                                {fixingIssueId === issueKey ? (
-                                  <>
-                                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                                    <span>Applying Legal Patch...</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Zap className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
-                                    <span>
-                                      {issue.type === 'UNRESOLVED_PLACEHOLDER'
-                                        ? '⚡ Resolve Placeholder Token'
-                                        : issue.type?.includes('MISSING')
-                                        ? '⚡ Insert Canonical Clause'
-                                        : '⚡ 1-Click Quick Fix'}
-                                    </span>
-                                  </>
-                                )}
-                              </button>
+                          {/* 3. HOW TO RESOLVE (Drafting Advice) */}
+                          <div className="space-y-1 bg-emerald-50/90 p-2.5 rounded-lg border border-emerald-200 shadow-2xs">
+                            <div className="flex items-center gap-1 font-bold text-[10px] text-emerald-900 uppercase tracking-wider">
+                              <span>💡 How to Resolve (Drafting Guidance):</span>
                             </div>
-                          )}
-
-                          {/* Manual Drafting Guidance for non-auto-fixable items */}
-                          {!isAutoFixable && !isResolved && (
-                            <div className="p-2.5 bg-blue-50/80 rounded-lg border border-blue-200 text-[10px] text-blue-900 space-y-1">
-                              <div className="flex items-center gap-1 font-bold text-[10px] text-blue-800 uppercase tracking-wider">
-                                <HelpCircle className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />
-                                <span>Manual Drafting Required:</span>
-                              </div>
-                              <p className="leading-relaxed">
-                                {issue.type === 'MISSING_PAYMENT_AMOUNT'
-                                  ? 'Commercial consideration (fees, payment schedule, or currency) cannot be invented by AI. Click "Jump to Section in Editor" below to define the agreed commercial terms.'
-                                  : issue.type === 'CONFLICTING_TERMS'
-                                  ? 'Contradictory contractual terms detected. Click "Jump to Section in Editor" below to align the terms.'
-                                  : 'Click "Jump to Section in Editor" below to edit this text directly, or check the Perfection Guide tab for standard clauses.'}
-                              </p>
-                            </div>
-                          )}
+                            <p className="text-[11px] text-emerald-950 font-medium leading-relaxed">
+                              {issue.howToResolve || issue.suggestion || (
+                                isHigh
+                                  ? 'Manually update the provision in the editor to define precise obligations and clear terms.'
+                                  : 'Review and refine the wording in the editor to eliminate ambiguity.'
+                              )}
+                            </p>
+                          </div>
 
                           {/* Human Counsel Review Layer */}
                           <div className="p-2 bg-white/80 rounded-lg border border-black/5 flex items-center justify-between text-[10px]">
@@ -1558,29 +1477,17 @@ export const DocumentEditor: React.FC = () => {
                             </div>
                           </div>
 
-                          {/* Action Button: Jump & Highlight Section in Editor */}
+                          {/* Navigation Action: Jump to Evidence or Go to Insertion Point */}
                           <div className="pt-1">
                             {issue.isMissing || issue.location?.isMissing || (issue.type || '').startsWith('MISSING_') ? (
-                              <div className="flex items-center gap-1.5">
-                                <button
-                                  onClick={() => navigateToIssue(issue)}
-                                  className="flex-1 py-1.5 px-2 bg-amber-50 hover:bg-amber-100 text-amber-900 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1.5 border border-amber-300 shadow-2xs transition-colors cursor-pointer"
-                                  title="Scroll editor to insertion location for this missing clause"
-                                >
-                                  <ExternalLink className="w-3.5 h-3.5 text-amber-600" />
-                                  Go to Insertion Point
-                                </button>
-                                {issue.suggestion && (
-                                  <button
-                                    onClick={() => handleInsertMissingClause(issue.suggestion!, issue.location?.insertionOffset)}
-                                    className="py-1.5 px-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 shadow-2xs transition-colors cursor-pointer"
-                                    title="Insert suggested clause template into editor"
-                                  >
-                                    <Plus className="w-3.5 h-3.5" />
-                                    Insert Clause
-                                  </button>
-                                )}
-                              </div>
+                              <button
+                                onClick={() => navigateToIssue(issue)}
+                                className="w-full py-1.5 px-2 bg-amber-50 hover:bg-amber-100 text-amber-900 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1.5 border border-amber-300 shadow-2xs transition-colors cursor-pointer"
+                                title="Scroll editor to recommended insertion location for this missing clause"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5 text-amber-600" />
+                                Go to Insertion Point in Editor
+                              </button>
                             ) : (
                               <button
                                 onClick={() => navigateToIssue(issue)}
@@ -1588,7 +1495,7 @@ export const DocumentEditor: React.FC = () => {
                                 title="Scroll editor to this exact section and highlight text for editing"
                               >
                                 <ExternalLink className="w-3.5 h-3.5 text-gray-500" />
-                                Jump to Section in Editor
+                                Jump to Evidence in Editor
                               </button>
                             )}
                           </div>

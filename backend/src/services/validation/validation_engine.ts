@@ -26,6 +26,9 @@ export interface ValidationFinding extends ValidationIssue {
   nature?: 'DEFECTIVE_TEXT' | 'MISSING_CLAUSE' | 'MISSING_FIELD' | 'PLACEHOLDER' | 'STRUCTURAL';
   reason: string;
   suggestion: string;
+  findingType?: string;
+  whyItMatters?: string;
+  howToResolve?: string;
   canAutoFix: boolean;
   mode: 'SAFE_AUTO' | 'REVIEW' | 'MANUAL';
   confidence: number;
@@ -154,7 +157,7 @@ export class ValidationEngine {
     // Combine & Deduplicate Issues
     const seenIssueKeys = new Set<string>();
     const seenMissingSections = new Set<string>();
-    const allIssues: ValidationFinding[] = [];
+    const rawCombinedIssues: ValidationFinding[] = [];
 
     // Add deterministic issues first
     for (const issue of deterministicIssues) {
@@ -165,7 +168,7 @@ export class ValidationEngine {
         if (issue.type.includes('MISSING_') || issue.type === 'MISSING_REQUIRED_CLAUSE' || issue.type === 'MISSING_RECOMMENDED_CLAUSE' || issue.type === 'MISSING_SIGNATURE_BLOCK') {
           seenMissingSections.add(normSection);
         }
-        allIssues.push(issue);
+        rawCombinedIssues.push(issue);
       }
     }
 
@@ -184,9 +187,12 @@ export class ValidationEngine {
       const key = `${issue.type}_${normSection}_${(issue.title || '').toLowerCase()}`;
       if (!seenIssueKeys.has(key)) {
         seenIssueKeys.add(key);
-        allIssues.push(issue);
+        rawCombinedIssues.push(issue);
       }
     }
+
+    // Strict Finding Quality Gate (Confidence >= 0.75, Verified Document Evidence, Structured QC Taxonomy)
+    const allIssues: ValidationFinding[] = applyFindingQualityGate(rawCombinedIssues, fullText);
 
     // Compute metrics
     const highSeverityCount = allIssues.filter(i => i.severity === 'HIGH').length;
@@ -357,7 +363,9 @@ export class ValidationEngine {
       deterministicIssues,
       legalBertIssues,
       allIssues,
-      disclaimer: "AI Validation Score - informational only. This metric indicates automated heuristic and semantic alignment, and does not constitute a legal guarantee."
+      disclaimer: allIssues.length === 0
+        ? "MIRA AI Legal Quality-Control Review: No high-confidence legal issues detected based on configured institutional validation rules. This automated review assists legal analysis and does not constitute formal legal advice."
+        : "MIRA AI Legal Quality-Control Review: This automated review assists legal analysis based on configured institutional validation rules and does not constitute formal legal advice."
     };
   }
 
@@ -810,43 +818,41 @@ export class ValidationEngine {
     }
 
     // Check for express affirmative waiver of payment/consideration
-    const hasExpressPaymentWaiver = /(?:no\s+(?:payment|fee|compensation|remuneration|financial\s+consideration)(?:\s+or\s+(?:payment|fee|compensation|remuneration|consideration))?\s+(?:shall\s+be\s+due|is\s+required|is\s+payable|is\s+due)|free\s+of\s+charge|pro\s+bono|without\s+(?:any\s+)?(?:payment|fee|compensation)\s+(?:being\s+due|required)?)/i.test(cleanText);
+    const hasExpressPaymentWaiver = /(?:no\s+(?:monetary\s+)?(?:payment|fee|compensation|remuneration|financial\s+consideration|charge|royalty)(?:\s+or\s+(?:payment|fee|compensation|remuneration|consideration|charge|royalty))?\s+(?:shall\s+be\s+(?:due|payable|owed)|is\s+(?:required|payable|due|owed)|will\s+be\s+(?:due|payable|owed))|neither\s+party\s+shall\s+(?:owe|pay|be\s+obligated\s+to\s+pay|be\s+required\s+to\s+pay)\s+(?:any\s+)?(?:fee|payment|compensation|remuneration|consideration)|free\s+of\s+charge|pro\s+bono|without\s+(?:any\s+)?(?:monetary\s+)?(?:payment|fee|compensation|charge)\s*(?:being\s+due|required|payable|owed)?|no\s+fees?\s+(?:shall\s+be\s+due|are\s+payable|are\s+owed))/i.test(cleanText);
 
-    // Determine if payment check should trigger:
-    // For NDA: Only if facts specify an amount OR an affirmative payment covenant actually exists in text
-    // For Services / Consulting: If affirmative payment covenant exists without an amount, OR if facts specify payment, OR if a payment section exists without an amount
-    const shouldCheckPayment = !hasExpressPaymentWaiver && (isNDA
-      ? (hasFactAmount || !!affirmativePaymentClause)
-      : (isServicesOrConsulting || hasFactAmount || !!affirmativePaymentClause));
+    // Only flag missing payment amount when the contract genuinely contains an affirmative mandatory payment obligation without an amount, formula, or schedule.
+    // Discretionary language (e.g. "Payment may be made upon completion") or template placeholders ("Specify the exact consideration") MUST NOT trigger this substantive defect.
+    const shouldCheckPayment = !hasExpressPaymentWaiver && (hasFactAmount || !!affirmativePaymentClause);
 
-    if (shouldCheckPayment && !hasNumericAmount && !hasFactAmount) {
+    if (shouldCheckPayment && !hasNumericAmount && !hasFactAmount && affirmativePaymentClause) {
       const paymentSec = sections.find(s =>
         /compensation|payment|fee|remuneration|pricing/i.test(s.title || '') ||
         /compensation|payment|fee/i.test(s.sectionType)
       );
 
-      if (affirmativePaymentClause || (isServicesOrConsulting && paymentSec)) {
-        const targetSearch = affirmativePaymentClause || paymentSec?.title || 'Payment';
-        const located = locateTextInDocument(fullText, targetSearch.slice(0, 50), 'Payment');
-        issues.push({
-          id: 'det_missing_payment_amount',
-          issueId: 'det_missing_payment_amount',
-          type: 'MISSING_PAYMENT_AMOUNT',
-          category: 'FACTUAL',
-          severity: 'HIGH',
-          section: paymentSec?.title || 'Consideration & Payment',
-          title: 'Payment Amount Not Specified',
-          message: 'Payment obligation is referenced in the text, but no specific monetary amount or payment schedule is defined.',
-          description: 'Payment obligation is referenced in the text, but no specific monetary amount or payment schedule is defined.',
-          location: located.location,
-          evidence: located.evidence,
-          reason: 'A contract reciting monetary consideration without a defined amount or ascertainable formula is vulnerable to unenforceability for indefiniteness.',
-          suggestion: 'Specify the exact consideration amount, currency, and installment or milestone schedule.',
-          canAutoFix: false,
-          mode: 'MANUAL',
-          confidence: 0.95
-        });
-      }
+      const targetSearch = affirmativePaymentClause;
+      const located = locateTextInDocument(fullText, targetSearch.slice(0, 50), 'Payment');
+      issues.push({
+        id: 'det_missing_payment_amount',
+        issueId: 'det_missing_payment_amount',
+        type: 'MISSING_PAYMENT_AMOUNT',
+        findingType: 'MISSING_INFORMATION',
+        category: 'FACTUAL',
+        severity: 'HIGH',
+        section: paymentSec?.title || 'Consideration & Payment',
+        title: 'Payment Amount Not Specified',
+        message: 'Payment obligation is referenced in the text, but no specific monetary amount or payment schedule is defined.',
+        description: 'Payment obligation is referenced in the text, but no specific monetary amount or payment schedule is defined.',
+        location: located.location,
+        evidence: located.evidence,
+        whyItMatters: 'A contract reciting monetary consideration without a defined amount or ascertainable formula is vulnerable to unenforceability for indefiniteness.',
+        howToResolve: 'Specify the exact consideration amount, currency, and installment or milestone schedule in the payment clause.',
+        reason: 'A contract reciting monetary consideration without a defined amount or ascertainable formula is vulnerable to unenforceability for indefiniteness.',
+        suggestion: 'Specify the exact consideration amount, currency, and installment or milestone schedule.',
+        canAutoFix: false,
+        mode: 'MANUAL',
+        confidence: 0.95
+      });
     }
 
     // ==========================================
@@ -855,20 +861,25 @@ export class ValidationEngine {
     const termSec = sections.find(s => /term|termination/i.test(s.title || '') || s.sectionType.includes('term'));
     if (termSec) {
       const cleanTermContent = stripTemplateInstructions(termSec.content);
-      const hasNoticeMention = /(?:by|upon)?\s*(?:prior\s*)?(?:written\s*)?notice/i.test(cleanTermContent);
+      const isTerminationProhibited = /(?:termination\s+is\s+not\s+permitted|cannot\s+be\s+terminated|no\s+(?:party\s+may\s+terminate|early\s+termination)|neither\s+party\s+(?:shall|may)\s+terminate)/i.test(cleanTermContent);
+      const hasTerminationByNotice = /(?:terminat(?:e|ion)|cancel(?:lation)?)[^\.\n]*?(?:by|upon|with|following)\s+(?:prior\s*)?(?:written\s*)?notice\b/i.test(cleanTermContent) ||
+        /(?:upon|with|by)\s+(?:prior\s*)?(?:written\s*)?notice[^\.\n]*?(?:terminat|cancel)/i.test(cleanTermContent);
       const hasNoticeDays = /\d+\s*days/i.test(cleanTermContent);
 
-      if (hasNoticeMention && !hasNoticeDays) {
+      if (!isTerminationProhibited && hasTerminationByNotice && !hasNoticeDays) {
         const noticeMatch = cleanTermContent.match(/(?:by|upon)\s*(?:prior\s*)?(?:written\s*)?notice/i) || cleanTermContent.match(/notice/i);
         const originalPhrase = noticeMatch ? noticeMatch[0] : 'notice';
         const located = locateTextInDocument(fullText, originalPhrase, 'Term');
         const rawPeriod = facts.noticePeriod || facts.responsePeriod || '30 days';
         const knownPeriod = rawPeriod.includes('day') ? rawPeriod : `${rawPeriod} days`;
 
+        const hasKnownFact = !!(facts.noticePeriod || facts.responsePeriod);
+
         issues.push({
           id: 'det_missing_notice_period',
           issueId: 'det_missing_notice_period',
           type: 'MISSING_NOTICE_PERIOD',
+          findingType: 'INSUFFICIENT_PROTECTION',
           category: 'STRUCTURAL',
           severity: 'MEDIUM',
           section: 'Termination',
@@ -877,12 +888,14 @@ export class ValidationEngine {
           description: 'The termination clause specifies termination upon notice but does not define a required notice timeframe.',
           location: located.location,
           evidence: located.evidence,
+          whyItMatters: 'Without a defined notice duration, an agreement can be terminated abruptly, prejudicing ongoing operations and transition arrangements.',
+          howToResolve: `Specify the required notice window (e.g., '${knownPeriod} written notice') in the termination clause.`,
           reason: 'Without a defined notice duration, an agreement can be terminated abruptly, prejudicing ongoing operations and transition arrangements.',
           suggestion: `Specify the required notice window (e.g., '${knownPeriod} written notice').`,
-          canAutoFix: true,
-          mode: 'SAFE_AUTO',
+          canAutoFix: hasKnownFact,
+          mode: hasKnownFact ? 'SAFE_AUTO' : 'MANUAL',
           confidence: 0.92,
-          proposedPatch: {
+          proposedPatch: hasKnownFact ? {
             id: 'patch_notice_period',
             issueId: 'det_missing_notice_period',
             action: 'REPLACE_TEXT',
@@ -894,7 +907,7 @@ export class ValidationEngine {
             mode: 'SAFE_AUTO',
             confidence: 0.92,
             requiresUserInput: false
-          }
+          } : undefined
         });
       }
     }
@@ -940,7 +953,7 @@ export class ValidationEngine {
 
     if (!isExcludedFromIPCheck) {
       const commissionsCustomWork = /(?:shall\s*(?:create|develop|author|deliver|provide|build)\s*(?:custom\s*)?(?:software|deliverables|work\s*product|source\s*code|inventions)|custom\s*software\s*modules|deliverables\s*and\s*deliverables|commissioned\s*work)\b/i.test(cleanText);
-      const definesOwnership = /hereby\s*assigns|exclusive\s*property\s*of|sole\s*and\s*exclusive\s*owner|retains\s*all\s*right|all\s*rights.*shall\s*belong|work\s*(?:made\s*)?for\s*hire|ownership\s*of\s*(?:ip|intellectual\s*property|deliverables)|assignment\s*of\s*rights|title\s*and\s*interest\s*in|remains\s+the\s+property\s+of|independently\s+created|no\s+intellectual\s+property\s+is\s+transferred|no\s+transfer\s+of\s+intellectual\s+property|retains\s+ownership|independent\s+ip/i.test(cleanText);
+      const definesOwnership = /hereby\s*assigns|exclusive\s*property\s*of|sole\s*and\s*exclusive\s*owner|retains\s*all\s*right|all\s*rights.*shall\s*belong|work\s*(?:made\s*)?for\s*hire|ownership\s*of\s*(?:ip|intellectual\s*property|deliverables)|assignment\s*of\s*rights|title\s*and\s*interest\s*in|remains\s+the\s+property\s+of|independently\s+created|no\s+intellectual\s+property\s+is\s+transferred|no\s+transfer\s+of\s+intellectual\s+property|no\s+ip\s+rights\s+are\s+transferred|no\s+(?:license|transfer)\s+(?:or\s+(?:license|transfer)\s+)?of\s+(?:intellectual\s+property|ip)|neither\s+party\s+transfers\s+(?:any\s+)?(?:intellectual\s+property|ip)|retains\s+ownership|independent\s+ip/i.test(cleanText);
 
       if (commissionsCustomWork && !definesOwnership) {
         const located = locateTextInDocument(fullText, /custom software|deliverables|work product|inventions/i, 'Intellectual Property');
@@ -948,6 +961,7 @@ export class ValidationEngine {
           id: 'det_missing_ip_ownership',
           issueId: 'det_missing_ip_ownership',
           type: 'MISSING_IP_OWNERSHIP',
+          findingType: 'INSUFFICIENT_PROTECTION',
           category: 'RISK',
           severity: 'MEDIUM',
           section: 'Intellectual Property',
@@ -956,6 +970,8 @@ export class ValidationEngine {
           description: 'The contract references intellectual property or deliverables, but does not explicitly state who owns newly created work.',
           location: located.location,
           evidence: located.evidence,
+          whyItMatters: 'Failure to explicitly state whether developments are retained, licensed, or assigned leads to dual-ownership disputes under statutory IP laws.',
+          howToResolve: 'Add an intellectual property covenant defining ownership transfer, retaining pre-existing rights, and licensing terms.',
           reason: 'Failure to explicitly state whether developments are retained, licensed, or assigned leads to dual-ownership disputes under statutory IP laws.',
           suggestion: 'Add an intellectual property covenant defining ownership transfer, retaining pre-existing rights, and licensing terms.',
           canAutoFix: false,
@@ -1161,3 +1177,177 @@ function getSuggestionForType(type: string, section: string): string {
 }
 
 export const validationEngine = new ValidationEngine();
+
+/**
+ * Strict Finding Quality Gate
+ * 1. Confidence threshold >= 0.75 (suppress low-confidence flags)
+ * 2. Evidence verification: for non-missing defects, evidence text must exist within fullText
+ * 3. Structured QC Taxonomy: populates findingType, whyItMatters, howToResolve
+ */
+export function applyFindingQualityGate(issues: ValidationFinding[], fullText: string): ValidationFinding[] {
+  const verified: ValidationFinding[] = [];
+  const normalizedFullText = fullText.replace(/\r\n/g, '\n');
+
+  for (const issue of issues) {
+    // 1. Strict Confidence Threshold (>= 0.75)
+    const conf = typeof issue.confidence === 'number' ? issue.confidence : 0.8;
+    if (conf < 0.75) {
+      continue;
+    }
+
+    // 2. Verified Evidence Check:
+    // If finding points to defective text (not an omission/missing clause), evidence MUST exist in the document text.
+    const isMissing = Boolean(
+      issue.isMissing ||
+      issue.location?.isMissing ||
+      issue.type?.startsWith('MISSING_') ||
+      issue.nature === 'MISSING_CLAUSE' ||
+      issue.nature === 'MISSING_FIELD'
+    );
+
+    if (!isMissing) {
+      const ev = (issue.evidence || '').trim();
+      if (!ev) {
+        // No evidence provided for a text defect -> unverified / fabricated, suppress!
+        continue;
+      }
+      // Check if evidence actually exists in document text
+      const cleanEv = ev.replace(/[“”"']/g, '').trim();
+      if (cleanEv.length >= 3) {
+        let found = normalizedFullText.toLowerCase().includes(cleanEv.toLowerCase()) ||
+          normalizedFullText.includes(ev);
+
+        // For comparisons / contradictions (e.g. "30 days vs 45 days"):
+        if (!found && cleanEv.includes(' vs ')) {
+          const parts = cleanEv.split(/\s+vs\s+/i);
+          found = parts.every(part => {
+            const p = part.trim().toLowerCase();
+            return p.length >= 2 && normalizedFullText.toLowerCase().includes(p);
+          });
+        }
+
+        if (!found && issue.type === 'CONFLICTING_TERMS') {
+          found = true;
+        }
+
+        if (!found) {
+          // Evidence cannot be matched in actual document text -> suppress!
+          continue;
+        }
+      }
+    }
+
+    // 3. Taxonomy Normalization & Field Completeness
+    const mappedFindingType = mapToFindingType(issue.type, issue.nature);
+    const whyItMatters = issue.whyItMatters || issue.reason || getWhyItMatters(issue.type, issue.severity);
+    const howToResolve = issue.howToResolve || issue.suggestion || getHowToResolve(issue.type, issue.section);
+
+    verified.push({
+      ...issue,
+      findingType: issue.findingType || mappedFindingType,
+      whyItMatters,
+      howToResolve,
+      reason: issue.reason || whyItMatters,
+      suggestion: issue.suggestion || howToResolve
+    });
+  }
+
+  return verified;
+}
+
+export function mapToFindingType(type: string, nature?: string): string {
+  if (type === 'UNRESOLVED_PLACEHOLDER') return 'PLACEHOLDER';
+  if (
+    type === 'MISSING_REQUIRED_CLAUSE' ||
+    type === 'MISSING_SIGNATURE_BLOCK' ||
+    type === 'MISSING_SECTION'
+  ) return 'MISSING_REQUIRED_CLAUSE';
+  if (
+    type === 'MISSING_REQUIRED_FIELD' ||
+    type === 'MISSING_RECOMMENDED_FIELD' ||
+    type === 'MISSING_INFORMATION'
+  ) return 'MISSING_INFORMATION';
+  if (type === 'MISSING_RECOMMENDED_CLAUSE') return 'OPTIONAL_RECOMMENDATION';
+  if (
+    type === 'PARTY_MISMATCH' ||
+    type === 'FACT_MISMATCH' ||
+    type === 'DATE_CHRONOLOGY_ERROR'
+  ) return 'FACT_INCONSISTENCY';
+  if (type === 'CONFLICTING_TERMS') return 'CONTRADICTION';
+  if (type === 'BROKEN_CROSS_REFERENCE') return 'BROKEN_CROSS_REFERENCE';
+  if (type === 'UNDEFINED_TERM') return 'UNDEFINED_TERM';
+  if (type === 'AMBIGUOUS_PROVISION' || type === 'INCOMPLETE_CLAUSE') return 'AMBIGUOUS_PROVISION';
+  if (
+    type === 'UNLIMITED_LIABILITY' ||
+    type === 'UNCAPPED_LIABILITY' ||
+    type === 'ONE_SIDED_TERMINATION' ||
+    type === 'INSUFFICIENT_PROTECTION'
+  ) return 'INSUFFICIENT_PROTECTION';
+  if (
+    type === 'EMPTY_OR_TRUNCATED_SECTION' ||
+    type === 'STRUCTURAL_PROBLEM'
+  ) return 'STRUCTURAL_PROBLEM';
+  return 'RISK';
+}
+
+export function getWhyItMatters(type: string, severity: string): string {
+  switch (type) {
+    case 'UNRESOLVED_PLACEHOLDER':
+      return 'Execution of agreements with unresolved bracketed fill-ins or template instructions renders essential terms indeterminate and legally defective.';
+    case 'MISSING_REQUIRED_CLAUSE':
+      return 'Omitting this foundational clause creates severe statutory ambiguity, weakens enforceability, and leaves core rights unprotected.';
+    case 'MISSING_REQUIRED_FIELD':
+    case 'MISSING_INFORMATION':
+      return 'Essential factual elements are missing, preventing clear identification of parties, effective dates, or core commercial terms.';
+    case 'FACT_MISMATCH':
+    case 'PARTY_MISMATCH':
+      return 'Discrepancy between stated transaction facts and operative drafting creates privity defects and risks contract dispute or repudiation.';
+    case 'CONFLICTING_TERMS':
+      return 'Direct internal contradictions create judicial interpretation ambiguities and weaken enforcement under standard contract doctrine.';
+    case 'UNLIMITED_LIABILITY':
+    case 'UNCAPPED_LIABILITY':
+      return 'Failure to cap aggregate financial exposure leaves a contracting party vulnerable to uncapped catastrophic damages.';
+    case 'MISSING_PAYMENT_AMOUNT':
+      return 'Reciting payment obligations without agreed monetary consideration or clear formulas renders the provision unenforceable for indefiniteness.';
+    case 'MISSING_NOTICE_PERIOD':
+      return 'Omitting a definite notice period allows immediate termination, causing disruption and potential breach of transition covenants.';
+    case 'MISSING_IP_OWNERSHIP':
+      return 'Unclear intellectual property assignment leads to dual-ownership claims and disputes under statutory copyright and patent laws.';
+    case 'BROKEN_CROSS_REFERENCE':
+      return 'Referencing non-existent sections creates contractual incoherence and makes dependent provisions unenforceable.';
+    default:
+      return severity === 'HIGH'
+        ? 'Creates substantial legal exposure, ambiguity, or dispute liability under applicable law.'
+        : 'Reduces contractual clarity and may lead to conflicting interpretations between parties.';
+  }
+}
+
+export function getHowToResolve(type: string, section: string): string {
+  switch (type) {
+    case 'UNRESOLVED_PLACEHOLDER':
+      return 'Manually locate the placeholder in the editor and replace it with agreed transaction terms or remove if inapplicable.';
+    case 'MISSING_REQUIRED_CLAUSE':
+      return `Navigate to the insertion point in the editor and draft standard operative language for '${section}'.`;
+    case 'MISSING_REQUIRED_FIELD':
+    case 'MISSING_INFORMATION':
+      return `Update the document text to explicitly state the required ${section} details.`;
+    case 'FACT_MISMATCH':
+    case 'PARTY_MISMATCH':
+      return 'Align the party name, date, or term in the agreement preamble and operative text with verified transaction facts.';
+    case 'CONFLICTING_TERMS':
+      return 'Review conflicting sections and harmonize the terms so obligations and timelines are consistent throughout.';
+    case 'UNLIMITED_LIABILITY':
+    case 'UNCAPPED_LIABILITY':
+      return 'Add an aggregate monetary liability cap (e.g., total fees paid in preceding 12 months) and mutual consequential damages waiver.';
+    case 'MISSING_PAYMENT_AMOUNT':
+      return 'Explicitly define the agreed currency, fee amount, milestone schedule, and invoicing terms in the payment clause.';
+    case 'MISSING_NOTICE_PERIOD':
+      return 'Specify the required notice window (e.g., 30 days prior written notice) in the termination provision.';
+    case 'MISSING_IP_OWNERSHIP':
+      return 'Incorporate clear intellectual property ownership, work product assignment, or licensing provisions.';
+    case 'BROKEN_CROSS_REFERENCE':
+      return 'Correct the section number reference to point to the actual intended clause in the document.';
+    default:
+      return 'Review the highlighted text and refine wording to meet institutional standards and eliminate ambiguity.';
+  }
+}

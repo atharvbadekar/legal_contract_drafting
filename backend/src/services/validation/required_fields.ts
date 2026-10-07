@@ -978,6 +978,7 @@ export function validateRequiredFields(
       id: issueId,
       issueId,
       type: 'UNRESOLVED_PLACEHOLDER',
+      findingType: 'PLACEHOLDER',
       category: 'STRUCTURAL',
       severity: 'HIGH',
       section: located.location.sectionTitle || 'General',
@@ -986,6 +987,8 @@ export function validateRequiredFields(
       description: `Document contains unresolved placeholder '${ph.rawText}' which must be populated with authoritative legal terms prior to execution.`,
       location: located.location,
       evidence: ph.lineSnippet || located.evidence,
+      whyItMatters: 'Execution of agreements with unresolved bracketed fill-ins or template instructions renders essential terms indeterminate and legally defective.',
+      howToResolve: `Replace '${ph.rawText}' with authoritative contractual data or remove if not applicable.`,
       reason: 'Execution of agreements with unresolved bracketed fill-ins or blank placeholders renders essential terms indeterminate and legally defective.',
       suggestion: `Replace '${ph.rawText}' with authoritative contractual data or remove if not applicable.`,
       canAutoFix: false,
@@ -995,6 +998,8 @@ export function validateRequiredFields(
   });
 
   // 2. REQUIRED & RECOMMENDED FIELD PRESENCE CHECK
+  const hasPaymentWaiver = /(?:no\s+(?:monetary\s+)?(?:payment|fee|compensation|remuneration|financial\s+consideration|charge|royalty)(?:\s+or\s+(?:payment|fee|compensation|remuneration|consideration|charge|royalty))?\s+(?:shall\s+be\s+(?:due|payable|owed)|is\s+(?:required|payable|due|owed)|will\s+be\s+(?:due|payable|owed))|neither\s+party\s+shall\s+(?:owe|pay|be\s+obligated\s+to\s+pay|be\s+required\s+to\s+pay)\s+(?:any\s+)?(?:fee|payment|compensation|remuneration|consideration)|free\s+of\s+charge|pro\s+bono|without\s+(?:any\s+)?(?:monetary\s+)?(?:payment|fee|compensation|charge)\s*(?:being\s+due|required|payable|owed)?|no\s+fees?\s+(?:shall\s+be\s+due|are\s+payable|are\s+owed))/i.test(cleanText);
+
   for (const field of fieldDefs) {
     const factVal = extractFactValue(facts, field.aliases);
     const hasFact = factVal !== undefined && !isPlaceholderOrEmpty(factVal);
@@ -1008,6 +1013,11 @@ export function validateRequiredFields(
           break;
         }
       }
+    }
+
+    // If compensation/salary is waived expressly, text requirement is satisfied
+    if ((field.key === 'compensation' || field.key === 'salary') && hasPaymentWaiver) {
+      hasTextEvidence = true;
     }
 
     // For party names: verify actual substantive entity name appears in text
@@ -1024,6 +1034,7 @@ export function validateRequiredFields(
     if (!hasFact && !hasTextEvidence) {
       const severity = field.requirement === 'REQUIRED' ? 'HIGH' : (field.requirement === 'RECOMMENDED' ? 'MEDIUM' : 'LOW');
       const type = field.requirement === 'REQUIRED' ? 'MISSING_REQUIRED_FIELD' : 'MISSING_RECOMMENDED_FIELD';
+      const findingType = 'MISSING_INFORMATION';
       const issueId = `det_missing_${field.key}`;
 
       const located = locateTextInDocument(fullText, field.label, 'Parties', {
@@ -1034,6 +1045,7 @@ export function validateRequiredFields(
         id: issueId,
         issueId,
         type,
+        findingType,
         category: field.category,
         severity,
         section: field.label,
@@ -1047,6 +1059,8 @@ export function validateRequiredFields(
         },
         evidence: '',
         isMissing: true,
+        whyItMatters: field.missingReason,
+        howToResolve: field.suggestion,
         reason: field.missingReason,
         suggestion: field.suggestion,
         canAutoFix: false,

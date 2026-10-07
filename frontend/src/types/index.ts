@@ -97,6 +97,8 @@ export interface DocumentLocation {
   };
   contextBefore?: string;
   contextAfter?: string;
+  lineStart?: number;
+  lineEnd?: number;
   isMissing?: boolean;
   insertionOffset?: number;
   insertionAnchor?: string;
@@ -119,10 +121,26 @@ export interface DocumentPatch {
   requiresUserInput: boolean;
 }
 
+export type FindingType =
+  | 'MISSING_REQUIRED_CLAUSE'
+  | 'MISSING_INFORMATION'
+  | 'PLACEHOLDER'
+  | 'CONTRADICTION'
+  | 'FACT_INCONSISTENCY'
+  | 'UNDEFINED_TERM'
+  | 'BROKEN_CROSS_REFERENCE'
+  | 'AMBIGUOUS_PROVISION'
+  | 'INSUFFICIENT_PROTECTION'
+  | 'RISK'
+  | 'STRUCTURAL_PROBLEM'
+  | 'OPTIONAL_RECOMMENDATION'
+  | string;
+
 export interface ValidationIssue {
   id?: string;
   issueId?: string;
   type: string;
+  findingType?: FindingType;
   category?: 'FACTUAL' | 'STRUCTURAL' | 'RISK' | 'COMPLIANCE';
   severity: 'HIGH' | 'MEDIUM' | 'LOW';
   section: string;
@@ -135,7 +153,9 @@ export interface ValidationIssue {
   nature?: string;
   deduplicationKey?: string;
   reason?: string;
+  whyItMatters?: string;
   suggestion?: string;
+  howToResolve?: string;
   canAutoFix?: boolean;
   mode?: 'SAFE_AUTO' | 'REVIEW' | 'MANUAL';
   confidence?: number;

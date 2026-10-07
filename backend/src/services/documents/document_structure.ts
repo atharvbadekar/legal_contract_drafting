@@ -46,6 +46,8 @@ export interface DocumentLocation {
   };
   contextBefore?: string;
   contextAfter?: string;
+  lineStart?: number;
+  lineEnd?: number;
   isMissing?: boolean;
   insertionOffset?: number;
   insertionAnchor?: string;

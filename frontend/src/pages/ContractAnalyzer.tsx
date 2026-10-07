@@ -800,7 +800,7 @@ Title: Managing Partner`);
                 className="px-4 py-2 bg-mira-primary hover:bg-mira-accent text-white text-xs font-bold rounded-lg shadow-sm transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 self-start sm:self-auto"
               >
                 <Edit3 className="w-3.5 h-3.5" />
-                {importing ? 'Importing...' : 'Open in Editor & Apply Fixes'}
+                {importing ? 'Importing...' : 'Open in Editor to Review & Edit'}
               </button>
             </div>
 
@@ -821,9 +821,9 @@ Title: Managing Partner`);
                 </div>
                 <p className="text-xs text-purple-800">
                   {result.health.score >= 90
-                    ? 'This contract has strong foundational protections. Review the checklist below to achieve institutional perfection.'
+                    ? 'This contract has strong foundational protections based on configured validation rules.'
                     : result.health.score >= 70
-                    ? 'Standard draft with notable risk exposure. Implementing the 6 priority fixes below will elevate this document to 95%+.'
+                    ? 'Standard draft with notable risk exposure. Reviewing and addressing the priority recommendations below will elevate this document.'
                     : 'Critical vulnerabilities detected. This document requires essential terms, liability caps, and party alignment before signing.'}
                 </p>
               </div>
@@ -915,7 +915,7 @@ Title: Managing Partner`);
               <div className="space-y-0.5">
                 <span className="text-xs font-bold text-purple-950">Ready to Perfect This Contract?</span>
                 <p className="text-[11px] text-purple-800">
-                  Open this document in our Document Editor to use 1-Click Quick Fix, resolve placeholders, or insert canonical clauses from the Clause Library.
+                  Open this document in our Document Editor to review findings, resolve placeholders, and manually adjust text based on verified legal recommendations.
                 </p>
               </div>
               <button
