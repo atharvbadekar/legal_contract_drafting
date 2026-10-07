@@ -6,6 +6,8 @@ export const ndaConfig: ContractTypeConfig = {
   description: 'Bilateral or unilateral agreement safeguarding confidential technical disclosures, trade secrets, and proprietary information.',
   version: '1.0',
   jurisdiction: 'India',
+  defaultJurisdiction: 'India',
+  supportedJurisdictions: ['India', 'United States', 'United Kingdom', 'Singapore'],
   icon: 'Shield',
   color: 'blue',
   category: 'CONFIDENTIALITY',
@@ -47,5 +49,94 @@ export const ndaConfig: ContractTypeConfig = {
     { key: 'injunctiveRelief', label: 'Injunctive Relief Without Bond Covenant', type: 'toggle', required: 'RECOMMENDED', defaultValue: true, section: 'Obligations' },
   ],
   requiredFacts: ['disclosingParty.name', 'receivingParty.name', 'purpose', 'effectiveDate', 'governingLaw'],
-  optionalFacts: ['duration', 'disclosingParty.address', 'receivingParty.address', 'returnDays', 'jurisdiction']
+  optionalFacts: ['duration', 'disclosingParty.address', 'receivingParty.address', 'returnDays', 'jurisdiction'],
+  clauses: {
+    requiredClauses: [
+      'preamble',
+      'parties',
+      'purpose',
+      'definition',
+      'confidentiality',
+      'exceptions',
+      'return_destruction',
+      'duration',
+      'remedies',
+      'governing_law',
+      'signatures'
+    ],
+    recommendedClauses: [
+      'permitted_disclosure',
+      'dispute_resolution',
+      'severability',
+      'entire_agreement'
+    ],
+    conditionalClauses: [
+      {
+        clauseKey: 'require_destruction_cert',
+        conditionField: 'requireDestructionCert',
+        conditionValue: true,
+        reason: 'Client requested verified written certification of destroyed materials.'
+      },
+      {
+        clauseKey: 'injunctive_relief_bond_waiver',
+        conditionField: 'injunctiveRelief',
+        conditionValue: true,
+        reason: 'Parties agree equitable relief does not require posting security bond.'
+      }
+    ],
+    optionalClauses: [
+      'non_solicitation',
+      'counterparts',
+      'export_controls'
+    ]
+  },
+  clauseDependencies: {
+    remedies: ['confidentiality'],
+    exceptions: ['definition'],
+    return_destruction: ['duration']
+  },
+  validationRules: [
+    {
+      id: 'val_parties',
+      name: 'Bilateral Parties Verification',
+      description: 'Both disclosing and receiving legal parties must be identified without placeholder terms.',
+      ruleType: 'FIELD_PRESENCE',
+      severity: 'CRITICAL',
+      fieldOrClause: 'parties'
+    },
+    {
+      id: 'val_duration',
+      name: 'Survival Term Definition',
+      description: 'Definite term duration must be stipulated to prevent perpetual restraint challenges.',
+      ruleType: 'FIELD_PRESENCE',
+      severity: 'HIGH',
+      fieldOrClause: 'duration'
+    },
+    {
+      id: 'val_purpose',
+      name: 'Authorized Purpose Scope',
+      description: 'Authorized purpose cannot be blank or undefined.',
+      ruleType: 'FIELD_PRESENCE',
+      severity: 'HIGH',
+      fieldOrClause: 'purpose'
+    }
+  ],
+  riskRules: [
+    {
+      id: 'risk_perpetual_restraint',
+      name: 'Unreasonable Perpetual Restraint',
+      description: 'Indefinite non-disclosure covenants may violate Section 27 of Indian Contract Act 1872.',
+      triggerCondition: 'duration == perpetual',
+      riskLevel: 'HIGH',
+      suggestedResolution: 'Limit term of confidentiality to 2 to 5 years from Effective Date.'
+    },
+    {
+      id: 'risk_missing_injunctive',
+      name: 'Absence of Injunctive Relief',
+      description: 'Without equitable relief, disclosing party cannot obtain emergency court restraining orders.',
+      triggerCondition: 'injunctiveRelief == false',
+      riskLevel: 'MEDIUM',
+      suggestedResolution: 'Include emergency injunctive relief acknowledging irreparable harm.'
+    }
+  ]
 };

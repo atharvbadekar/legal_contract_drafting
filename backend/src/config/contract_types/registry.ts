@@ -9,6 +9,8 @@ import { vendorConfig } from './vendor.config.js';
 import { partnershipConfig } from './partnership.config.js';
 import { internshipConfig } from './internship.config.js';
 import { leaseConfig } from './lease.config.js';
+import { legalNoticeConfig } from './legal_notice.config.js';
+import { saleConfig } from './sale.config.js';
 
 export const CONTRACT_TYPES_REGISTRY: Record<string, ContractTypeConfig> = {
   NDA: ndaConfig,
@@ -21,10 +23,29 @@ export const CONTRACT_TYPES_REGISTRY: Record<string, ContractTypeConfig> = {
   PARTNERSHIP: partnershipConfig,
   INTERNSHIP: internshipConfig,
   LEASE: leaseConfig,
+  LEGAL_NOTICE: legalNoticeConfig,
+  SALE_AGREEMENT: saleConfig,
+  SALE: saleConfig,
+  EMPLOYMENT_AGREEMENT: employmentConfig,
+  SERVICE_AGREEMENT: serviceConfig,
+  RENTAL: leaseConfig,
+  RENTAL_LEASE: leaseConfig,
+  FREELANCE: consultingConfig,
+  CONTRACTOR: consultingConfig,
+  INDEPENDENT_CONTRACTOR: consultingConfig
 };
 
 export function getAllContractTypes(): ContractTypeConfig[] {
-  return Object.values(CONTRACT_TYPES_REGISTRY);
+  // Return unique contract types
+  const seen = new Set<string>();
+  const list: ContractTypeConfig[] = [];
+  for (const c of Object.values(CONTRACT_TYPES_REGISTRY)) {
+    if (!seen.has(c.code)) {
+      seen.add(c.code);
+      list.push(c);
+    }
+  }
+  return list;
 }
 
 export function getContractTypeConfig(code: string): ContractTypeConfig | null {

@@ -310,7 +310,7 @@ export class ValidationEngine {
     let calculatedScore = Math.max(15, Math.min(98, baseScore - totalDeduction));
     const capsApplied: string[] = [];
 
-    // HARD CAP RULES based on deduplicated defect groups:
+    // DYNAMIC QUALITY GATES based on deduplicated defect groups:
     if (deduplicatedHighCount >= 4) {
       calculatedScore = Math.min(calculatedScore, 35);
       capsApplied.push('Score capped at 35% due to 4+ high-severity defect groups');
@@ -364,8 +364,8 @@ export class ValidationEngine {
       legalBertIssues,
       allIssues,
       disclaimer: allIssues.length === 0
-        ? "MIRA AI Legal Quality-Control Review: No high-confidence legal issues detected based on configured institutional validation rules. This automated review assists legal analysis and does not constitute formal legal advice."
-        : "MIRA AI Legal Quality-Control Review: This automated review assists legal analysis based on configured institutional validation rules and does not constitute formal legal advice."
+        ? "Atharv Legal AI (MIRA AI Legal Quality-Control Review): No high-confidence legal issues detected based on configured institutional validation rules. This automated review assists legal analysis and does not constitute formal legal advice."
+        : "Atharv Legal AI (MIRA AI Legal Quality-Control Review): This automated review assists legal analysis based on configured institutional validation rules and does not constitute formal legal advice."
     };
   }
 

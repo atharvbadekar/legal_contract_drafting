@@ -14,6 +14,7 @@ import {
   Layers,
   Search
 } from 'lucide-react';
+import { SystemStatusWidget } from './SystemStatusWidget';
 
 export const Navbar: React.FC = () => {
   const { user, logout, isAdmin } = useAuth();
@@ -165,8 +166,9 @@ export const Navbar: React.FC = () => {
             )}
           </div>
 
-          {/* User Profile / Logout */}
+          {/* User Profile / Logout & Status */}
           <div className="flex items-center gap-3">
+            <SystemStatusWidget />
             {user ? (
               <div className="flex items-center gap-3">
                 <div className="hidden sm:flex flex-col text-right">

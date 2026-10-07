@@ -14,7 +14,6 @@ import {
   parseDocumentStructure
 } from '../documents/document_structure.js';
 import { validationEngine, ValidationFinding } from './validation_engine.js';
-import { generationService } from '../generation/generation_service.js';
 
 export class UnsafePatchError extends Error {
   constructor(message: string) {

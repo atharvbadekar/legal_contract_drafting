@@ -9,6 +9,8 @@ import { exportService } from '../services/documents/export_service.js';
 import { parseDocumentStructure } from '../services/documents/document_structure.js';
 import { contractAnalyzer } from '../services/analyzer/contract_analyzer.js';
 import { generationService } from '../services/generation/generation_service.js';
+import { naturalLanguageEditor } from '../services/editor/natural_language_editor.js';
+import { documentHistoryService } from '../services/history/document_history_service.js';
 
 interface InMemoryDocument {
   id: string;
@@ -322,35 +324,22 @@ export class DocumentsController {
       inMemoryDocuments.set(id, updated);
 
       if (saveAsVersion && content) {
-        const vers = inMemoryVersions.get(id) || [];
-        const nextNum = vers.length + 1;
-        const newVer = {
-          id: randomUUID(),
-          documentId: id,
-          versionNumber: nextNum,
-          content: updated.content,
-          structuredFacts: updated.structuredFacts as any,
-          validationResult: updated.validationSummary as any,
-          createdById: userId,
-          createdBy: { name: req.user?.name || 'Author' },
-          createdAt: new Date()
-        };
-        vers.unshift(newVer);
-        inMemoryVersions.set(id, vers);
-
         try {
-          await prisma.documentVersion.create({
-            data: {
-              documentId: id,
-              versionNumber: nextNum,
-              content: updated.content,
-              structuredFacts: updated.structuredFacts as any,
-              validationResult: updated.validationSummary as any,
-              createdById: userId
-            }
+          await documentHistoryService.recordVersion({
+            documentId: id,
+            userId,
+            authorName: req.user?.name || 'Author',
+            authorEmail: req.user?.email || 'user@atharv.legal',
+            content: updated.content,
+            structuredFacts: updated.structuredFacts as any,
+            validationSummary: updated.validationSummary as any,
+            validationScore: updated.validationScore,
+            changeSummary: 'Manual document edit saved',
+            operationType: 'MANUAL_EDIT',
+            scoreBefore: existing.validationScore
           });
-        } catch {
-          // in-memory version recorded
+        } catch (hErr) {
+          console.warn('Failed to record manual edit version history:', hErr);
         }
       }
 
@@ -472,20 +461,24 @@ export class DocumentsController {
 
         inMemoryDocuments.set(id, updatedDoc);
 
-        // Record version
-        const vers = inMemoryVersions.get(id) || [];
-        vers.unshift({
-          id: randomUUID(),
-          documentId: id,
-          versionNumber: vers.length + 1,
-          structuredFacts: facts,
-          content: draftResult.formattedDocument,
-          validationResult: updatedDoc.validationSummary,
-          createdById: doc.userId,
-          createdBy: { name: req.user?.name || 'Author' },
-          createdAt: new Date()
-        });
-        inMemoryVersions.set(id, vers);
+        // Record version via DocumentHistoryService
+        try {
+          await documentHistoryService.recordVersion({
+            documentId: id,
+            userId: doc.userId,
+            authorName: req.user?.name || 'Author',
+            authorEmail: req.user?.email || 'user@atharv.legal',
+            content: draftResult.formattedDocument,
+            structuredFacts: facts,
+            validationSummary: updatedDoc.validationSummary,
+            validationScore: validationResult.overallScore,
+            changeSummary: `Generated contract (${mode}) via ${draftResult.modelUsed || 'AI Drafting Engine'}`,
+            operationType: 'GENERATION',
+            engine: draftResult.modelUsed || 'Atharv Legal AI Drafting'
+          });
+        } catch (hErr) {
+          console.warn('Failed to record generation version history:', hErr);
+        }
 
         // Persist to DB if accessible
         try {
@@ -653,24 +646,57 @@ export class DocumentsController {
   async getVersions(req: AuthRequest, res: Response) {
     try {
       const { id } = req.params;
-      let versions: any[] = [];
-      try {
-        versions = await prisma.documentVersion.findMany({
-          where: { documentId: id },
-          orderBy: { versionNumber: 'desc' },
-          include: { createdBy: { select: { name: true, email: true } } }
-        });
-      } catch {
-        // fallback
-      }
-
-      if (!versions || versions.length === 0) {
-        versions = inMemoryVersions.get(id) || [];
-      }
-
+      const versions = await documentHistoryService.getVersions(id);
       return res.json({ versions });
     } catch (err: any) {
+      console.error('getVersions error:', err);
       return res.status(500).json({ error: 'Failed to retrieve versions' });
+    }
+  }
+
+  async compareVersions(req: AuthRequest, res: Response) {
+    try {
+      const { id } = req.params;
+      const { v1, v2 } = req.query;
+      if (!v1 || !v2) {
+        return res.status(400).json({ error: 'Query parameters v1 and v2 are required for version comparison.' });
+      }
+
+      const diff = await documentHistoryService.compareVersions(id, Number(v1), Number(v2));
+      return res.json({ diff });
+    } catch (err: any) {
+      console.error('compareVersions error:', err);
+      return res.status(400).json({ error: err.message || 'Failed to compare versions' });
+    }
+  }
+
+  async getAuditTrail(req: AuthRequest, res: Response) {
+    try {
+      const { id } = req.params;
+      const auditLogs = await documentHistoryService.getAuditLogs(id);
+      return res.json({ auditLogs });
+    } catch (err: any) {
+      console.error('getAuditTrail error:', err);
+      return res.status(500).json({ error: 'Failed to retrieve audit trail' });
+    }
+  }
+
+  async exportAuditReport(req: AuthRequest, res: Response) {
+    try {
+      const { id } = req.params;
+      const doc = await this.findDoc(id);
+      if (!doc) {
+        return res.status(404).json({ error: 'Document not found' });
+      }
+
+      const report = await documentHistoryService.exportAuditReport(id);
+      const filename = `audit_report_${(doc.title || 'document').replace(/[^a-zA-Z0-9_-]/g, '_')}.json`;
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      return res.json(report);
+    } catch (err: any) {
+      console.error('exportAuditReport error:', err);
+      return res.status(500).json({ error: 'Failed to export audit report' });
     }
   }
 
@@ -688,13 +714,14 @@ export class DocumentsController {
 
       if (!version) {
         const memVers = inMemoryVersions.get(id) || [];
-        version = memVers.find(v => v.id === versionId);
+        version = memVers.find(v => v.id === versionId || String(v.versionNumber) === versionId);
       }
 
       if (!version || version.documentId !== id) {
         return res.status(404).json({ error: 'Version not found' });
       }
 
+      const userId = req.user?.id || version.createdById || '00000000-0000-0000-0000-000000000002';
       let updated: any = null;
       try {
         updated = await prisma.document.update({
@@ -716,6 +743,25 @@ export class DocumentsController {
         }
       }
 
+      // Record restore in document version history & audit trail
+      try {
+        await documentHistoryService.recordVersion({
+          documentId: id,
+          userId,
+          authorName: req.user?.name || 'Author',
+          authorEmail: req.user?.email || 'user@atharv.legal',
+          content: version.content,
+          structuredFacts: version.structuredFacts,
+          validationSummary: version.validationResult,
+          validationScore: version.validationResult?.score || updated?.validationScore || 0,
+          changeSummary: `Restored to version v${version.versionNumber}`,
+          operationType: 'RESTORE',
+          scoreBefore: updated?.validationScore
+        });
+      } catch (hErr) {
+        console.warn('Failed to record restore version history:', hErr);
+      }
+
       return res.json({ message: `Restored to version ${version.versionNumber}`, document: updated });
     } catch (err: any) {
       return res.status(500).json({ error: 'Failed to restore version' });
@@ -732,6 +778,21 @@ export class DocumentsController {
 
       const buffer = await exportService.generateDocx(doc.title, doc.content);
       const filename = `${doc.title.replace(/[^a-zA-Z0-9_-]/g, '_')}.docx`;
+
+      // Log export audit event
+      try {
+        await documentHistoryService.logAuditEvent({
+          documentId: id,
+          userId: req.user?.id || '00000000-0000-0000-0000-000000000002',
+          authorName: req.user?.name || 'Author',
+          action: 'DOCUMENT_EXPORT_DOCX',
+          operationType: 'EXPORT_DOCX',
+          changeSummary: `Exported DOCX: ${filename}`,
+          engine: 'Native Word XML Engine'
+        });
+      } catch (aErr) {
+        console.warn('Failed to log DOCX export audit event:', aErr);
+      }
 
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
@@ -752,6 +813,21 @@ export class DocumentsController {
 
       const buffer = await exportService.generatePdf(doc.title, doc.content);
       const filename = `${doc.title.replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`;
+
+      // Log export audit event
+      try {
+        await documentHistoryService.logAuditEvent({
+          documentId: id,
+          userId: req.user?.id || '00000000-0000-0000-0000-000000000002',
+          authorName: req.user?.name || 'Author',
+          action: 'DOCUMENT_EXPORT_PDF',
+          operationType: 'EXPORT_PDF',
+          changeSummary: `Exported PDF: ${filename}`,
+          engine: 'PDFKit Legal Typography Engine'
+        });
+      } catch (aErr) {
+        console.warn('Failed to log PDF export audit event:', aErr);
+      }
 
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
@@ -841,6 +917,26 @@ export class DocumentsController {
         inMemoryDocuments.set(id, (result as any).document);
       }
 
+      // Record in documentHistoryService for audit and diffing
+      try {
+        await documentHistoryService.recordVersion({
+          documentId: id,
+          userId,
+          authorName: req.user?.name || 'Author',
+          authorEmail: req.user?.email || 'user@atharv.legal',
+          content: (result as any)?.document?.content || doc.content,
+          structuredFacts: (result as any)?.document?.structuredFacts,
+          validationSummary: (result as any)?.document?.validationSummary,
+          validationScore: (result as any)?.document?.validationScore || (result as any)?.validationResult?.overallScore || 0,
+          changeSummary: `Applied AI Fix: ${targetPatch?.reason || 'compliance issue patch'}`,
+          operationType: 'AI_FIX',
+          scoreBefore: doc.validationScore,
+          engine: 'Atharv Legal AI Fix Engine'
+        });
+      } catch (hErr) {
+        console.warn('Failed to record AI fix version history:', hErr);
+      }
+
       return res.json(result);
     } catch (err: any) {
       return res.status(400).json({ error: err.message });
@@ -852,6 +948,7 @@ export class DocumentsController {
       const { id } = req.params;
       const { content: clientContent } = req.body;
       const userId = req.user?.id || '00000000-0000-0000-0000-000000000002';
+      const doc = await this.findDoc(id);
 
       if (clientContent) {
         if (inMemoryDocuments.has(id)) {
@@ -876,6 +973,25 @@ export class DocumentsController {
         inMemoryDocuments.set(id, (result as any).document);
       }
 
+      try {
+        await documentHistoryService.recordVersion({
+          documentId: id,
+          userId,
+          authorName: req.user?.name || 'Author',
+          authorEmail: req.user?.email || 'user@atharv.legal',
+          content: (result as any)?.document?.content || doc?.content || '',
+          structuredFacts: (result as any)?.document?.structuredFacts,
+          validationSummary: (result as any)?.document?.validationSummary,
+          validationScore: (result as any)?.document?.validationScore || (result as any)?.validationResult?.overallScore || 0,
+          changeSummary: `Batch applied ${(result as any)?.fixesApplied || 0} safe AI fixes`,
+          operationType: 'AI_FIX',
+          scoreBefore: doc?.validationScore,
+          engine: 'Atharv Safe AI Batch Engine'
+        });
+      } catch (hErr) {
+        console.warn('Failed to record batch AI fix version history:', hErr);
+      }
+
       return res.json(result);
     } catch (err: any) {
       return res.status(400).json({ error: err.message });
@@ -886,6 +1002,7 @@ export class DocumentsController {
     try {
       const { id } = req.params;
       const userId = req.user?.id || '00000000-0000-0000-0000-000000000002';
+      const doc = await this.findDoc(id);
 
       const result = await patchService.undoLastFix({
         documentId: id,
@@ -894,6 +1011,25 @@ export class DocumentsController {
 
       if (inMemoryDocuments.has(id) && (result as any)?.document) {
         inMemoryDocuments.set(id, (result as any).document);
+      }
+
+      try {
+        await documentHistoryService.recordVersion({
+          documentId: id,
+          userId,
+          authorName: req.user?.name || 'Author',
+          authorEmail: req.user?.email || 'user@atharv.legal',
+          content: (result as any)?.document?.content || doc?.content || '',
+          structuredFacts: (result as any)?.document?.structuredFacts,
+          validationSummary: (result as any)?.document?.validationSummary,
+          validationScore: (result as any)?.document?.validationScore || 0,
+          changeSummary: 'Undid previous AI fix',
+          operationType: 'RESTORE',
+          scoreBefore: doc?.validationScore,
+          engine: 'Atharv Undo Engine'
+        });
+      } catch (hErr) {
+        console.warn('Failed to record undo version history:', hErr);
       }
 
       return res.json(result);
@@ -1135,10 +1271,257 @@ export class DocumentsController {
         console.warn('Failed to record audit log:', auditErr);
       }
 
-      return res.json({ success: true, validationSummary: updatedSummary, document: updatedDoc });
+      return res.json({ document: updatedDoc || doc });
     } catch (err: any) {
       console.error('Review issue error:', err);
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: 'Failed to update issue status' });
+    }
+  }
+
+  async planNaturalLanguageEdit(req: AuthRequest, res: Response) {
+    try {
+      const { id } = req.params;
+      const { instruction, content, clarificationAnswer } = req.body;
+
+      if (!instruction || !instruction.trim()) {
+        return res.status(400).json({ error: 'Instruction is required for natural-language editing.' });
+      }
+
+      const doc = await this.findDoc(id);
+      if (!doc) {
+        return res.status(404).json({ error: 'Document not found' });
+      }
+
+      const effectiveContent = (content || doc.content || '').trim();
+      const plan = await naturalLanguageEditor.planEdit({
+        instruction,
+        content: effectiveContent,
+        documentType: doc.documentType,
+        structuredFacts: (doc.structuredFacts as any) || {},
+        clarificationAnswer
+      });
+
+      return res.json({ plan });
+    } catch (err: any) {
+      console.error('Plan natural language edit error:', err);
+      return res.status(500).json({ error: `Failed to plan natural-language edit: ${err.message}` });
+    }
+  }
+
+  async applyNaturalLanguageEdit(req: AuthRequest, res: Response) {
+    try {
+      const { id } = req.params;
+      const { instruction, operations, updatedContent, updatedFacts } = req.body;
+      const userId = req.user?.id || '00000000-0000-0000-0000-000000000002';
+
+      const doc = await this.findDoc(id);
+      if (!doc) {
+        return res.status(404).json({ error: 'Document not found' });
+      }
+
+      const previousContent = doc.content;
+      const previousFacts = doc.structuredFacts;
+      const previousValidationSummary = doc.validationSummary;
+
+      // 1. Snapshot previous state for one-click undo
+      const existingVersions = inMemoryVersions.get(id) || [];
+      const versionNum = (existingVersions.length || 0) + 1;
+      const versionSnapshot = {
+        id: randomUUID(),
+        documentId: id,
+        versionNumber: versionNum,
+        content: previousContent,
+        structuredFacts: previousFacts,
+        validationResult: previousValidationSummary,
+        createdById: userId,
+        createdAt: new Date().toISOString(),
+        notes: `Prior to NL Edit: ${instruction || 'Custom instruction'}`
+      };
+
+      try {
+        await prisma.documentVersion.create({
+          data: {
+            documentId: id,
+            versionNumber: versionNum,
+            content: previousContent,
+            structuredFacts: (previousFacts as any) || {},
+            validationResult: (previousValidationSummary as any) || {},
+            createdById: userId
+          }
+        });
+      } catch {
+        // DB offline fallback
+      }
+
+      existingVersions.unshift(versionSnapshot);
+      inMemoryVersions.set(id, existingVersions);
+
+      // 2. Deterministically determine updated content and facts if not passed directly
+      let finalContent = updatedContent;
+      let finalFacts = updatedFacts;
+
+      if (!finalContent && operations && Array.isArray(operations)) {
+        const execution = naturalLanguageEditor.applyOperations(previousContent, operations, (previousFacts as any) || {});
+        finalContent = execution.updatedContent;
+        finalFacts = execution.updatedFacts;
+      }
+
+      if (!finalContent) {
+        return res.status(400).json({ error: 'No content changes specified to apply.' });
+      }
+
+      // 3. Re-validate document
+      const parsed = parseDocumentStructure(finalContent);
+      const sectionBlocks = parsed.sections.map(s => ({
+        sectionType: s.sectionType,
+        title: s.title,
+        content: s.content
+      }));
+
+      let approvedClauses: any[] = [];
+      try {
+        approvedClauses = await prisma.clause.findMany({
+          where: { documentType: doc.documentType, status: 'APPROVED' }
+        });
+      } catch {
+        // DB offline fallback
+      }
+
+      const validationResult = await validationEngine.validate(
+        doc.documentType,
+        sectionBlocks,
+        finalFacts || previousFacts,
+        approvedClauses.map(c => ({ clauseType: c.clauseType, title: c.title, content: c.content })),
+        finalContent
+      );
+
+      const refreshedSummary = {
+        status: validationResult.status,
+        score: validationResult.overallScore,
+        summaryCounts: {
+          passedChecks: validationResult.summaryCounts?.passedChecks || 0,
+          needsAttention: validationResult.summaryCounts?.needsAttention || 0,
+          highPriority: validationResult.summaryCounts?.highPriority || 0,
+          safeFixable: validationResult.summaryCounts?.safeFixable || 0
+        },
+        layerScores: {
+          factualAccuracy: validationResult.layerScores?.factualAccuracy || 95,
+          sectionCompleteness: validationResult.layerScores?.sectionCompleteness || 100,
+          clauseCoverage: validationResult.layerScores?.clauseCoverage || 95,
+          legalKnowledgeSupport: validationResult.layerScores?.legalKnowledgeSupport || 90,
+          semanticConsistency: validationResult.layerScores?.semanticConsistency || 90
+        },
+        issues: (validationResult as any).allIssues || (validationResult as any).issues || [],
+        semanticStatus: {
+          available: true,
+          service: 'Deterministic & Legal-NLP Validation'
+        },
+        disclaimer: 'Validated by Atharv Legal AI. Review with a qualified lawyer.'
+      };
+
+      // 4. Update document
+      let updatedDoc: any = null;
+      try {
+        updatedDoc = await prisma.document.update({
+          where: { id },
+          data: {
+            content: finalContent,
+            structuredFacts: (finalFacts as any) || {},
+            validationScore: validationResult.overallScore,
+            status: validationResult.status === 'PASSED' ? 'COMPLETED' : 'NEEDS_REVIEW',
+            validationSummary: refreshedSummary as any
+          }
+        });
+      } catch {
+        doc.content = finalContent;
+        doc.structuredFacts = finalFacts || previousFacts;
+        doc.validationScore = validationResult.overallScore;
+        doc.status = validationResult.status === 'PASSED' ? 'COMPLETED' : 'NEEDS_REVIEW';
+        doc.validationSummary = refreshedSummary;
+        doc.updatedAt = new Date();
+        updatedDoc = doc;
+      }
+
+      inMemoryDocuments.set(id, updatedDoc || doc);
+
+      // Record new version in document history & audit trail
+      try {
+        await documentHistoryService.recordVersion({
+          documentId: id,
+          userId: req.user?.id || doc.userId || '00000000-0000-0000-0000-000000000002',
+          authorName: req.user?.name || 'Author',
+          authorEmail: req.user?.email || 'user@atharv.legal',
+          content: finalContent,
+          structuredFacts: finalFacts || previousFacts,
+          validationSummary: refreshedSummary,
+          validationScore: validationResult.overallScore,
+          changeSummary: req.body?.instruction ? `Natural-Language Edit: "${req.body.instruction.slice(0, 80)}"` : 'Natural-Language Edit applied',
+          operationType: 'NL_EDIT',
+          scoreBefore: doc.validationScore,
+          engine: 'Atharv Natural-Language Edit Engine'
+        });
+      } catch (hErr) {
+        console.warn('Failed to record NL edit version history:', hErr);
+      }
+
+      return res.json({
+        success: true,
+        document: updatedDoc || doc,
+        validationResult,
+        message: 'Natural-language edit successfully applied.'
+      });
+    } catch (err: any) {
+      console.error('Apply natural language edit error:', err);
+      return res.status(500).json({ error: `Failed to apply edit: ${err.message}` });
+    }
+  }
+
+  async undoNaturalLanguageEdit(req: AuthRequest, res: Response) {
+    try {
+      const { id } = req.params;
+      const doc = await this.findDoc(id);
+      if (!doc) {
+        return res.status(404).json({ error: 'Document not found' });
+      }
+
+      const existingVersions = inMemoryVersions.get(id) || [];
+      if (existingVersions.length === 0) {
+        return res.status(400).json({ error: 'No previous edit snapshot available to undo.' });
+      }
+
+      const lastVersion = existingVersions.shift();
+      inMemoryVersions.set(id, existingVersions);
+
+      let updatedDoc: any = null;
+      try {
+        updatedDoc = await prisma.document.update({
+          where: { id },
+          data: {
+            content: lastVersion.content,
+            structuredFacts: (lastVersion.structuredFacts as any) || {},
+            validationScore: lastVersion.validationResult?.score || 85,
+            validationSummary: (lastVersion.validationResult as any) || {}
+          }
+        });
+      } catch {
+        doc.content = lastVersion.content;
+        doc.structuredFacts = lastVersion.structuredFacts;
+        doc.validationScore = lastVersion.validationResult?.score || 85;
+        doc.validationSummary = lastVersion.validationResult;
+        doc.updatedAt = new Date();
+        updatedDoc = doc;
+      }
+
+      inMemoryDocuments.set(id, updatedDoc || doc);
+
+      return res.json({
+        success: true,
+        document: updatedDoc || doc,
+        message: 'Reverted natural-language edit to previous state.'
+      });
+    } catch (err: any) {
+      console.error('Undo edit error:', err);
+      return res.status(500).json({ error: `Failed to undo edit: ${err.message}` });
     }
   }
 }

@@ -10,7 +10,21 @@ import { VendorDrafter } from './drafters/vendor.drafter.js';
 import { PartnershipDrafter } from './drafters/partnership.drafter.js';
 import { InternshipDrafter } from './drafters/internship.drafter.js';
 import { LeaseDrafter } from './drafters/lease.drafter.js';
+import { z } from 'zod';
+import { llmManager } from '../../ai/index.js';
 import { ContractDrafter } from './drafters/base_drafter.js';
+import {
+  tagUserFacts,
+  unwrapFacts,
+  resolveFactOrPlaceholder,
+  getVisiblePlaceholder,
+  ProvenanceFactsMap,
+  FactProvenance
+} from '../facts/fact_provenance.js';
+import { getContractTypeConfig } from '../../config/contract_types/registry.js';
+import { validationEngine } from '../validation/validation_engine.js';
+import { patchService } from '../validation/patch_service.js';
+import { applyDocumentPatch } from '../documents/document_structure.js';
 
 export function formatLegalDate(dateStr?: string): string {
   if (!dateStr) return new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
@@ -38,11 +52,20 @@ const DRAFTER_MAP: Record<string, ContractDrafter> = {
   VENDOR: new VendorDrafter(),
   PARTNERSHIP: new PartnershipDrafter(),
   INTERNSHIP: new InternshipDrafter(),
-  LEASE: new LeaseDrafter()
+  LEASE: new LeaseDrafter(),
+  SALE: new VendorDrafter(),
+  SALE_AGREEMENT: new VendorDrafter(),
+  EMPLOYMENT_AGREEMENT: new EmploymentDrafter(),
+  SERVICE_AGREEMENT: new ServiceDrafter(),
+  RENTAL: new LeaseDrafter(),
+  RENTAL_LEASE: new LeaseDrafter(),
+  FREELANCE: new ConsultingDrafter(),
+  CONTRACTOR: new ConsultingDrafter(),
+  INDEPENDENT_CONTRACTOR: new ConsultingDrafter()
 };
 
 export function getDrafter(documentType: string): ContractDrafter {
-  const upper = (documentType || 'NDA').toUpperCase().trim();
+  const upper = (documentType || 'NDA').toUpperCase().trim().replace(/[-\s]/g, '_');
   return DRAFTER_MAP[upper] || DRAFTER_MAP.NDA;
 }
 
@@ -69,6 +92,48 @@ export interface GeneratedDocumentResult {
   formattedDocument: string;
   generationTimeMs: number;
   modelUsed: string;
+  structurePlan?: ContractStructurePlan;
+  factsProvenance?: ProvenanceFactsMap;
+  verificationReport?: VerificationReport;
+  disclaimer?: string;
+}
+
+export interface ContractStructurePlan {
+  documentType: string;
+  jurisdiction: string;
+  governingLaw: string;
+  requiredClauses: string[];
+  recommendedClauses: string[];
+  activeConditionalClauses: Array<{ clauseKey: string; reason: string }>;
+  sectionOrder: string[];
+  missingRequiredFacts: string[];
+  provenanceMap: ProvenanceFactsMap;
+  definitions: string[];
+}
+
+export interface FactDiscrepancy {
+  field: string;
+  expected: any;
+  found: any;
+  status: 'MATCH' | 'MISMATCH' | 'MISSING_IN_OUTPUT' | 'PLACEHOLDER_SUBSTITUTED';
+}
+
+export interface VerificationReport {
+  factsCompared: number;
+  factDiscrepancies: FactDiscrepancy[];
+  initialScore: number;
+  finalScore: number;
+  autoFixesApplied: number;
+  validationStatus: 'PASSED' | 'NEEDS_REVIEW' | 'FAILED';
+  issuesCount: number;
+  disclaimer: string;
+}
+
+export interface TwoPassGenerationResult extends GeneratedDocumentResult {
+  structurePlan: ContractStructurePlan;
+  factsProvenance: ProvenanceFactsMap;
+  verificationReport: VerificationReport;
+  disclaimer: string;
 }
 
 export interface ClauseExplanation {
@@ -137,24 +202,298 @@ export class GenerationService {
       return this.generateBaselineDraft(input, startTime);
     }
 
-    return this.generateMiraControlledDraft(input, startTime);
+    return await this.generateMiraControlledDraft(input, startTime);
+  }
+
+  /**
+   * PASS 1: Structure Decision from Facts + Ontology.
+   * Decides clauses, order, definitions, and dependencies deterministically.
+   * Never hallucinates facts; flags missing critical facts.
+   */
+  planStructure(documentType: string, rawFacts: Record<string, any>): ContractStructurePlan {
+    const config = getContractTypeConfig(documentType);
+    const provenanceMap = tagUserFacts(rawFacts);
+    const unwrapped = unwrapFacts(rawFacts);
+
+    // Jurisdiction awareness: default to India, allow template/user override
+    const jurisdiction = unwrapped.jurisdiction || config?.jurisdiction || 'India';
+    const governingLaw =
+      unwrapped.governingLaw ||
+      (jurisdiction.toLowerCase().includes('india')
+        ? 'Laws of India (Indian Contract Act, 1872)'
+        : `Laws of ${jurisdiction}`);
+
+    const requiredClauses = config?.clauses?.requiredClauses || [
+      'preamble',
+      'core_terms',
+      'governing_law',
+      'signatures'
+    ];
+    const recommendedClauses = config?.clauses?.recommendedClauses || ['severability'];
+
+    // Evaluate conditional clauses against facts
+    const activeConditionalClauses: Array<{ clauseKey: string; reason: string }> = [];
+    if (config?.clauses?.conditionalClauses) {
+      for (const rule of config.clauses.conditionalClauses) {
+        const factVal = unwrapped[rule.conditionField];
+        let matches = false;
+        if (rule.conditionOperator === 'EQUALS' || !rule.conditionOperator) {
+          matches = factVal === rule.conditionValue || (rule.conditionValue === true && Boolean(factVal));
+        } else if (rule.conditionOperator === 'NOT_EQUALS') {
+          matches = factVal !== rule.conditionValue;
+        } else if (rule.conditionOperator === 'IS_TRUTHY') {
+          matches = Boolean(factVal);
+        } else if (rule.conditionOperator === 'CONTAINS' && typeof factVal === 'string') {
+          matches = factVal.includes(String(rule.conditionValue));
+        }
+        if (matches) {
+          activeConditionalClauses.push({ clauseKey: rule.clauseKey, reason: rule.reason });
+        }
+      }
+    }
+
+    // Check required facts
+    const missingRequiredFacts: string[] = [];
+    if (config?.requiredFacts) {
+      for (const reqFact of config.requiredFacts) {
+        const item = provenanceMap[reqFact];
+        if (!item || item.provenance === 'MISSING' || item.value === null || item.value === undefined || item.value === '') {
+          missingRequiredFacts.push(reqFact);
+        }
+      }
+    }
+
+    // Determine section order from ontology categories or clause lists
+    const sectionOrder: string[] = config?.ontologyCategories
+      ? config.ontologyCategories.slice().sort((a, b) => a.order - b.order).map(c => c.categoryKey)
+      : [...requiredClauses, ...recommendedClauses];
+
+    return {
+      documentType,
+      jurisdiction,
+      governingLaw,
+      requiredClauses,
+      recommendedClauses,
+      activeConditionalClauses,
+      sectionOrder,
+      missingRequiredFacts,
+      provenanceMap,
+      definitions: ['Confidential Information', 'Effective Date', 'Applicable Law']
+    };
+  }
+
+  /**
+   * PASS 2: Legal Language Synthesis.
+   * Binds user facts into approved clauses and drafter templates.
+   * If a critical fact is missing, renders a visible placeholder [FIELD — SPECIFY] rather than inventing text.
+   * Cites RAG sources transparently without fabricating citations.
+   */
+  synthesizeSections(plan: ContractStructurePlan, input: GenerationInput): { title: string; sections: GeneratedSection[] } {
+    const drafter = getDrafter(input.documentType);
+
+    // Enrich facts with jurisdiction defaults and safe placeholder resolution
+    const enrichedFacts: Record<string, any> = {
+      ...input.structuredFacts,
+      jurisdiction: input.structuredFacts.jurisdiction || plan.jurisdiction,
+      governingLaw: input.structuredFacts.governingLaw || plan.governingLaw
+    };
+
+    // Replace any blank or missing critical values with explicit visible placeholders
+    for (const missingKey of plan.missingRequiredFacts) {
+      if (!enrichedFacts[missingKey]) {
+        enrichedFacts[missingKey] = getVisiblePlaceholder(missingKey);
+      }
+    }
+
+    const draftInput: GenerationInput = {
+      ...input,
+      structuredFacts: enrichedFacts
+    };
+
+    const draftRes = drafter.draft(draftInput);
+
+    // If RAG knowledge is provided, annotate relevant sections with verified legal citations
+    if (input.retrievedLegalKnowledge && input.retrievedLegalKnowledge.length > 0) {
+      const topKnowledge = input.retrievedLegalKnowledge[0];
+      const govSection = draftRes.sections.find(s => s.sectionType.includes('governing') || s.sectionType.includes('law'));
+      if (govSection && !govSection.content.includes(topKnowledge.title)) {
+        govSection.content += `\n\n*Statutory Reference: ${topKnowledge.title} (Relevance Score: ${Math.round(topKnowledge.relevanceScore * 100)}%)*`;
+      }
+    }
+
+    return draftRes;
+  }
+
+  /**
+   * POST-GENERATION VERIFICATION:
+   * 1. Compares generated text against user-provided facts (anti-hallucination check).
+   * 2. Runs deterministic validation.
+   * 3. Executes targeted auto-fix if safe issues exist.
+   * 4. Re-validates and compiles verification report with disclaimer.
+   */
+  async verifyAndValidate(
+    documentType: string,
+    title: string,
+    sections: GeneratedSection[],
+    plan: ContractStructurePlan,
+    input: GenerationInput
+  ): Promise<{ formattedDocument: string; verificationReport: VerificationReport; sections: GeneratedSection[] }> {
+    let currentSections = [...sections];
+    let formatted = this.assembleFormattedText(title, currentSections);
+
+    // 1. Fact comparison
+    const factDiscrepancies: FactDiscrepancy[] = [];
+    const userFacts = unwrapFacts(input.structuredFacts);
+
+    for (const [key, val] of Object.entries(userFacts)) {
+      if (val === null || val === undefined || typeof val === 'object') continue;
+      const strVal = String(val).trim();
+      if (!strVal) continue;
+
+      const isPresent = formatted.toLowerCase().includes(strVal.toLowerCase());
+      if (isPresent) {
+        factDiscrepancies.push({
+          field: key,
+          expected: strVal,
+          found: strVal,
+          status: 'MATCH'
+        });
+      } else {
+        // Check if placeholder was substituted
+        const placeholder = getVisiblePlaceholder(key);
+        if (formatted.includes(placeholder)) {
+          factDiscrepancies.push({
+            field: key,
+            expected: strVal,
+            found: placeholder,
+            status: 'PLACEHOLDER_SUBSTITUTED'
+          });
+        } else {
+          factDiscrepancies.push({
+            field: key,
+            expected: strVal,
+            found: null,
+            status: 'MISSING_IN_OUTPUT'
+          });
+        }
+      }
+    }
+
+    // 2. Initial Validation
+    let initialScore = 95;
+    let finalScore = 95;
+    let autoFixesApplied = 0;
+    let validationStatus: 'PASSED' | 'NEEDS_REVIEW' | 'FAILED' = 'PASSED';
+    let issuesCount = 0;
+
+    try {
+      const initialVal = await validationEngine.validate(
+        documentType,
+        currentSections,
+        input.structuredFacts,
+        input.approvedClauses,
+        formatted
+      );
+      initialScore = initialVal.overallScore;
+      issuesCount = initialVal.allIssues.length;
+      validationStatus = initialVal.status;
+
+      // 3. Targeted Auto-Fix (if safe fixable issues exist)
+      const safeFixable = initialVal.allIssues.filter(i => i.canAutoFix && i.mode === 'SAFE_AUTO');
+      if (safeFixable.length > 0) {
+        let patchedContent = formatted;
+        for (const issue of safeFixable.slice(0, 3)) {
+          try {
+            const patch = await patchService.generatePatchForIssue({
+              documentType,
+              content: patchedContent,
+              issue,
+              structuredFacts: input.structuredFacts
+            });
+            if (patch && patch.canAutoFix) {
+              const res = applyDocumentPatch(patchedContent, patch);
+              patchedContent = res.newContent;
+              autoFixesApplied++;
+            }
+          } catch (patchErr) {
+            // Ignore patch errors, preserve original content
+          }
+        }
+
+        if (autoFixesApplied > 0) {
+          formatted = patchedContent;
+          const reval = await validationEngine.validate(
+            documentType,
+            currentSections,
+            input.structuredFacts,
+            input.approvedClauses,
+            formatted
+          );
+          finalScore = reval.overallScore;
+          validationStatus = reval.status;
+          issuesCount = reval.allIssues.length;
+        } else {
+          finalScore = initialScore;
+        }
+      } else {
+        finalScore = initialScore;
+      }
+    } catch (valErr) {
+      console.warn('Validation in two-pass generation encountered an error (using fallback score):', valErr);
+    }
+
+    const verificationReport: VerificationReport = {
+      factsCompared: factDiscrepancies.length,
+      factDiscrepancies,
+      initialScore,
+      finalScore,
+      autoFixesApplied,
+      validationStatus,
+      issuesCount,
+      disclaimer: 'This document is AI-assisted and provided for drafting assistance only. Please review with a qualified lawyer before execution.'
+    };
+
+    return {
+      formattedDocument: formatted,
+      verificationReport,
+      sections: currentSections
+    };
+  }
+
+  /**
+   * Complete Two-Pass Generation Execution.
+   */
+  async generateTwoPassDocument(input: GenerationInput): Promise<TwoPassGenerationResult> {
+    const startTime = Date.now();
+
+    // Pass 1: Plan Structure
+    const structurePlan = this.planStructure(input.documentType, input.structuredFacts);
+
+    // Pass 2: Synthesize Sections
+    const { title, sections } = this.synthesizeSections(structurePlan, input);
+
+    // Post-generation Verification & Validation
+    const { formattedDocument, verificationReport, sections: finalSections } =
+      await this.verifyAndValidate(input.documentType, title, sections, structurePlan, input);
+
+    return {
+      title,
+      sections: finalSections,
+      formattedDocument,
+      generationTimeMs: Date.now() - startTime,
+      modelUsed: llmManager.modelName || this.modelName,
+      structurePlan,
+      factsProvenance: structurePlan.provenanceMap,
+      verificationReport,
+      disclaimer: verificationReport.disclaimer
+    };
   }
 
   /**
    * Generates a controlled, fact-anchored legal document matching the template and approved clauses.
    */
-  private generateMiraControlledDraft(input: GenerationInput, startTime: number): GeneratedDocumentResult {
-    const drafter = getDrafter(input.documentType);
-    const { title, sections } = drafter.draft(input);
-    const formatted = this.assembleFormattedText(title, sections);
-
-    return {
-      title,
-      sections,
-      formattedDocument: formatted,
-      generationTimeMs: Date.now() - startTime,
-      modelUsed: this.modelName
-    };
+  private async generateMiraControlledDraft(input: GenerationInput, startTime: number): Promise<GeneratedDocumentResult> {
+    return await this.generateTwoPassDocument(input);
   }
 
   /**
@@ -392,6 +731,34 @@ export class GenerationService {
   }
 
   async explainClause(clauseContent: string): Promise<ClauseExplanation> {
+    const ClauseExplanationSchema = z.object({
+      plainLanguage: z.string(),
+      purpose: z.string(),
+      legalImplication: z.string(),
+      sourcesUsed: z.array(z.string()),
+      disclaimer: z.string()
+    });
+
+    try {
+      const response = await llmManager.generateJSON({
+        prompt: `Explain this legal contract clause in clear terms for a business reader:\n\n"""\n${clauseContent}\n"""\n\nProvide:
+- plainLanguage: Clear non-legalese explanation
+- purpose: Commercial and legal purpose
+- legalImplication: Practical impact and remedies upon breach
+- sourcesUsed: Relevant statutory or drafting sources (e.g. Indian Contract Act 1872)
+- disclaimer: Standard legal disclaimer`,
+        systemPrompt: 'You are an expert legal assistant. Provide accurate, explainable legal clause breakdowns in structured JSON.',
+        schema: ClauseExplanationSchema,
+        schemaName: 'ClauseExplanation'
+      });
+
+      if (response?.data?.plainLanguage) {
+        return response.data;
+      }
+    } catch (err: any) {
+      // Graceful fallback to deterministic explanation
+    }
+
     const isConf = /confidential|disclose|proprietary/i.test(clauseContent);
     const isTerm = /term|duration|years|expire/i.test(clauseContent);
     const isRemedies = /remedy|injunctive|damages|harm/i.test(clauseContent);

@@ -34,8 +34,87 @@ export const consultingConfig: ContractTypeConfig = {
     
     { key: 'startDate', label: 'Engagement Commencement Date', type: 'date', required: 'REQUIRED', section: 'Terms' },
     { key: 'term', label: 'Consulting Engagement Term', type: 'text', required: 'RECOMMENDED', defaultValue: '6 months', section: 'Terms' },
-    { key: 'governingLaw', label: 'Governing Law', type: 'text', required: 'REQUIRED', defaultValue: 'State of California', section: 'Terms' },
+    { key: 'governingLaw', label: 'Governing Law', type: 'text', required: 'REQUIRED', defaultValue: 'Laws of India', section: 'Terms' },
   ],
   requiredFacts: ['client.name', 'consultant.name', 'scopeOfServices', 'compensation', 'governingLaw'],
-  optionalFacts: ['currency', 'startDate', 'term']
+  optionalFacts: ['currency', 'startDate', 'term'],
+  clauses: {
+    requiredClauses: [
+      'preamble',
+      'services',
+      'independent_contractor',
+      'compensation',
+      'ip_rights',
+      'confidentiality',
+      'termination',
+      'governing_law',
+      'signatures'
+    ],
+    recommendedClauses: [
+      'expense_reimbursement',
+      'indemnification',
+      'severability'
+    ],
+    conditionalClauses: [
+      {
+        clauseKey: 'non_solicitation_freelance',
+        conditionField: 'nonSolicitation',
+        conditionValue: true,
+        reason: 'Restricts hiring client employees or soliciting existing client customers during term.'
+      }
+    ],
+    optionalClauses: [
+      'publicity_rights',
+      'subcontractor_restriction'
+    ]
+  },
+  clauseDependencies: {
+    compensation: ['services'],
+    ip_rights: ['services'],
+    termination: ['startDate']
+  },
+  validationRules: [
+    {
+      id: 'val_cns_parties',
+      name: 'Client & Consultant Names',
+      description: 'Both client and independent consultant must be identified.',
+      ruleType: 'FIELD_PRESENCE',
+      severity: 'CRITICAL',
+      fieldOrClause: 'parties'
+    },
+    {
+      id: 'val_cns_comp',
+      name: 'Consulting Compensation',
+      description: 'Consultant fee amount must be specified.',
+      ruleType: 'FIELD_PRESENCE',
+      severity: 'CRITICAL',
+      fieldOrClause: 'compensation'
+    },
+    {
+      id: 'val_cns_indep',
+      name: 'Independent Contractor Clause',
+      description: 'Contract must contain explicit independent contractor status to avoid misclassification.',
+      ruleType: 'CLAUSE_COVERAGE',
+      severity: 'HIGH',
+      fieldOrClause: 'independent_contractor'
+    }
+  ],
+  riskRules: [
+    {
+      id: 'risk_misclassification',
+      name: 'Employee Misclassification Risk',
+      description: 'Absence of explicit independent contractor disclaimer risks employment statutory benefits liability.',
+      triggerCondition: 'independentContractorDisclaimer == false',
+      riskLevel: 'HIGH',
+      suggestedResolution: 'Include unambiguous independent contractor clause stating consultant pays own taxes and controls hours.'
+    },
+    {
+      id: 'risk_ip_retention',
+      name: 'Consultant IP Retention',
+      description: 'Without work-for-hire assignment, copyright remains with independent creator under Section 17 Indian Copyright Act.',
+      triggerCondition: 'ipAssignment == false',
+      riskLevel: 'CRITICAL',
+      suggestedResolution: 'Mandate complete assignment of all work product, notes, and code created during advisory engagement.'
+    }
+  ]
 };

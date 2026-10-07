@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { documentService } from '../services/api';
-import { DocumentRecord, ValidationIssue } from '../types';
+import { DocumentRecord, ValidationIssue, NaturalLanguageEditPlan } from '../types';
 import { 
   FileText, 
   CheckCircle2, 
@@ -21,7 +21,6 @@ import {
   Send,
   Edit3,
   Scale,
-
   X,
   XCircle,
   CheckSquare,
@@ -38,7 +37,15 @@ import {
   Tag,
   Award,
   BookOpen,
-  Lightbulb
+  Lightbulb,
+  Undo2,
+  Redo2,
+  Eye,
+  EyeOff,
+  Wand2,
+  Split,
+  CornerDownLeft,
+  GitCompare
 } from 'lucide-react';
 import { findNormalizedMatch, normalizeForMatching } from '../utils/textNormalizer';
 
@@ -111,6 +118,7 @@ export const DocumentEditor: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'VALIDATION' | 'COMPLETENESS' | 'PERFECTION_GUIDE'>('VALIDATION');
   const [issueFilter, setIssueFilter] = useState<'ACTIVE' | 'RESOLVED' | 'ALL'>('ACTIVE');
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
+  const [showOutline, setShowOutline] = useState(false);
 
   // Fix Action States
   const [fixingIssueId, setFixingIssueId] = useState<string | null>(null);
@@ -148,6 +156,22 @@ export const DocumentEditor: React.FC = () => {
   const [selectedText, setSelectedText] = useState('');
   const [saveSuccessMsg, setSaveSuccessMsg] = useState('');
 
+  // Phase 4: View Mode (EDIT, PREVIEW, SPLIT)
+  const [viewMode, setViewMode] = useState<'EDIT' | 'PREVIEW' | 'SPLIT'>('EDIT');
+
+  // Phase 4: Undo/Redo Stack
+  const [undoStack, setUndoStack] = useState<string[]>([]);
+  const [redoStack, setRedoStack] = useState<string[]>([]);
+
+  // Phase 4: Natural-Language Editing State
+  const [nlInstruction, setNlInstruction] = useState('');
+  const [nlPlanning, setNlPlanning] = useState(false);
+  const [nlPlan, setNlPlan] = useState<NaturalLanguageEditPlan | null>(null);
+  const [showDiffModal, setShowDiffModal] = useState(false);
+  const [nlApplying, setNlApplying] = useState(false);
+  const [canUndoNlEdit, setCanUndoNlEdit] = useState(false);
+  const [nlClarificationAnswer, setNlClarificationAnswer] = useState('');
+
   // Navigation & Dirty State Tracking
   const [isContentDirty, setIsContentDirty] = useState(false);
   const [activeNavFinding, setActiveNavFinding] = useState<{
@@ -161,31 +185,178 @@ export const DocumentEditor: React.FC = () => {
     insertionOffset?: number;
   } | null>(null);
 
-  // Keyboard shortcut Ctrl+F / Cmd+F to open Search & Replace
+  // Debounced background re-validation on content changes
+  const debouncedValidationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!id || !document || !isContentDirty) return;
+
+    if (debouncedValidationTimerRef.current) {
+      clearTimeout(debouncedValidationTimerRef.current);
+    }
+
+    debouncedValidationTimerRef.current = setTimeout(async () => {
+      try {
+        const res = await documentService.validate(id, {
+          content,
+          structuredFacts: document.structuredFacts
+        });
+        if (res && res.document) {
+          setDocument(res.document);
+        }
+      } catch {
+        // Silent background validation
+      }
+    }, 1500);
+
+    return () => {
+      if (debouncedValidationTimerRef.current) {
+        clearTimeout(debouncedValidationTimerRef.current);
+      }
+    };
+  }, [content, isContentDirty, id]);
+
+  // Undo/Redo History Helpers
+  const updateContentWithHistory = (newVal: string) => {
+    setUndoStack(prev => [...prev.slice(-30), content]);
+    setRedoStack([]);
+    setContent(newVal);
+    setIsContentDirty(true);
+  };
+
+  const handleUndo = () => {
+    if (undoStack.length === 0) return;
+    const prev = undoStack[undoStack.length - 1];
+    setUndoStack(undoStack.slice(0, -1));
+    setRedoStack(r => [...r, content]);
+    setContent(prev);
+    setIsContentDirty(true);
+  };
+
+  const handleRedo = () => {
+    if (redoStack.length === 0) return;
+    const next = redoStack[redoStack.length - 1];
+    setRedoStack(redoStack.slice(0, -1));
+    setUndoStack(u => [...u, content]);
+    setContent(next);
+    setIsContentDirty(true);
+  };
+
+  // Natural Language Edit Planning and Execution
+  const handlePlanNlEdit = async (clarification?: string) => {
+    if (!id || !nlInstruction.trim()) return;
+    setNlPlanning(true);
+    try {
+      const plan = await documentService.planNlEdit(id, {
+        instruction: nlInstruction,
+        content,
+        clarificationAnswer: clarification || nlClarificationAnswer || undefined
+      });
+      setNlPlan(plan);
+      setShowDiffModal(true);
+    } catch (err: any) {
+      alert(`Planning edit failed: ${err.message}`);
+    } finally {
+      setNlPlanning(false);
+    }
+  };
+
+  const handleApplyNlEdit = async () => {
+    if (!id || !nlPlan) return;
+    setNlApplying(true);
+    try {
+      const res = await documentService.applyNlEdit(id, {
+        instruction: nlPlan.instruction,
+        operations: nlPlan.operations,
+        updatedContent: nlPlan.previewContent,
+        updatedFacts: nlPlan.updatedFacts
+      });
+      if (res && res.document) {
+        updateContentWithHistory(res.document.content);
+        setDocument(res.document);
+        setCanUndoNlEdit(true);
+        setShowDiffModal(false);
+        setNlPlan(null);
+        setNlInstruction('');
+        setNlClarificationAnswer('');
+        setSaveSuccessMsg(`✓ Natural-language edit applied: ${res.message || 'Updated'}`);
+        setTimeout(() => setSaveSuccessMsg(''), 4000);
+      }
+    } catch (err: any) {
+      alert(`Apply edit failed: ${err.message}`);
+    } finally {
+      setNlApplying(false);
+    }
+  };
+
+  const handleUndoNlEdit = async () => {
+    if (!id) return;
+    try {
+      const res = await documentService.undoNlEdit(id);
+      if (res && res.document) {
+        updateContentWithHistory(res.document.content);
+        setDocument(res.document);
+        setCanUndoNlEdit(false);
+        setSaveSuccessMsg('↺ Natural-language edit reverted to previous version.');
+        setTimeout(() => setSaveSuccessMsg(''), 4000);
+      }
+    } catch (err: any) {
+      alert(`Undo edit failed: ${err.message}`);
+    }
+  };
+
+  // Keyboard shortcuts: Ctrl+F, Ctrl+Z, Ctrl+Y, Ctrl+Shift+Z
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
         e.preventDefault();
         setShowSearch(prev => !prev);
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        handleUndo();
+      } else if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) {
+        e.preventDefault();
+        handleRedo();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [undoStack, redoStack, content]);
 
-  // 1-Click insert missing clause template directly into editor
-  const handleInsertMissingClause = (templateText: string, insertionOffset?: number) => {
+  // 1-Click insert missing clause template directly into editor and revalidate
+  const handleInsertMissingClause = async (templateText: string, insertionOffset?: number) => {
     if (!templateText) return;
     const el = textareaRef.current;
     const offset = insertionOffset ?? (el ? el.selectionStart : content.length);
     const before = content.substring(0, offset).trimEnd();
     const after = content.substring(offset).trimStart();
     const newText = before ? `${before}\n\n${templateText.trim()}\n\n${after}` : `${templateText.trim()}\n\n${after}`;
-    setContent(newText);
-    setIsContentDirty(true);
+    
+    updateContentWithHistory(newText);
     setActiveNavFinding(null);
-    setSaveSuccessMsg('✓ Inserted suggested clause template into editor.');
-    setTimeout(() => setSaveSuccessMsg(''), 3000);
+    setIsContentDirty(false);
+
+    if (id && document) {
+      setValidating(true);
+      try {
+        await documentService.update(id, { content: newText });
+        const valRes = await documentService.validate(id, {
+          content: newText,
+          structuredFacts: document.structuredFacts
+        });
+        if (valRes && valRes.document) {
+          setDocument(valRes.document);
+          const newScore = valRes.document.validationScore || 0;
+          setSaveSuccessMsg(`✓ Suggested clause inserted — Health Score updated to ${newScore}%!`);
+          setTimeout(() => setSaveSuccessMsg(''), 4500);
+        }
+      } catch (err) {
+        setSaveSuccessMsg('✓ Inserted suggested clause template into editor.');
+        setTimeout(() => setSaveSuccessMsg(''), 3000);
+      } finally {
+        setValidating(false);
+      }
+    }
   };
 
   /**
@@ -365,11 +536,29 @@ export const DocumentEditor: React.FC = () => {
     if (!id || !document) return;
     setValidating(true);
     try {
+      const oldScore = document.validationScore || 0;
+      // 1. Ensure latest content is saved first
+      await documentService.update(id, { content });
+
+      // 2. Run deterministic + semantic validation
       const res = await documentService.validate(id, {
         content,
         structuredFacts: document.structuredFacts
       });
-      setDocument(res.document);
+
+      if (res && res.document) {
+        setDocument(res.document);
+        setIsContentDirty(false);
+        const newScore = res.document.validationScore || 0;
+        const diff = newScore - oldScore;
+        const scoreFeedback = diff > 0 
+          ? `Score improved to ${newScore}% (+${diff}% jump)!`
+          : diff < 0 
+          ? `Score adjusted to ${newScore}% (${diff}%)` 
+          : `Health score confirmed at ${newScore}%`;
+        setSaveSuccessMsg(`✓ Re-validation complete: ${scoreFeedback}`);
+        setTimeout(() => setSaveSuccessMsg(''), 4500);
+      }
     } catch (err: any) {
       alert(`Validation failed: ${err.message}`);
     } finally {
@@ -517,33 +706,89 @@ export const DocumentEditor: React.FC = () => {
     }
   };
 
-  // Insert standard canonical clause at cursor
-  const insertTextAtCursor = (textToInsert: string) => {
-    if (!textareaRef.current) return;
+  // Smart canonical clause insertion with intelligent positioning, duplicate prevention, and automatic re-validation
+  const handleSmartInsertClause = async (clauseTitle: string, clauseText: string) => {
+    if (!id || !document) return;
+    const current = content;
+
+    let newContent = '';
     const el = textareaRef.current;
-    const start = el.selectionStart;
-    const end = el.selectionEnd;
-    const current = el.value;
+    const hasSelection = el && el.selectionStart !== el.selectionEnd;
+    const cursorAtBlankLine = el && el.selectionStart > 0 && 
+      current.substring(Math.max(0, el.selectionStart - 2), el.selectionStart) === '\n\n';
 
-    const before = current.substring(0, start);
-    const after = current.substring(end);
-    
-    const needsPrefixNewline = before.length > 0 && !before.endsWith('\n\n') ? (before.endsWith('\n') ? '\n' : '\n\n') : '';
-    const needsSuffixNewline = after.length > 0 && !after.startsWith('\n\n') ? (after.startsWith('\n') ? '\n' : '\n\n') : '';
-    
-    const newContent = `${before}${needsPrefixNewline}${textToInsert}${needsSuffixNewline}${after}`;
-    setContent(newContent);
+    // 1. Check if section already exists to prevent duplicate repetition
+    const normTitleMatch = clauseTitle.replace(/[^a-zA-Z0-9]/g, ' ').toLowerCase().trim().split(' ')[0];
+    const existingSecRegex = new RegExp(`(^|\\n)#{1,3}\\s*[^\\n]*${normTitleMatch}[^\\n]*\\n([\\s\\S]*?)(?=\\n#{1,3}\\s|$)`, 'i');
+    const existingMatch = current.match(existingSecRegex);
 
-    setTimeout(() => {
-      el.focus();
-      const newCursorPos = start + needsPrefixNewline.length + textToInsert.length;
-      el.setSelectionRange(newCursorPos, newCursorPos);
-      const linesBefore = newContent.substring(0, newCursorPos).split('\n').length;
-      el.scrollTop = Math.max(0, (linesBefore - 3) * 24);
-    }, 50);
+    if (existingMatch && !hasSelection) {
+      // Replace the existing section to avoid repeated lines
+      newContent = current.replace(existingSecRegex, (match, prefix) => {
+        return `${prefix}${clauseText.trim()}`;
+      });
+    } else if (hasSelection && el) {
+      const start = el.selectionStart;
+      const end = el.selectionEnd;
+      const before = current.substring(0, start).trimEnd();
+      const after = current.substring(end).trimStart();
+      newContent = `${before}\n\n${clauseText.trim()}\n\n${after}`;
+    } else if (cursorAtBlankLine && el) {
+      const pos = el.selectionStart;
+      const before = current.substring(0, pos).trimEnd();
+      const after = current.substring(pos).trimStart();
+      newContent = `${before}\n\n${clauseText.trim()}\n\n${after}`;
+    } else {
+      // Intelligently place in optimal legal document location
+      if (/execution|signature|witness/i.test(clauseTitle)) {
+        newContent = `${current.trimEnd()}\n\n${clauseText.trim()}\n`;
+      } else {
+        // Place before signature / execution block if one exists
+        const sigMatch = current.search(/(?:^|\n)(?:#{1,3}\s*(?:execution|signatures?|in\s+witness\s+whereof)|IN\s+WITNESS\s+WHEREOF)/i);
+        if (sigMatch !== -1) {
+          const beforeSig = current.substring(0, sigMatch).trimEnd();
+          const sigPart = current.substring(sigMatch).trimStart();
+          newContent = `${beforeSig}\n\n${clauseText.trim()}\n\n${sigPart}`;
+        } else {
+          newContent = `${current.trimEnd()}\n\n${clauseText.trim()}\n`;
+        }
+      }
+    }
 
-    setSaveSuccessMsg('✓ Clause inserted into document');
-    setTimeout(() => setSaveSuccessMsg(''), 3000);
+    updateContentWithHistory(newContent);
+    setIsContentDirty(false);
+    setValidating(true);
+
+    try {
+      // Persist draft to backend
+      await documentService.update(id, { content: newContent });
+
+      // Run re-validation immediately
+      const valRes = await documentService.validate(id, {
+        content: newContent,
+        structuredFacts: document.structuredFacts
+      });
+
+      if (valRes && valRes.document) {
+        setDocument(valRes.document);
+        const newScore = valRes.document.validationScore || 0;
+        setSaveSuccessMsg(`✓ Inserted "${clauseTitle}" — Health Score updated to ${newScore}%!`);
+        setTimeout(() => setSaveSuccessMsg(''), 4500);
+      }
+    } catch (err: any) {
+      console.error('Smart insertion error:', err);
+      setSaveSuccessMsg(`✓ Inserted "${clauseTitle}" into document`);
+      setTimeout(() => setSaveSuccessMsg(''), 3000);
+    } finally {
+      setValidating(false);
+    }
+  };
+
+  // Insert standard canonical clause at cursor or delegate to smart insertion
+  const insertTextAtCursor = (textToInsert: string) => {
+    // Determine title if possible
+    const firstLine = textToInsert.split('\n')[0].replace(/^#+\s*/, '').trim();
+    handleSmartInsertClause(firstLine || 'Legal Clause', textToInsert);
   };
 
   // Formatting helpers (bold, italic, list, divider)
@@ -658,24 +903,108 @@ export const DocumentEditor: React.FC = () => {
     setTimeout(() => setSaveSuccessMsg(''), 3500);
   };
 
+  const renderNumberedPreview = (docContent: string) => {
+    const blocks = docContent.split('\n\n');
+    let sectionCounter = 0;
+
+    return (
+      <div className="space-y-4 font-serif text-xs leading-relaxed text-gray-900 p-6 bg-white rounded-lg border border-gray-100 shadow-2xs max-h-[64vh] overflow-y-auto">
+        {blocks.map((block, idx) => {
+          const trimmed = block.trim();
+          if (!trimmed) return null;
+
+          if (trimmed.startsWith('# ')) {
+            return (
+              <h1 key={idx} className="text-base font-bold text-gray-950 border-b border-gray-200 pb-2 text-center uppercase tracking-wide">
+                {trimmed.replace(/^#\s*/, '')}
+              </h1>
+            );
+          }
+
+          if (trimmed.startsWith('## ')) {
+            sectionCounter++;
+            const headingText = trimmed.replace(/^##\s*/, '').replace(/^\d+[\.\)]\s*/, '');
+            return (
+              <h2 key={idx} className="text-xs font-bold text-gray-900 pt-3 border-t border-gray-100 uppercase tracking-wider flex items-center gap-2">
+                <span className="text-purple-700 font-mono font-bold bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">{sectionCounter}.</span>
+                <span>{headingText}</span>
+              </h2>
+            );
+          }
+
+          if (trimmed.startsWith('### ')) {
+            return (
+              <h3 key={idx} className="text-xs font-semibold text-gray-800 italic">
+                {trimmed.replace(/^###\s*/, '')}
+              </h3>
+            );
+          }
+
+          if (trimmed === '---') {
+            return <hr key={idx} className="my-3 border-gray-200" />;
+          }
+
+          if (trimmed.includes('|') && trimmed.includes('\n')) {
+            const rows = trimmed.split('\n').filter(r => r.includes('|') && !r.includes(':---'));
+            return (
+              <div key={idx} className="overflow-x-auto my-3">
+                <table className="min-w-full divide-y divide-gray-200 border border-gray-200 text-[11px]">
+                  <tbody className="divide-y divide-gray-100 bg-white">
+                    {rows.map((row, rIdx) => {
+                      const cells = row.split('|').filter((_, cIdx, arr) => cIdx > 0 && cIdx < arr.length - 1);
+                      return (
+                        <tr key={rIdx} className={rIdx === 0 ? 'bg-gray-50 font-bold' : ''}>
+                          {cells.map((cell, cIdx) => (
+                            <td key={cIdx} className="px-3 py-2 border-r border-gray-100 last:border-r-0">
+                              {cell.trim()}
+                            </td>
+                          ))}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            );
+          }
+
+          const formattedParagraph = trimmed
+            .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*([^*]+)\*/g, '<em>$1</em>');
+
+          return (
+            <p
+              key={idx}
+              className="text-xs leading-relaxed text-gray-800"
+              dangerouslySetInnerHTML={{ __html: formattedParagraph }}
+            />
+          );
+        })}
+      </div>
+    );
+  };
+
   if (!document) {
     return <div className="p-12 text-center text-xs text-mira-muted">Loading document editor...</div>;
   }
 
-  // Parse sections for outline
-  const sections = content.split('---').map((block, idx) => {
-    const lines = block.trim().split('\n');
-    const headerLine = lines.find(l => l.startsWith('## ') || l.startsWith('# '));
-    const title = headerLine ? headerLine.replace(/#+\s*/, '') : `Section ${idx + 1}`;
-    
-    // Check if active issues exist in this section
-    const hasIssues = (document.validationSummary?.issues || []).some(
-      (iss: ValidationIssue) => (!iss.reviewStatus || iss.reviewStatus === 'NEEDS_REVIEW') &&
-        (title.toLowerCase().includes(iss.section.toLowerCase()) || iss.section.toLowerCase().includes(title.toLowerCase()))
-    );
+  // Parse sections for outline cleanly by markdown headers
+  const sections = React.useMemo(() => {
+    if (!content) return [];
+    const blocks = content.split(/(?=(?:^|\n)#{1,3}\s+)/g).filter(b => b.trim().length > 0);
+    return blocks.map((block, idx) => {
+      const lines = block.trim().split('\n');
+      const headerLine = lines.find(l => /^#{1,3}\s+/.test(l));
+      const title = headerLine ? headerLine.replace(/^#{1,3}\s+/, '') : `Section ${idx + 1}`;
+      
+      const hasIssues = (document?.validationSummary?.issues || []).some(
+        (iss: ValidationIssue) => (!iss.reviewStatus || iss.reviewStatus === 'NEEDS_REVIEW') &&
+          (title.toLowerCase().includes((iss.section || '').toLowerCase()) || (iss.section || '').toLowerCase().includes(title.toLowerCase()))
+      );
 
-    return { id: idx, title, content: block.trim(), hasIssues };
-  });
+      return { id: idx, title, content: block.trim(), hasIssues };
+    });
+  }, [content, document?.validationSummary?.issues]);
 
   const allIssues: ValidationIssue[] = document.validationSummary?.issues || [];
   const activeIssues = allIssues.filter(
@@ -742,6 +1071,19 @@ export const DocumentEditor: React.FC = () => {
           )}
 
           <button
+            onClick={() => setShowOutline(prev => !prev)}
+            className={`px-3 py-1.5 border text-xs font-semibold rounded-lg flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer ${
+              showOutline 
+                ? 'bg-purple-100 border-purple-300 text-purple-900' 
+                : 'bg-white border-mira-border hover:border-mira-primary text-mira-dark'
+            }`}
+            title="Toggle Document Outline"
+          >
+            <Layers className="w-3.5 h-3.5 text-mira-primary" />
+            <span>Outline ({sections.length})</span>
+          </button>
+
+          <button
             onClick={() => handleSave(false)}
             disabled={saving}
             className="px-3 py-1.5 bg-white border border-mira-border hover:border-mira-primary text-xs font-semibold rounded-lg text-mira-dark flex items-center gap-1.5 shadow-2xs cursor-pointer"
@@ -758,6 +1100,15 @@ export const DocumentEditor: React.FC = () => {
             <History className="w-3.5 h-3.5" />
             Save as Version
           </button>
+
+          <Link
+            to={`/documents/${document.id}/versions`}
+            className="px-3 py-1.5 bg-white border border-mira-border hover:border-mira-primary text-xs font-semibold rounded-lg text-mira-dark flex items-center gap-1.5 shadow-2xs"
+            title="View Version Diff & Audit Trail"
+          >
+            <GitCompare className="w-3.5 h-3.5 text-mira-primary" />
+            History & Audit
+          </Link>
 
           <button
             onClick={handleRevalidate}
@@ -784,58 +1135,66 @@ export const DocumentEditor: React.FC = () => {
         </div>
       </div>
 
-      {/* 3-PANEL EDITOR GRID */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-        {/* PANEL 1: Document Outline (Left, 3 cols) */}
-        <div className="lg:col-span-3 bg-white rounded-xl border border-mira-border shadow-xs p-4 space-y-3 sticky top-20">
-          <div className="flex items-center justify-between border-b border-mira-border pb-2">
-            <span className="text-xs font-bold text-mira-dark uppercase tracking-wider flex items-center gap-1.5">
-              <Layers className="w-3.5 h-3.5 text-mira-primary" />
-              Document Outline
-            </span>
-            <span className="text-[10px] text-mira-muted">{sections.length} Sections</span>
-          </div>
-
-          <div className="space-y-1 max-h-[70vh] overflow-y-auto pr-1">
-            {sections.map((sec) => (
-              <button
-                key={sec.id}
-                onClick={() => {
-                  setSelectedSection(sec.title);
-                  scrollToSection(sec.title);
-                }}
-                className={`w-full text-left p-2 rounded-lg text-xs transition-colors flex items-center justify-between cursor-pointer ${
-                  selectedSection === sec.title
-                    ? 'bg-mira-light text-mira-primary font-bold'
-                    : 'text-mira-dark hover:bg-gray-50'
-                }`}
+      {/* 2 or 3 PANEL EDITOR GRID */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+        {/* PANEL 1: Document Outline (Collapsible, 3 cols) */}
+        {showOutline && (
+          <div className="lg:col-span-3 bg-white rounded-xl border border-mira-border shadow-xs p-4 space-y-3 sticky top-20 animate-in fade-in">
+            <div className="flex items-center justify-between border-b border-mira-border pb-2">
+              <span className="text-xs font-bold text-mira-dark uppercase tracking-wider flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5 text-mira-primary" />
+                Document Outline
+              </span>
+              <button 
+                onClick={() => setShowOutline(false)}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded"
+                title="Hide Outline"
               >
-                <div className="flex items-center gap-2 truncate">
-                  {sec.hasIssues ? (
-                    <AlertTriangle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
-                  ) : (
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
-                  )}
-                  <span className="truncate">{sec.title}</span>
-                </div>
-                {sec.hasIssues && (
-                  <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800">
-                    Flagged
-                  </span>
-                )}
+                <X className="w-3.5 h-3.5" />
               </button>
-            ))}
-          </div>
+            </div>
 
-          <div className="pt-2 border-t border-mira-border text-[11px] text-mira-muted">
-            <Link to={`/documents/${document.id}/versions`} className="text-mira-primary font-semibold hover:underline flex items-center gap-1">
-              <History className="w-3 h-3" /> View Version History (v{document.versions?.length || 1})
-            </Link>
-          </div>
-        </div>
+            <div className="space-y-1 max-h-[70vh] overflow-y-auto pr-1">
+              {sections.map((sec) => (
+                <button
+                  key={sec.id}
+                  onClick={() => {
+                    setSelectedSection(sec.title);
+                    scrollToSection(sec.title);
+                  }}
+                  className={`w-full text-left p-2 rounded-lg text-xs transition-colors flex items-center justify-between cursor-pointer ${
+                    selectedSection === sec.title
+                      ? 'bg-mira-light text-mira-primary font-bold'
+                      : 'text-mira-dark hover:bg-gray-50'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 truncate">
+                    {sec.hasIssues ? (
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+                    ) : (
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+                    )}
+                    <span className="truncate">{sec.title}</span>
+                  </div>
+                  {sec.hasIssues && (
+                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800">
+                      Flagged
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
 
-        {/* PANEL 2: Editable Document & Professional Drafting Toolbar (Center, 6 cols) */}
-        <div className="lg:col-span-6 bg-white rounded-xl border border-mira-border shadow-xs flex flex-col min-h-[75vh]">
+            <div className="pt-2 border-t border-mira-border text-[11px] text-mira-muted">
+              <Link to={`/documents/${document.id}/versions`} className="text-mira-primary font-semibold hover:underline flex items-center gap-1">
+                <History className="w-3 h-3" /> View Version History (v{document.versions?.length || 1})
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {/* PANEL 2: Editable Document & Professional Drafting Toolbar */}
+        <div className={`${showOutline ? 'lg:col-span-5' : 'lg:col-span-7 xl:col-span-8'} bg-white rounded-xl border border-mira-border shadow-xs flex flex-col min-h-[75vh]`}>
           {/* Top Bar */}
           <div className="px-5 py-2.5 border-b border-mira-border bg-gray-50/50 flex items-center justify-between text-xs text-mira-muted">
             <div className="flex items-center gap-2">
@@ -845,10 +1204,122 @@ export const DocumentEditor: React.FC = () => {
             <span className="text-[11px] font-medium text-purple-700">AI never prevents manual editing</span>
           </div>
 
+          {/* Natural Language Assistant Bar */}
+          <div className="px-4 py-2.5 bg-gradient-to-r from-purple-50 via-white to-purple-50/50 border-b border-purple-100 flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-1 rounded-md bg-purple-600 text-white shadow-2xs">
+                  <Wand2 className="w-3.5 h-3.5" />
+                </div>
+                <span className="text-xs font-bold text-gray-800">Natural-Language Editor</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 font-semibold border border-purple-200">
+                  Deterministic Operations • Zod Validated
+                </span>
+              </div>
+              {canUndoNlEdit && (
+                <button
+                  type="button"
+                  onClick={handleUndoNlEdit}
+                  className="px-2 py-0.5 text-[11px] font-semibold text-purple-700 hover:text-purple-900 bg-purple-100 hover:bg-purple-200 rounded flex items-center gap-1 cursor-pointer transition-colors"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  Undo Last AI Edit
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  value={nlInstruction}
+                  onChange={(e) => setNlInstruction(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !nlPlanning && nlInstruction.trim()) {
+                      handlePlanNlEdit();
+                    }
+                  }}
+                  placeholder='e.g., "change the party name to Acme Corp instead of Beta Corp", "make confidentiality mutual", "make the term 3 years"...'
+                  className="w-full pl-3 pr-8 py-1.5 bg-white border border-purple-200 rounded-lg text-xs text-gray-800 placeholder-gray-400 focus:outline-hidden focus:border-purple-600 focus:ring-1 focus:ring-purple-500 shadow-2xs"
+                />
+                {nlInstruction && (
+                  <button
+                    type="button"
+                    onClick={() => setNlInstruction('')}
+                    className="absolute right-2 top-2 text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => handlePlanNlEdit()}
+                disabled={nlPlanning || !nlInstruction.trim()}
+                className="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-2xs cursor-pointer transition-all flex-shrink-0"
+              >
+                {nlPlanning ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Planning...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Plan Edit</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Quick Suggestion Chips */}
+            <div className="flex items-center gap-1.5 overflow-x-auto text-[10px] text-gray-500 pb-0.5">
+              <span className="font-semibold text-gray-400 flex-shrink-0">Suggestions:</span>
+              {[
+                'make confidentiality mutual',
+                'make the term 3 years',
+                'change governing law to Rajasthan courts',
+                'add a non-solicitation clause'
+              ].map((suggestion, sIdx) => (
+                <button
+                  key={sIdx}
+                  type="button"
+                  onClick={() => {
+                    setNlInstruction(suggestion);
+                  }}
+                  className="px-2 py-0.5 bg-white hover:bg-purple-50 border border-gray-200 hover:border-purple-300 rounded-md text-gray-700 whitespace-nowrap cursor-pointer transition-colors"
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Professional Drafting Toolbar */}
           <div className="px-4 py-2 border-b border-mira-border bg-gray-50/80 flex items-center justify-between gap-2 flex-wrap">
-            {/* Formatting Tools */}
+            {/* Formatting Tools & Undo/Redo */}
             <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={handleUndo}
+                disabled={undoStack.length === 0}
+                className="p-1.5 bg-white hover:bg-gray-100 disabled:opacity-30 text-gray-700 border border-gray-200 rounded shadow-2xs cursor-pointer disabled:cursor-not-allowed"
+                title="Undo (Ctrl+Z)"
+              >
+                <Undo2 className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={handleRedo}
+                disabled={redoStack.length === 0}
+                className="p-1.5 bg-white hover:bg-gray-100 disabled:opacity-30 text-gray-700 border border-gray-200 rounded shadow-2xs cursor-pointer disabled:cursor-not-allowed"
+                title="Redo (Ctrl+Y)"
+              >
+                <Redo2 className="w-3.5 h-3.5" />
+              </button>
+
+              <div className="h-4 w-px bg-gray-300 mx-1" />
+
               <button
                 onClick={() => insertFormatting('## ', '\n')}
                 className="px-2 py-1 bg-white hover:bg-gray-100 text-gray-700 border border-gray-200 rounded text-xs font-bold shadow-2xs cursor-pointer"
@@ -902,18 +1373,57 @@ export const DocumentEditor: React.FC = () => {
               </button>
             </div>
 
-            {/* Insert Approved Standard Clause Dropdown */}
-            <div className="relative">
-              <button
-                onClick={() => setShowClauseMenu(!showClauseMenu)}
-                className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-800 text-xs font-bold rounded-lg flex items-center gap-1.5 shadow-2xs cursor-pointer"
-              >
-                <PlusCircle className="w-3.5 h-3.5 text-mira-primary" />
-                <span>+ Insert Standard Clause</span>
-                <ChevronDown className="w-3 h-3 text-purple-600" />
-              </button>
+            {/* Right Group: View Mode Switcher + Insert Approved Standard Clause */}
+            <div className="flex items-center gap-2">
+              {/* View Mode Toggle */}
+              <div className="flex items-center rounded-lg border border-gray-200 p-0.5 bg-gray-100 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('EDIT')}
+                  className={`px-2 py-0.5 rounded font-medium flex items-center gap-1 transition-colors cursor-pointer ${
+                    viewMode === 'EDIT' ? 'bg-white text-purple-700 font-bold shadow-2xs' : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                  title="Editor Only"
+                >
+                  <Edit3 className="w-3 h-3" />
+                  <span>Edit</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('PREVIEW')}
+                  className={`px-2 py-0.5 rounded font-medium flex items-center gap-1 transition-colors cursor-pointer ${
+                    viewMode === 'PREVIEW' ? 'bg-white text-purple-700 font-bold shadow-2xs' : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                  title="Formatted Legal Preview"
+                >
+                  <Eye className="w-3 h-3" />
+                  <span>Preview</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('SPLIT')}
+                  className={`px-2 py-0.5 rounded font-medium flex items-center gap-1 transition-colors cursor-pointer ${
+                    viewMode === 'SPLIT' ? 'bg-white text-purple-700 font-bold shadow-2xs' : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                  title="Split View: Editor & Live Preview"
+                >
+                  <Split className="w-3 h-3" />
+                  <span>Split</span>
+                </button>
+              </div>
 
-              {showClauseMenu && (
+              {/* Insert Approved Standard Clause Dropdown */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowClauseMenu(!showClauseMenu)}
+                  className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-800 text-xs font-bold rounded-lg flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                >
+                  <PlusCircle className="w-3.5 h-3.5 text-mira-primary" />
+                  <span>+ Insert Clause</span>
+                  <ChevronDown className="w-3 h-3 text-purple-600" />
+                </button>
+
+                {showClauseMenu && (
                 <>
                   <div 
                     className="fixed inset-0 z-20" 
@@ -949,6 +1459,7 @@ export const DocumentEditor: React.FC = () => {
               )}
             </div>
           </div>
+        </div>
 
           {/* Search & Replace Active Bar */}
           {showSearch && (
@@ -1075,22 +1586,80 @@ export const DocumentEditor: React.FC = () => {
             </div>
           )}
 
-          {/* Textarea Editor */}
-          <div className="p-5 flex-1 flex flex-col">
-            <textarea
-              ref={textareaRef}
-              value={content}
-              onChange={(e) => {
-                setContent(e.target.value);
-                setIsContentDirty(true);
-              }}
-              onSelect={(e: any) => {
-                const sel = e.target.value.substring(e.target.selectionStart, e.target.selectionEnd);
-                if (sel) setSelectedText(sel);
-              }}
-              className="w-full flex-1 min-h-[64vh] p-4 font-serif text-sm leading-relaxed text-mira-dark bg-transparent border-0 focus:outline-hidden resize-none selection:bg-purple-100"
-              placeholder="Legal document text..."
-            />
+          {/* Executive Document Paper Canvas */}
+          <div className="bg-slate-100/70 p-4 sm:p-6 flex-1 flex flex-col min-h-[70vh] overflow-y-auto">
+            {viewMode === 'EDIT' && (
+              <div className="w-full max-w-4xl mx-auto bg-white rounded-xl shadow-xs border border-slate-200/90 p-8 sm:p-12 flex flex-col min-h-[66vh]">
+                <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-6 text-xs text-gray-400">
+                  <span className="font-mono uppercase tracking-widest text-[10px] text-purple-800 font-semibold bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                    {document.documentType} • Official Legal Draft
+                  </span>
+                  <span className="text-[11px] text-gray-500 font-medium">
+                    Atharv Legal AI Active Canvas
+                  </span>
+                </div>
+                <textarea
+                  ref={textareaRef}
+                  value={content}
+                  onChange={(e) => {
+                    setContent(e.target.value);
+                    setIsContentDirty(true);
+                  }}
+                  onSelect={(e: any) => {
+                    const sel = e.target.value.substring(e.target.selectionStart, e.target.selectionEnd);
+                    if (sel) setSelectedText(sel);
+                  }}
+                  className="w-full flex-1 min-h-[58vh] font-serif text-sm sm:text-base leading-relaxed text-gray-900 bg-transparent border-0 focus:outline-hidden resize-none selection:bg-purple-100 placeholder-gray-400"
+                  placeholder="Legal document text..."
+                  spellCheck={false}
+                />
+              </div>
+            )}
+
+            {viewMode === 'PREVIEW' && (
+              <div className="w-full max-w-4xl mx-auto bg-white rounded-xl shadow-xs border border-slate-200/90 p-8 sm:p-12 min-h-[66vh]">
+                {renderNumberedPreview(content)}
+              </div>
+            )}
+
+            {viewMode === 'SPLIT' && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 flex-1 min-h-[66vh]">
+                <div className="bg-white rounded-xl shadow-xs border border-slate-200/90 p-6 flex flex-col">
+                  <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center justify-between border-b pb-2">
+                    <span className="flex items-center gap-1.5 text-purple-700">
+                      <Edit3 className="w-3.5 h-3.5" />
+                      Drafting Canvas (Markdown)
+                    </span>
+                    <span className="text-[10px] font-mono text-gray-400">Editable</span>
+                  </div>
+                  <textarea
+                    ref={textareaRef}
+                    value={content}
+                    onChange={(e) => {
+                      setContent(e.target.value);
+                      setIsContentDirty(true);
+                    }}
+                    onSelect={(e: any) => {
+                      const sel = e.target.value.substring(e.target.selectionStart, e.target.selectionEnd);
+                      if (sel) setSelectedText(sel);
+                    }}
+                    className="w-full flex-1 min-h-[58vh] font-serif text-xs leading-relaxed text-gray-900 bg-transparent border-0 focus:outline-hidden resize-none selection:bg-purple-100"
+                    placeholder="Legal document text..."
+                    spellCheck={false}
+                  />
+                </div>
+                <div className="bg-white rounded-xl shadow-xs border border-slate-200/90 p-6 flex flex-col overflow-y-auto">
+                  <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center justify-between border-b pb-2">
+                    <span className="flex items-center gap-1.5 text-emerald-700">
+                      <Eye className="w-3.5 h-3.5" />
+                      Live Formatted Agreement
+                    </span>
+                    <span className="text-[10px] font-mono text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">Rendered</span>
+                  </div>
+                  {renderNumberedPreview(content)}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Live Document Metrics Bar */}
@@ -1111,8 +1680,8 @@ export const DocumentEditor: React.FC = () => {
           </div>
         </div>
 
-        {/* PANEL 3: Validation & Perfection Guide Panel (Right, 3 cols) */}
-        <div className="lg:col-span-3 bg-white rounded-xl border border-mira-border shadow-xs p-4 space-y-4 sticky top-20">
+        {/* PANEL 3: Validation & Perfection Guide Panel (Right, responsive width) */}
+        <div className={`${showOutline ? 'lg:col-span-4' : 'lg:col-span-5 xl:col-span-4'} bg-white rounded-xl border border-mira-border shadow-xs p-5 space-y-4 sticky top-20`}>
           {/* Tabs */}
           <div className="grid grid-cols-3 gap-1 p-1 bg-gray-100 rounded-lg text-[11px] font-semibold">
             <button
@@ -1144,17 +1713,30 @@ export const DocumentEditor: React.FC = () => {
           {/* TAB 1: VALIDATION REPORT */}
           {activeTab === 'VALIDATION' && (
             <div className="space-y-4">
-              {/* Validation Score Widget */}
-              <div className="p-4 rounded-xl bg-purple-50/60 border border-purple-100 text-center space-y-1.5">
-                <span className="text-[10px] font-bold text-mira-muted uppercase tracking-wider">
-                  AI Validation Score
-                </span>
-                <div className="text-3xl font-black text-mira-primary">
+              {/* Spacious Validation Health Rating Card */}
+              <div className="p-4 rounded-xl bg-gradient-to-br from-purple-50 via-white to-purple-50/40 border border-purple-100 shadow-2xs text-center space-y-2.5">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="font-bold text-gray-500 uppercase tracking-wider">Health Rating</span>
+                  <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
+                    validationScore >= 85 ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' :
+                    validationScore >= 70 ? 'bg-blue-100 text-blue-800 border border-blue-200' :
+                    validationScore >= 50 ? 'bg-amber-100 text-amber-800 border border-amber-200' :
+                    'bg-red-100 text-red-800 border border-red-200'
+                  }`}>
+                    {validationScore >= 85 ? 'Grade A • Strong' :
+                     validationScore >= 70 ? 'Grade B • Acceptable' :
+                     validationScore >= 50 ? 'Grade C • Review Needed' :
+                     'Grade D • Critical Fixes Required'}
+                  </span>
+                </div>
+
+                <div className="text-4xl font-black text-purple-950 tracking-tight">
                   {validationScore}%
                 </div>
-                <div className="w-full bg-purple-200 rounded-full h-1.5 overflow-hidden">
+
+                <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
                   <div
-                    className={`h-full rounded-full ${
+                    className={`h-full rounded-full transition-all duration-500 ${
                       validationScore >= 90 ? 'bg-emerald-500' :
                       validationScore >= 70 ? 'bg-blue-500' :
                       validationScore >= 50 ? 'bg-amber-500' : 'bg-red-500'
@@ -1162,32 +1744,120 @@ export const DocumentEditor: React.FC = () => {
                     style={{ width: `${validationScore}%` }}
                   />
                 </div>
-                <span className="inline-block text-[10px] text-purple-700 font-medium pt-1">
-                  {document.status === 'COMPLETED' ? '✓ Passed automated checks' : '⚠ Requires manual review'}
-                </span>
+
+                <div className="flex items-center justify-between text-[11px] text-gray-500 pt-1 border-t border-purple-100/60">
+                  <span>Passed: <strong className="text-gray-900 font-semibold">{document.validationSummary?.summaryCounts?.passedChecks ?? Math.max(0, 16 - activeIssues.length)}</strong></span>
+                  <span>Flags: <strong className="text-red-700 font-semibold">{activeIssues.length}</strong></span>
+                  <span>Safe Fixable: <strong className="text-purple-700 font-semibold">{safeFixableCount}</strong></span>
+                </div>
               </div>
 
+              {/* Spacious Multi-tier Layer Health Breakdown */}
+              <div className="bg-slate-50/80 rounded-xl p-4 border border-slate-200/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5">
+                    <Layers className="w-3.5 h-3.5 text-purple-600" />
+                    Multi-Layer Audit Scores
+                  </span>
+                  <span className="text-[10px] font-semibold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full border border-purple-200">
+                    5 Audit Engines
+                  </span>
+                </div>
 
-              {/* Multi-tier Layer Checks */}
-              <div className="space-y-2">
-                <span className="text-xs font-bold text-mira-dark">Layer Breakdown:</span>
-                
-                <div className="p-2.5 bg-gray-50 rounded-lg text-xs space-y-1 border border-gray-100">
-                  <div className="flex justify-between font-medium">
-                    <span>Factual Accuracy</span>
-                    <span className="font-bold text-mira-dark">{document.validationSummary?.layerScores?.factualAccuracy || 95}%</span>
+                <div className="space-y-2.5">
+                  {/* Layer 1: Factual Accuracy */}
+                  <div>
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="text-gray-700 font-medium flex items-center gap-1.5">
+                        <CheckSquare className="w-3 h-3 text-emerald-600" />
+                        Factual Accuracy
+                      </span>
+                      <span className="font-bold text-gray-900 font-mono text-[11px]">
+                        {document.validationSummary?.layerScores?.factualAccuracy ?? 95}%
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                      <div 
+                        className="bg-emerald-500 h-full rounded-full transition-all duration-500" 
+                        style={{ width: `${document.validationSummary?.layerScores?.factualAccuracy ?? 95}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="flex justify-between font-medium">
-                    <span>Section Completeness</span>
-                    <span className="font-bold text-mira-dark">{document.validationSummary?.layerScores?.sectionCompleteness || 100}%</span>
+
+                  {/* Layer 2: Section Completeness */}
+                  <div>
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="text-gray-700 font-medium flex items-center gap-1.5">
+                        <FileText className="w-3 h-3 text-blue-600" />
+                        Section Completeness
+                      </span>
+                      <span className="font-bold text-gray-900 font-mono text-[11px]">
+                        {document.validationSummary?.layerScores?.sectionCompleteness ?? 100}%
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                      <div 
+                        className="bg-blue-500 h-full rounded-full transition-all duration-500" 
+                        style={{ width: `${document.validationSummary?.layerScores?.sectionCompleteness ?? 100}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="flex justify-between font-medium">
-                    <span>Clause Coverage</span>
-                    <span className="font-bold text-mira-dark">{document.validationSummary?.layerScores?.clauseCoverage || 92}%</span>
+
+                  {/* Layer 3: Clause Coverage */}
+                  <div>
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="text-gray-700 font-medium flex items-center gap-1.5">
+                        <BookOpen className="w-3 h-3 text-indigo-600" />
+                        Clause Coverage
+                      </span>
+                      <span className="font-bold text-gray-900 font-mono text-[11px]">
+                        {document.validationSummary?.layerScores?.clauseCoverage ?? 92}%
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                      <div 
+                        className="bg-indigo-500 h-full rounded-full transition-all duration-500" 
+                        style={{ width: `${document.validationSummary?.layerScores?.clauseCoverage ?? 92}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="flex justify-between font-medium">
-                    <span>NLP Semantic Consistency</span>
-                    <span className="font-bold text-mira-dark">{document.validationSummary?.layerScores?.semanticConsistency || 90}%</span>
+
+                  {/* Layer 4: Semantic Consistency */}
+                  <div>
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="text-gray-700 font-medium flex items-center gap-1.5">
+                        <Scale className="w-3 h-3 text-purple-600" />
+                        NLP Semantic Consistency
+                      </span>
+                      <span className="font-bold text-gray-900 font-mono text-[11px]">
+                        {document.validationSummary?.layerScores?.semanticConsistency ?? 90}%
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                      <div 
+                        className="bg-purple-500 h-full rounded-full transition-all duration-500" 
+                        style={{ width: `${document.validationSummary?.layerScores?.semanticConsistency ?? 90}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Layer 5: Legal Precedent Support */}
+                  <div>
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="text-gray-700 font-medium flex items-center gap-1.5">
+                        <Award className="w-3 h-3 text-amber-600" />
+                        Precedent Alignment
+                      </span>
+                      <span className="font-bold text-gray-900 font-mono text-[11px]">
+                        {document.validationSummary?.layerScores?.legalKnowledgeSupport ?? 95}%
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                      <div 
+                        className="bg-amber-500 h-full rounded-full transition-all duration-500" 
+                        style={{ width: `${document.validationSummary?.layerScores?.legalKnowledgeSupport ?? 95}%` }}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1890,6 +2560,209 @@ export const DocumentEditor: React.FC = () => {
               >
                 Replace All in Document
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Phase 4: Natural-Language Edit & Disambiguation Modal */}
+      {showDiffModal && nlPlan && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-gray-100 space-y-4 max-h-[88vh] flex flex-col animate-in fade-in zoom-in-95">
+            {/* Modal Header */}
+            <div className="flex items-start justify-between pb-3 border-b border-gray-100 flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <div className={`p-2.5 rounded-xl ${nlPlan.isAmbiguous ? 'bg-amber-100 text-amber-700' : 'bg-purple-100 text-purple-700'}`}>
+                  {nlPlan.isAmbiguous ? <HelpCircle className="w-5 h-5" /> : <Wand2 className="w-5 h-5" />}
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-gray-900">
+                    {nlPlan.isAmbiguous ? 'Clarification Required Before Editing' : 'Review Natural-Language Edit Plan'}
+                  </h3>
+                  <p className="text-xs text-gray-500">
+                    {nlPlan.isAmbiguous 
+                      ? 'The model detected ambiguous intent. Please specify which entity or section you intend to change.' 
+                      : `Instruction: "${nlPlan.instruction}"`}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setShowDiffModal(false);
+                  setNlPlan(null);
+                }}
+                className="text-gray-400 hover:text-gray-600 p-1 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="space-y-4 overflow-y-auto flex-1 pr-1 text-xs">
+              {nlPlan.isAmbiguous ? (
+                /* Disambiguation Section */
+                <div className="space-y-3">
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 font-medium">
+                    <p className="font-bold text-amber-950 mb-1 flex items-center gap-1.5">
+                      <AlertTriangle className="w-4 h-4 text-amber-600" />
+                      <span>{nlPlan.clarifyingQuestion || 'Which party or section do you want to modify?'}</span>
+                    </p>
+                    <p className="text-[11px] text-amber-800">
+                      To prevent corrupting your legal document, Atharv Legal AI requires explicit confirmation before applying changes.
+                    </p>
+                  </div>
+
+                  {nlPlan.suggestedOptions && nlPlan.suggestedOptions.length > 0 && (
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-gray-700">Select intended option:</label>
+                      <div className="grid grid-cols-1 gap-2">
+                        {nlPlan.suggestedOptions.map((opt, oIdx) => (
+                          <button
+                            key={oIdx}
+                            type="button"
+                            onClick={() => {
+                              setNlClarificationAnswer(opt);
+                              handlePlanNlEdit(opt);
+                            }}
+                            className="p-3 text-left bg-white hover:bg-purple-50 border border-gray-200 hover:border-purple-300 rounded-xl font-medium text-gray-800 transition-colors flex items-center justify-between cursor-pointer group shadow-2xs"
+                          >
+                            <span className="font-semibold text-xs group-hover:text-purple-900">{opt}</span>
+                            <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-purple-600" />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-1.5 pt-2">
+                    <label className="text-xs font-bold text-gray-700">Or type custom clarification:</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={nlClarificationAnswer}
+                        onChange={(e) => setNlClarificationAnswer(e.target.value)}
+                        placeholder="Type clarifying context..."
+                        className="flex-1 p-2 bg-white border border-gray-300 rounded-lg text-xs focus:outline-hidden focus:border-purple-600"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handlePlanNlEdit(nlClarificationAnswer)}
+                        disabled={!nlClarificationAnswer.trim() || nlPlanning}
+                        className="px-3 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold shadow-2xs cursor-pointer flex-shrink-0"
+                      >
+                        {nlPlanning ? 'Planning...' : 'Re-Plan'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* Standard Diff Review & Operations Section */
+                <div className="space-y-4">
+                  {/* Summary / Explanation */}
+                  <div className="p-3 bg-purple-50 border border-purple-100 rounded-xl text-purple-950">
+                    <div className="font-bold flex items-center gap-1.5 mb-1">
+                      <Sparkles className="w-3.5 h-3.5 text-purple-700" />
+                      <span>{nlPlan.explanation || 'Deterministic Edit Operations Generated'}</span>
+                    </div>
+                    <div className="text-[11px] text-purple-800">
+                      Operations are applied deterministically by the backend. Raw document content is never overwritten uninspected.
+                    </div>
+                  </div>
+
+                  {/* Structured Operations Table/List */}
+                  <div className="space-y-1.5">
+                    <div className="font-bold text-gray-700 flex items-center justify-between">
+                      <span>Planned Operations ({nlPlan.operations.length}):</span>
+                    </div>
+                    <div className="space-y-1.5 max-h-36 overflow-y-auto">
+                      {nlPlan.operations.map((op, opIdx) => (
+                        <div key={opIdx} className="p-2 bg-gray-50 border border-gray-200 rounded-lg text-[11px] flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 truncate">
+                            <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-purple-100 text-purple-800 uppercase flex-shrink-0">
+                              {op.op}
+                            </span>
+                            <span className="truncate text-gray-700">
+                              {op.op === 'replace_all' && `Replace "${op.oldText}" → "${op.newText}"`}
+                              {op.op === 'replace_in_section' && `In [${op.sectionId || 'section'}]: "${op.oldText}" → "${op.newText}"`}
+                              {op.op === 'insert_clause' && `Insert clause: ${op.clauseType || 'new clause'} (${op.position || 'before'} ${op.targetClauseId || 'signatures'})`}
+                              {op.op === 'delete_clause' && `Delete clause: ${op.sectionId || op.targetClauseId || ''}`}
+                              {op.op === 'update_fact' && `Update structured fact: ${op.factKey} = ${JSON.stringify(op.factValue)}`}
+                            </span>
+                          </div>
+                          {op.reason && (
+                            <span className="text-[10px] text-gray-400 italic flex-shrink-0">{op.reason}</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Unified Diff Box */}
+                  <div className="space-y-1.5">
+                    <div className="font-bold text-gray-700 flex items-center justify-between">
+                      <span>Unified Diff Preview:</span>
+                      <span className="text-[10px] text-gray-400">Green = Added, Red = Removed</span>
+                    </div>
+                    <div className="bg-gray-900 rounded-xl p-3 font-mono text-[11px] leading-relaxed max-h-56 overflow-y-auto border border-gray-800 shadow-inner">
+                      {nlPlan.diffSummary?.unifiedDiff ? (
+                        nlPlan.diffSummary.unifiedDiff.split('\n').map((line: string, lIdx: number) => {
+                          let lineStyle = 'text-gray-300';
+                          if (line.startsWith('+++') || line.startsWith('---')) {
+                            lineStyle = 'text-gray-400 font-bold';
+                          } else if (line.startsWith('+')) {
+                            lineStyle = 'text-emerald-400 bg-emerald-950/40 px-1 rounded-xs font-semibold';
+                          } else if (line.startsWith('-')) {
+                            lineStyle = 'text-rose-400 bg-rose-950/40 px-1 rounded-xs font-semibold';
+                          } else if (line.startsWith('@@')) {
+                            lineStyle = 'text-purple-300 font-bold';
+                          }
+                          return (
+                            <div key={lIdx} className={`${lineStyle} whitespace-pre-wrap break-all py-0.5`}>
+                              {line || ' '}
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div className="text-gray-400 italic">No textual difference generated.</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100 flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDiffModal(false);
+                  setNlPlan(null);
+                }}
+                className="px-3.5 py-1.5 text-xs text-gray-600 hover:bg-gray-100 rounded-lg cursor-pointer font-medium"
+              >
+                Cancel
+              </button>
+              {!nlPlan.isAmbiguous && (
+                <button
+                  type="button"
+                  onClick={handleApplyNlEdit}
+                  disabled={nlApplying}
+                  className="px-4 py-1.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg shadow-2xs cursor-pointer flex items-center gap-1.5"
+                >
+                  {nlApplying ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Applying Changes...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Accept & Apply Edit</span>
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           </div>
         </div>

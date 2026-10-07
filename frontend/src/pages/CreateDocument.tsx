@@ -49,7 +49,8 @@ const CONTRACT_TYPES: ContractTypeOption[] = [
   { code: 'VENDOR', name: 'Vendor', fullTitle: 'Vendor Supply Agreement', icon: Building2, active: true },
   { code: 'PARTNERSHIP', name: 'Partnership', fullTitle: 'Partnership Agreement', icon: Layers, active: true },
   { code: 'INTERNSHIP', name: 'Internship', fullTitle: 'Internship Agreement', icon: FileText, active: true },
-  { code: 'LEASE', name: 'Lease', fullTitle: 'Commercial Lease Agreement', icon: MapPin, active: true }
+  { code: 'LEASE', name: 'Lease', fullTitle: 'Commercial Lease Agreement', icon: MapPin, active: true },
+  { code: 'SALE', name: 'Sale', fullTitle: 'Sale of Goods Agreement', icon: DollarSign, active: true }
 ];
 
 const PRESETS: Record<string, Record<string, any>> = {
@@ -210,6 +211,20 @@ const PRESETS: Record<string, Record<string, any>> = {
     'governingLaw': 'State of New York',
     'jurisdiction': 'Courts of the County of New York, State of New York',
     'disputeMethod': 'Court of competent jurisdiction with mutual waiver of jury trial'
+  },
+  SALE: {
+    'seller.name': 'Apex Industrial Equipment Pvt. Ltd.',
+    'seller.address': 'Plot 45, Peenya Industrial Area, Phase II, Bangalore, KA 560058',
+    'buyer.name': 'Metro Logistics & Warehousing LLP',
+    'buyer.address': 'Survey 88, Whitefield Main Road, Bangalore, KA 560066',
+    'goodsDescription': 'High-precision automated sorting conveyors and barcoding scanner terminals',
+    'purchasePrice': '1250000',
+    'currency': 'INR',
+    'paymentTerms': '30% advance on confirmation, 70% upon delivery and inspection',
+    'deliveryDate': new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
+    'deliveryLocation': 'Buyer Central Hub, Warehouse Bay 3, Whitefield, Bangalore',
+    'inspectionDays': '7 business days',
+    'governingLaw': 'Laws of India (Sale of Goods Act, 1930)'
   }
 };
 
@@ -335,6 +350,19 @@ const FALLBACK_SCHEMAS: Record<string, QuestionnaireField[]> = {
     { key: 'leaseTermMonths', label: 'Lease Duration (Months)', type: 'select', required: 'REQUIRED', defaultValue: '36', options: [{ value: '11', label: '11 Months (Short-term)' }, { value: '24', label: '24 Months (2 Years)' }, { value: '36', label: '36 Months (3 Years)' }, { value: '60', label: '60 Months (5 Years)' }], section: 'Terms' },
     { key: 'lockInPeriodMonths', label: 'Lock-In Period (Months)', type: 'select', required: 'RECOMMENDED', defaultValue: '12', options: [{ value: '0', label: 'No Lock-in' }, { value: '6', label: '6 Months' }, { value: '12', label: '12 Months' }], section: 'Terms' },
     { key: 'governingLaw', label: 'Governing Law', type: 'text', required: 'REQUIRED', defaultValue: 'State of New York', section: 'Terms' }
+  ],
+  SALE: [
+    { key: 'seller.name', label: 'Seller Legal Name', type: 'text', required: 'REQUIRED', placeholder: 'e.g. Apex Industrial Equipment Pvt. Ltd.', section: 'Parties' },
+    { key: 'seller.address', label: 'Seller Registered Office', type: 'text', required: 'RECOMMENDED', section: 'Parties' },
+    { key: 'buyer.name', label: 'Buyer Legal Name', type: 'text', required: 'REQUIRED', placeholder: 'e.g. Metro Logistics & Warehousing LLP', section: 'Parties' },
+    { key: 'buyer.address', label: 'Buyer Registered Office', type: 'text', required: 'RECOMMENDED', section: 'Parties' },
+    { key: 'goodsDescription', label: 'Description of Commercial Goods', type: 'textarea', required: 'REQUIRED', defaultValue: 'Automated sorting conveyors and terminal accessories', section: 'Goods' },
+    { key: 'purchasePrice', label: 'Total Purchase Consideration Price', type: 'text', required: 'REQUIRED', defaultValue: '1250000', section: 'Commercials' },
+    { key: 'currency', label: 'Currency', type: 'select', required: 'REQUIRED', defaultValue: 'INR', options: [{ value: 'INR', label: 'INR (₹)' }, { value: 'USD', label: 'USD ($)' }, { value: 'EUR', label: 'EUR (€)' }], section: 'Commercials' },
+    { key: 'deliveryDate', label: 'Agreed Delivery Date', type: 'date', required: 'REQUIRED', section: 'Delivery' },
+    { key: 'deliveryLocation', label: 'Delivery Location / Destination', type: 'text', required: 'RECOMMENDED', defaultValue: 'Buyer Central Warehouse', section: 'Delivery' },
+    { key: 'inspectionDays', label: 'Inspection Window (Days)', type: 'select', required: 'RECOMMENDED', defaultValue: '7', options: [{ value: '3', label: '3 Days' }, { value: '7', label: '7 Days' }, { value: '14', label: '14 Days' }], section: 'Warranties' },
+    { key: 'governingLaw', label: 'Governing Law', type: 'text', required: 'REQUIRED', defaultValue: 'Laws of India (Sale of Goods Act, 1930)', section: 'Terms' }
   ]
 };
 

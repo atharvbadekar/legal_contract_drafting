@@ -7,7 +7,7 @@ export interface User {
   role: UserRole;
 }
 
-export type DocumentType = 'NDA' | 'LEGAL_NOTICE' | 'EMPLOYMENT' | 'SERVICE' | 'SAAS' | 'CONSULTING' | 'MOU' | 'VENDOR' | 'PARTNERSHIP' | 'INTERNSHIP' | 'LEASE' | string;
+export type DocumentType = 'NDA' | 'LEGAL_NOTICE' | 'EMPLOYMENT' | 'SERVICE' | 'SAAS' | 'CONSULTING' | 'MOU' | 'VENDOR' | 'PARTNERSHIP' | 'INTERNSHIP' | 'LEASE' | 'SALE' | string;
 export type DocumentStatus = 'DRAFT' | 'VALIDATING' | 'COMPLETED' | 'NEEDS_REVIEW';
 export type GenerationMode = 'BASELINE' | 'MIRA';
 export type ClauseStatus = 'DRAFT' | 'APPROVED' | 'ARCHIVED';
@@ -225,6 +225,69 @@ export interface DocumentVersionRecord {
   createdById: string;
   createdBy?: { name: string; email?: string };
   createdAt: string;
+  changeSummary?: string;
+  operationType?: string;
+  score?: number;
+  authorName?: string;
+  diffSummary?: string;
+}
+
+export interface VersionDiffLine {
+  type: 'ADD' | 'REMOVE' | 'EQUAL';
+  line: string;
+  v1LineNum?: number;
+  v2LineNum?: number;
+}
+
+export interface VersionDiffResult {
+  v1Number: number;
+  v2Number: number;
+  v1CreatedAt: string;
+  v2CreatedAt: string;
+  v1Author: string;
+  v2Author: string;
+  v1Score: number;
+  v2Score: number;
+  scoreDelta: number;
+  summary: string;
+  additions: number;
+  deletions: number;
+  diffLines: VersionDiffLine[];
+  factsDiff: Array<{
+    field: string;
+    oldValue: any;
+    newValue: any;
+  }>;
+}
+
+export interface AuditLogRecord {
+  id: string;
+  userId?: string | null;
+  action: string;
+  resourceType: string;
+  resourceId?: string | null;
+  details: {
+    documentId: string;
+    versionNumber?: number;
+    operationType: string;
+    changeSummary: string;
+    authorName: string;
+    authorEmail?: string;
+    engine?: string;
+    modelUsed?: string;
+    latencyMs?: number;
+    tokens?: {
+      prompt?: number;
+      completion?: number;
+      total?: number;
+    };
+    scoreBefore?: number;
+    scoreAfter?: number;
+    diffSummary?: string;
+    diff?: string;
+    timestamp: string;
+  };
+  createdAt: string;
 }
 
 export interface AgentStepRecord {
@@ -255,12 +318,20 @@ export interface ClauseRecord {
   id: string;
   title: string;
   documentType: DocumentType;
+  contractType?: string;
   clauseType: string;
   content: string;
+  text?: string;
+  variant?: string;
+  requiredStatus?: 'REQUIRED' | 'RECOMMENDED' | 'CONDITIONAL' | 'OPTIONAL' | string;
+  conditions?: Record<string, any>;
+  riskLevel?: 'LOW' | 'MEDIUM' | 'HIGH' | string;
   jurisdiction: string;
   status: ClauseStatus;
   version: number;
   source?: string;
+  sourceUrl?: string;
+  versions?: Array<any>;
   createdAt: string;
   updatedAt: string;
 }
@@ -326,15 +397,22 @@ export interface ContractClauseMapItem {
 
 export interface ContractRiskArea {
   id: string;
+  ruleId?: string;
   severity: ContractRiskSeverity;
   category: string;
   clause: string;
+  section?: string;
   title: string;
   description: string;
+  reason?: string;
+  practicalImpact?: string;
   evidence: string;
+  confidence?: number;
   location?: { line?: number; textRange?: { start: number; end: number } };
   legalRationale: string;
   suggestedResolution: string;
+  suggestedFix?: string;
+  nature?: 'TEMPLATE_PLACEHOLDER' | 'LEGAL_RISK' | 'CONTRADICTION' | 'MISSING_CLAUSE' | 'SECURITY';
 }
 
 export interface ContractConsistencyCheck {
@@ -355,6 +433,14 @@ export interface ContractOverview {
   jurisdiction?: string;
   wordCount: number;
   paragraphCount: number;
+  hasPromptInjection?: boolean;
+  hasUnresolvedPlaceholders?: boolean;
+}
+
+export interface ContractHealthSubScore {
+  score: number;
+  weight: number;
+  explanation: string;
 }
 
 export interface ContractAnalysisResult {
@@ -367,12 +453,58 @@ export interface ContractAnalysisResult {
     status: 'STRONG' | 'MODERATE' | 'NEEDS_REVISION' | 'CRITICAL_ATTENTION';
     categoryScores: {
       completeness: number;
+      clauseCoverage?: number;
       riskAndCompliance: number;
       consistency: number;
       clarity: number;
+      formatting?: number;
+      evidenceConfidence?: number;
+    };
+    subScores?: {
+      completeness: ContractHealthSubScore;
+      clauseCoverage: ContractHealthSubScore;
+      consistency: ContractHealthSubScore;
+      risk: ContractHealthSubScore;
+      formatting: ContractHealthSubScore;
+      evidenceConfidence: ContractHealthSubScore;
     };
     scoreBreakdown: string[];
     disclaimer: string;
   };
   extractedText: string;
 }
+
+export interface StructuredEditOperation {
+  op: 'replace_all' | 'replace_in_section' | 'insert_clause' | 'delete_clause' | 'update_fact';
+  target?: string;
+  old?: string;
+  new?: string;
+  oldText?: string;
+  newText?: string;
+  sectionId?: string;
+  sectionTitle?: string;
+  factKey?: string;
+  factValue?: any;
+  reason?: string;
+  clauseType?: string;
+  position?: string;
+  targetClauseId?: string;
+}
+
+export interface NaturalLanguageEditPlan {
+  instruction: string;
+  isAmbiguous: boolean;
+  clarifyingQuestion?: string;
+  suggestedOptions?: string[];
+  explanation: string;
+  operations: StructuredEditOperation[];
+  previewContent: string;
+  diffSummary: {
+    additionsCount: number;
+    deletionsCount: number;
+    changedSections: string[];
+    unifiedDiff: string;
+  };
+  updatedFacts: Record<string, any>;
+}
+

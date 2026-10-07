@@ -1,6 +1,9 @@
 import axios from 'axios';
 import {
   DocumentRecord,
+  DocumentVersionRecord,
+  VersionDiffResult,
+  AuditLogRecord,
   ClauseRecord,
   KnowledgeDocumentRecord,
   TemplateRecord,
@@ -145,9 +148,27 @@ export const documentService = {
     const res = await api.post<{ validationResult: any; document: DocumentRecord }>(`/documents/${id}/validate`, payload || {});
     return res.data;
   },
-  getVersions: async (id: string) => {
-    const res = await api.get<{ versions: any[] }>(`/documents/${id}/versions`);
+  getVersions: async (id: string): Promise<DocumentVersionRecord[]> => {
+    const res = await api.get<{ versions: DocumentVersionRecord[] }>(`/documents/${id}/versions`);
     return res.data.versions;
+  },
+  compareVersions: async (id: string, v1: number, v2: number) => {
+    const res = await api.get<{ diff: VersionDiffResult }>(`/documents/${id}/versions/compare?v1=${v1}&v2=${v2}`);
+    return res.data.diff;
+  },
+  getAuditTrail: async (id: string) => {
+    const res = await api.get<{ auditLogs: AuditLogRecord[] }>(`/documents/${id}/audit`);
+    return res.data.auditLogs;
+  },
+  exportAuditReport: async (id: string, filename = 'audit_report') => {
+    const res = await api.get(`/documents/${id}/audit/export`, { responseType: 'blob' });
+    const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/json' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `${filename}.json`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
   },
   restoreVersion: async (id: string, versionId: string) => {
     const res = await api.post<{ message: string; document: DocumentRecord }>(`/documents/${id}/restore/${versionId}`);
@@ -210,6 +231,23 @@ export const documentService = {
     const res = await api.post<{ success: boolean; validationSummary: any; document: DocumentRecord }>(
       `/documents/${id}/issues/${issueId}/review`,
       { reviewStatus, note }
+    );
+    return res.data;
+  },
+  planNlEdit: async (id: string, params: { instruction: string; content?: string; clarificationAnswer?: string }) => {
+    const res = await api.post<{ plan: any }>(`/documents/${id}/nl-edit/plan`, params);
+    return res.data.plan;
+  },
+  applyNlEdit: async (id: string, params: { instruction: string; operations?: any[]; updatedContent?: string; updatedFacts?: any }) => {
+    const res = await api.post<{ success: boolean; document: DocumentRecord; validationResult: any; message: string }>(
+      `/documents/${id}/nl-edit/apply`,
+      params
+    );
+    return res.data;
+  },
+  undoNlEdit: async (id: string) => {
+    const res = await api.post<{ success: boolean; document: DocumentRecord; message: string }>(
+      `/documents/${id}/nl-edit/undo`
     );
     return res.data;
   }
@@ -331,9 +369,21 @@ export const aiService = {
 
 // Clauses Service
 export const clauseService = {
-  list: async (filters?: { documentType?: string; status?: string; clauseType?: string }) => {
+  list: async (filters?: {
+    documentType?: string;
+    contractType?: string;
+    status?: string;
+    clauseType?: string;
+    variant?: string;
+    riskLevel?: string;
+    search?: string;
+  }) => {
     const res = await api.get<{ clauses: ClauseRecord[] }>('/clauses', { params: filters });
     return res.data.clauses;
+  },
+  getById: async (id: string) => {
+    const res = await api.get<{ clause: ClauseRecord }>(`/clauses/${id}`);
+    return res.data.clause;
   },
   create: async (data: any) => {
     const res = await api.post<{ clause: ClauseRecord }>('/clauses', data);
@@ -342,6 +392,26 @@ export const clauseService = {
   update: async (id: string, data: any) => {
     const res = await api.put<{ clause: ClauseRecord }>(`/clauses/${id}`, data);
     return res.data.clause;
+  },
+  createVersion: async (id: string, data: {
+    content: string;
+    revisionNotes?: string;
+    variant?: string;
+    riskLevel?: string;
+  }) => {
+    const res = await api.post<{ clause: ClauseRecord; newVersionNumber: number }>(`/clauses/${id}/version`, data);
+    return res.data;
+  },
+  select: async (params: {
+    contractType: string;
+    clauseType: string;
+    facts?: Record<string, any>;
+    targetSnippet?: string;
+    preferredVariant?: string;
+    limit?: number;
+  }) => {
+    const res = await api.post<{ selected: ClauseRecord | null; candidates: ClauseRecord[]; matchReason: string }>('/clauses/select', params);
+    return res.data;
   },
   approve: async (id: string) => {
     const res = await api.post<{ clause: ClauseRecord }>(`/clauses/${id}/approve`);
@@ -432,4 +502,40 @@ export const linterService = {
     return res.data;
   }
 };
+
+// System Status Service
+export interface SystemEngineInfo {
+  name: string;
+  status: 'ACTIVE' | 'DEGRADED' | 'FALLBACK_ADAPTER' | 'OFFLINE';
+  provider?: string;
+  model?: string;
+  details?: Record<string, any>;
+  latencyMs?: number;
+}
+
+export interface CompleteSystemStatusData {
+  timestamp: string;
+  environment: string;
+  overallStatus: 'HEALTHY' | 'DEGRADED' | 'UNAVAILABLE';
+  engines: {
+    deterministicRules: SystemEngineInfo;
+    semanticNlp: SystemEngineInfo;
+    llm: SystemEngineInfo;
+    rag: SystemEngineInfo;
+  };
+  cacheStats: {
+    hits: number;
+    misses: number;
+    entries: number;
+  };
+  rateLimitQueueLength: number;
+}
+
+export const systemService = {
+  getStatus: async (): Promise<CompleteSystemStatusData> => {
+    const res = await api.get<CompleteSystemStatusData>('/system/status');
+    return res.data;
+  }
+};
+
 

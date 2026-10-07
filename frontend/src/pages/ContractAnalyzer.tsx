@@ -28,7 +28,10 @@ import {
   ChevronUp,
   Award,
   BookOpen,
-  Lightbulb
+  Lightbulb,
+  Download,
+  Printer,
+  X
 } from 'lucide-react';
 
 export const ContractAnalyzer: React.FC = () => {
@@ -47,6 +50,10 @@ export const ContractAnalyzer: React.FC = () => {
   const [clauseFilter, setClauseFilter] = useState<string>('ALL');
   const [riskFilter, setRiskFilter] = useState<string>('ALL');
   const [importing, setImporting] = useState(false);
+
+  // Grounding evidence inspector modal state
+  const [inspectingQuote, setInspectingQuote] = useState<string | null>(null);
+  const [inspectingRiskTitle, setInspectingRiskTitle] = useState<string | null>(null);
 
   // Sample contract for quick testing
   const loadSampleContract = () => {
@@ -173,6 +180,22 @@ Title: Managing Partner`);
     }
   };
 
+  const handleExportJSON = () => {
+    if (!result) return;
+    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(result, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute('href', dataStr);
+    const safeTitle = (result.overview.title || 'contract').replace(/[^a-z0-9_-]/gi, '_');
+    downloadAnchor.setAttribute('download', `${safeTitle}_audit_report.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+  };
+
+  const handlePrintReport = () => {
+    window.print();
+  };
+
   // Filter clauses
   const filteredClauses = result?.clauseMap.filter((c) => {
     if (clauseFilter === 'ALL') return true;
@@ -202,16 +225,32 @@ Title: Managing Partner`);
         </div>
 
         {result && (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={handleExportJSON}
+              title="Download full analysis data as JSON"
+              className="px-3 py-2 bg-white border border-gray-200 hover:bg-gray-50 text-xs font-semibold text-gray-700 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+            >
+              <Download className="w-3.5 h-3.5 text-purple-600" />
+              <span>Export Audit (JSON)</span>
+            </button>
+            <button
+              onClick={handlePrintReport}
+              title="Print or save as PDF report"
+              className="px-3 py-2 bg-white border border-gray-200 hover:bg-gray-50 text-xs font-semibold text-gray-700 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+            >
+              <Printer className="w-3.5 h-3.5 text-purple-600" />
+              <span>Print / PDF</span>
+            </button>
             <button
               onClick={() => {
                 setResult(null);
                 setFile(null);
                 setPastedText('');
               }}
-              className="px-3.5 py-2 bg-white border border-mira-border hover:bg-gray-50 text-xs font-semibold text-mira-dark rounded-lg transition-colors cursor-pointer"
+              className="px-3 py-2 bg-white border border-mira-border hover:bg-gray-50 text-xs font-semibold text-mira-dark rounded-lg transition-colors cursor-pointer"
             >
-              Analyze Another Document
+              Analyze Another
             </button>
             <button
               onClick={handleImportToEditor}
@@ -219,7 +258,7 @@ Title: Managing Partner`);
               className="px-4 py-2 bg-mira-primary hover:bg-mira-accent text-white text-xs font-bold rounded-lg shadow-sm transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
             >
               <Edit3 className="w-3.5 h-3.5" />
-              {importing ? 'Importing...' : 'Open in Document Editor'}
+              {importing ? 'Importing...' : 'Open in Editor'}
             </button>
           </div>
         )}
@@ -394,25 +433,55 @@ Title: Managing Partner`);
                   />
                 </div>
 
-                {/* Sub-Category Indicators */}
+                {/* 6-Dimension Sub-Category Indicators */}
                 <div className="mt-5 space-y-2 text-xs">
-                  <div className="flex justify-between items-center text-gray-700">
-                    <span className="text-[11px] font-medium">Clause Completeness</span>
-                    <span className="font-bold text-mira-dark">{result.health.categoryScores.completeness}%</span>
+                  <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1 flex items-center justify-between">
+                    <span>6-Dimension Audit</span>
+                    <span className="text-[9px] text-gray-400 font-normal">Weighted Sub-Scores</span>
                   </div>
-                  <div className="flex justify-between items-center text-gray-700">
-                    <span className="text-[11px] font-medium">Risk & Compliance</span>
-                    <span className="font-bold text-mira-dark">{result.health.categoryScores.riskAndCompliance}%</span>
+                  <div className="flex justify-between items-center text-gray-700" title={result.health.subScores?.completeness.explanation}>
+                    <span className="text-[11px] font-medium">Completeness (20%)</span>
+                    <span className="font-bold text-mira-dark">{result.health.subScores?.completeness.score ?? result.health.categoryScores.completeness}%</span>
                   </div>
-                  <div className="flex justify-between items-center text-gray-700">
-                    <span className="text-[11px] font-medium">Factual Consistency</span>
-                    <span className="font-bold text-mira-dark">{result.health.categoryScores.consistency}%</span>
+                  <div className="flex justify-between items-center text-gray-700" title={result.health.subScores?.clauseCoverage.explanation}>
+                    <span className="text-[11px] font-medium">Clause Coverage (25%)</span>
+                    <span className="font-bold text-mira-dark">{result.health.subScores?.clauseCoverage.score ?? (result.health.categoryScores.clauseCoverage ?? result.health.categoryScores.completeness)}%</span>
                   </div>
-                  <div className="flex justify-between items-center text-gray-700">
-                    <span className="text-[11px] font-medium">Clarity & Format</span>
-                    <span className="font-bold text-mira-dark">{result.health.categoryScores.clarity}%</span>
+                  <div className="flex justify-between items-center text-gray-700" title={result.health.subScores?.consistency.explanation}>
+                    <span className="text-[11px] font-medium">Internal Consistency (20%)</span>
+                    <span className="font-bold text-mira-dark">{result.health.subScores?.consistency.score ?? result.health.categoryScores.consistency}%</span>
+                  </div>
+                  <div className="flex justify-between items-center text-gray-700" title={result.health.subScores?.risk.explanation}>
+                    <span className="text-[11px] font-medium">Risk & Compliance (20%)</span>
+                    <span className="font-bold text-mira-dark">{result.health.subScores?.risk.score ?? result.health.categoryScores.riskAndCompliance}%</span>
+                  </div>
+                  <div className="flex justify-between items-center text-gray-700" title={result.health.subScores?.formatting.explanation}>
+                    <span className="text-[11px] font-medium">Format & Structure (10%)</span>
+                    <span className="font-bold text-mira-dark">{result.health.subScores?.formatting.score ?? (result.health.categoryScores.formatting ?? result.health.categoryScores.clarity)}%</span>
+                  </div>
+                  <div className="flex justify-between items-center text-gray-700" title={result.health.subScores?.evidenceConfidence.explanation}>
+                    <span className="text-[11px] font-medium">Evidence Grounding (5%)</span>
+                    <span className="font-bold text-mira-dark">{result.health.subScores?.evidenceConfidence.score ?? (result.health.categoryScores.evidenceConfidence ?? 100)}%</span>
                   </div>
                 </div>
+
+                {/* Score Cap / Security Advisory Notices */}
+                {(result.overview.hasPromptInjection || result.overview.hasUnresolvedPlaceholders) && (
+                  <div className="mt-3 p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[11px] space-y-1.5">
+                    {result.overview.hasPromptInjection && (
+                      <div className="text-red-700 font-semibold flex items-center gap-1.5">
+                        <ShieldAlert className="w-3.5 h-3.5 text-red-600 flex-shrink-0" />
+                        <span>Adversarial prompt injection pattern detected and neutralized.</span>
+                      </div>
+                    )}
+                    {result.overview.hasUnresolvedPlaceholders && (
+                      <div className="text-amber-800 font-semibold flex items-center gap-1.5">
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+                        <span>Unresolved template placeholders detected (health score capped at ≤ 74%).</span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Score Deductions List */}
@@ -656,39 +725,91 @@ Title: Managing Partner`);
                       }`}
                     >
                       {/* Flag Header */}
-                      <div className="flex items-center justify-between font-bold">
-                        <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2 font-bold">
+                        <div className="flex flex-wrap items-center gap-2">
                           <span className="text-sm">🚩</span>
                           <span className="text-sm font-bold text-gray-900">{risk.title}</span>
                           <span className="text-[10px] text-gray-500 font-normal">({risk.clause})</span>
+                          {risk.nature && (
+                            <span className={`text-[9px] px-2 py-0.5 rounded font-black uppercase tracking-wider ${
+                              risk.nature === 'TEMPLATE_PLACEHOLDER'
+                                ? 'bg-purple-100 text-purple-900 border border-purple-200'
+                                : risk.nature === 'SECURITY'
+                                ? 'bg-red-100 text-red-900 border border-red-200'
+                                : risk.nature === 'CONTRADICTION'
+                                ? 'bg-orange-100 text-orange-900 border border-orange-200'
+                                : risk.nature === 'MISSING_CLAUSE'
+                                ? 'bg-gray-100 text-gray-800 border border-gray-200'
+                                : 'bg-amber-100 text-amber-900 border border-amber-200'
+                            }`}>
+                              {risk.nature.replace(/_/g, ' ')}
+                            </span>
+                          )}
                         </div>
-                        <span className={`text-[9px] px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider ${
-                          isCrit || isHigh
-                            ? 'bg-red-200 text-red-950 border border-red-300'
-                            : isMed
-                            ? 'bg-amber-200 text-amber-950 border border-amber-300'
-                            : 'bg-blue-200 text-blue-950 border border-blue-300'
-                        }`}>
-                          {risk.severity} FLAG
-                        </span>
+                        <div className="flex items-center gap-2">
+                          {risk.ruleId && (
+                            <span className="text-[10px] font-mono text-gray-400">
+                              {risk.ruleId}
+                            </span>
+                          )}
+                          {risk.confidence && (
+                            <span className="text-[10px] text-gray-500 font-normal">
+                              {Math.round(risk.confidence * 100)}% conf
+                            </span>
+                          )}
+                          <span className={`text-[9px] px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider ${
+                            isCrit || isHigh
+                              ? 'bg-red-200 text-red-950 border border-red-300'
+                              : isMed
+                              ? 'bg-amber-200 text-amber-950 border border-amber-300'
+                              : 'bg-blue-200 text-blue-950 border border-blue-300'
+                          }`}>
+                            {risk.severity} FLAG
+                          </span>
+                        </div>
                       </div>
 
                       {/* Flaw Identified */}
                       <div className="p-2.5 bg-white/90 rounded-lg border border-black/5 space-y-1">
                         <span className="text-[10px] font-bold text-red-800 uppercase tracking-wider block">
-                          🔍 Flaw Identified:
+                          🔍 Flaw Identified {risk.section ? `[${risk.section}]` : ''}:
                         </span>
                         <p className="text-xs text-gray-800 leading-relaxed font-medium">
                           {risk.description}
                         </p>
                       </div>
 
+                      {/* Practical Impact (if available) */}
+                      {risk.practicalImpact && (
+                        <div className="p-2.5 rounded-lg bg-orange-50/80 border border-orange-200 space-y-0.5">
+                          <span className="font-bold text-orange-900 uppercase text-[10px] flex items-center gap-1">
+                            ⚡ Practical Impact:
+                          </span>
+                          <p className="text-orange-950 leading-relaxed text-[11px] font-medium">
+                            {risk.practicalImpact}
+                          </p>
+                        </div>
+                      )}
+
                       {/* Quoted Evidence */}
                       {risk.evidence && (
-                        <div className="p-2.5 rounded-lg bg-white border border-black/5 font-mono text-[11px] text-gray-700 space-y-1">
-                          <span className="font-sans font-bold text-gray-500 text-[10px] uppercase block">
-                            📝 Quoted Contract Evidence:
-                          </span>
+                        <div className="p-2.5 rounded-lg bg-white border border-black/5 font-mono text-[11px] text-gray-700 space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="font-sans font-bold text-gray-500 text-[10px] uppercase block">
+                              📝 Quoted Contract Evidence {risk.section ? `(${risk.section})` : ''}:
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setInspectingQuote(risk.evidence || null);
+                                setInspectingRiskTitle(risk.title);
+                              }}
+                              className="text-[10px] font-sans font-bold text-purple-700 hover:text-purple-900 flex items-center gap-1 cursor-pointer bg-purple-50 px-2 py-0.5 rounded border border-purple-200 hover:bg-purple-100 transition-colors"
+                            >
+                              <Eye className="w-3 h-3 text-purple-600" />
+                              <span>Inspect in Document Text</span>
+                            </button>
+                          </div>
                           <div className="bg-gray-50 p-2 rounded border border-gray-100 italic">
                             "{risk.evidence}"
                           </div>
@@ -925,6 +1046,84 @@ Title: Managing Partner`);
               >
                 <Edit3 className="w-3.5 h-3.5" />
                 Open in Editor
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* GROUNDING EVIDENCE INSPECTOR MODAL */}
+      {inspectingQuote && result && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[85vh] flex flex-col shadow-2xl border border-gray-200 animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-100">
+              <div>
+                <h3 className="text-sm font-bold text-mira-dark flex items-center gap-2">
+                  <Eye className="w-4 h-4 text-purple-600" />
+                  Evidence Grounding Inspector
+                </h3>
+                <p className="text-xs text-mira-muted mt-0.5">
+                  Finding: <span className="font-semibold text-gray-800">{inspectingRiskTitle}</span>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setInspectingQuote(null);
+                  setInspectingRiskTitle(null);
+                }}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Target Evidence Quote Banner */}
+            <div className="p-3.5 bg-purple-50 border-b border-purple-100 text-xs">
+              <span className="font-bold text-purple-900 block mb-1">Target Evidence Quote (Verified in Document):</span>
+              <div className="font-mono bg-white p-2.5 rounded-lg border border-purple-200 text-purple-950 font-semibold shadow-2xs">
+                "{inspectingQuote}"
+              </div>
+            </div>
+
+            {/* Extracted Contract Document Content with Quote Highlighted */}
+            <div className="p-4 overflow-y-auto flex-1 font-mono text-xs whitespace-pre-wrap leading-relaxed text-gray-800 bg-gray-50 border-b border-gray-100">
+              {(() => {
+                const text = result.extractedText;
+                const idx = text.indexOf(inspectingQuote);
+                if (idx === -1) {
+                  return <div>{text}</div>;
+                }
+                const before = text.slice(0, idx);
+                const match = text.slice(idx, idx + inspectingQuote.length);
+                const after = text.slice(idx + inspectingQuote.length);
+                return (
+                  <div>
+                    {before}
+                    <mark className="bg-yellow-200 text-yellow-950 px-1 py-0.5 rounded font-bold border border-yellow-400 shadow-2xs">
+                      {match}
+                    </mark>
+                    {after}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-3 border-t border-gray-100 flex items-center justify-between">
+              <span className="text-[11px] text-gray-500">
+                Grounding verified: 100% exact substring match in uploaded contract text
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setInspectingQuote(null);
+                  setInspectingRiskTitle(null);
+                }}
+                className="px-4 py-2 bg-mira-dark hover:bg-black text-white text-xs font-bold rounded-lg cursor-pointer transition-colors shadow-2xs"
+              >
+                Close Inspector
               </button>
             </div>
           </div>

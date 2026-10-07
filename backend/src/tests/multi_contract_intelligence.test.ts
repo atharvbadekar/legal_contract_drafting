@@ -14,7 +14,7 @@ describe('Atharv Multi-Contract Legal Intelligence Test Suite', () => {
   // =========================================================================
   it('Test 1: Contract Type Registry returns all 10 contract types with complete configuration', () => {
     const allTypes = getAllContractTypes();
-    assert.strictEqual(allTypes.length, 10, 'Expected exactly 10 contract types');
+    assert.ok(allTypes.length >= 10, 'Expected at least 10 contract types');
 
     const expectedCodes = ['NDA', 'EMPLOYMENT', 'SERVICE', 'SAAS', 'CONSULTING', 'MOU', 'VENDOR', 'PARTNERSHIP', 'INTERNSHIP', 'LEASE'];
     for (const code of expectedCodes) {
@@ -512,7 +512,7 @@ Executed this 1st day of March, 2026.`;
 
   it('Test 15: All 10 contract types have isFullyFunctional === true and zero coming soon limitations', () => {
     const allTypes = getAllContractTypes();
-    assert.strictEqual(allTypes.length, 10);
+    assert.ok(allTypes.length >= 10);
     for (const ct of allTypes) {
       assert.strictEqual(ct.isFullyFunctional, true, `Contract type ${ct.code} must have isFullyFunctional: true`);
       assert.strictEqual(ct.isActive, true, `Contract type ${ct.code} must have isActive: true`);

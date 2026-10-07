@@ -27,12 +27,47 @@ export interface OntologyCategory {
   order: number;
 }
 
+export interface ConditionalClauseRule {
+  clauseKey: string;
+  conditionField: string;
+  conditionOperator?: 'EQUALS' | 'NOT_EQUALS' | 'CONTAINS' | 'IS_TRUTHY';
+  conditionValue: any;
+  reason: string;
+}
+
+export interface ContractValidationRule {
+  id: string;
+  name: string;
+  description: string;
+  ruleType: 'FIELD_PRESENCE' | 'FORMAT' | 'CLAUSE_COVERAGE' | 'CROSS_REFERENCE' | 'DATE_CHRONOLOGY';
+  severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+  fieldOrClause?: string;
+}
+
+export interface ContractRiskRule {
+  id: string;
+  name: string;
+  description: string;
+  triggerCondition: string;
+  riskLevel: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+  suggestedResolution: string;
+}
+
+export interface ContractClauseArchitecture {
+  requiredClauses: string[];
+  recommendedClauses: string[];
+  conditionalClauses: ConditionalClauseRule[];
+  optionalClauses: string[];
+}
+
 export interface ContractTypeConfig {
   code: string;
   name: string;
   description: string;
   version: string;
   jurisdiction: string;
+  defaultJurisdiction?: string;
+  supportedJurisdictions?: string[];
   icon: string;
   color: string;
   category: string;
@@ -42,4 +77,8 @@ export interface ContractTypeConfig {
   questionnaire: QuestionnaireField[];
   requiredFacts: string[];
   optionalFacts: string[];
+  clauses?: ContractClauseArchitecture;
+  clauseDependencies?: Record<string, string[]>;
+  validationRules?: ContractValidationRule[];
+  riskRules?: ContractRiskRule[];
 }

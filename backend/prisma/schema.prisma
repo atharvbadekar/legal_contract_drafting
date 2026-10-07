@@ -138,22 +138,29 @@ model TemplateSection {
 }
 
 model Clause {
-  id            String                   @id @default(uuid())
-  clauseCode    String?
-  title         String
-  documentType  String                   // NDA, LEGAL_NOTICE, etc.
-  clauseType    String                   // confidentiality, remedies, etc.
-  category      String                   @default("GENERAL")
-  requiredLevel String                   @default("RECOMMENDED")
-  content       String                   @db.Text
-  jurisdiction  String                   @default("India")
-  status        ClauseStatus             @default(DRAFT)
-  version       Int                      @default(1)
-  source        String?
-  embedding     Unsupported("vector(384)")?
-  variants      ClauseVariant[]
-  createdAt     DateTime                 @default(now())
-  updatedAt     DateTime                 @updatedAt
+  id             String                   @id @default(uuid())
+  clauseCode     String?
+  title          String
+  documentType   String                   // NDA, LEGAL_NOTICE, etc.
+  contractType   String?                  // Alias for documentType
+  clauseType     String                   // confidentiality, remedies, etc.
+  category       String                   @default("GENERAL")
+  requiredLevel  String                   @default("RECOMMENDED")
+  requiredStatus String?                  @default("RECOMMENDED") // REQUIRED, RECOMMENDED, CONDITIONAL, OPTIONAL
+  content        String                   @db.Text
+  text           String?                  @db.Text                 // Direct clause text alias
+  variant        String?                  @default("standard")    // mutual, one-way, strict, balanced
+  conditions     Json?                    @default("{}")
+  riskLevel      String?                  @default("LOW")         // LOW, MEDIUM, HIGH, CRITICAL
+  jurisdiction   String                   @default("India")
+  source         String?
+  sourceUrl      String?
+  status         ClauseStatus             @default(DRAFT)
+  version        Int                      @default(1)
+  embedding      Unsupported("vector(384)")?
+  variants       ClauseVariant[]
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
 
   @@map("clauses")
 }

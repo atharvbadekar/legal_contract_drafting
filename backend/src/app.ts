@@ -13,6 +13,7 @@ import templatesRoutes from './routes/templates.routes.js';
 import researchRoutes from './routes/research.routes.js';
 import contractTypesRoutes from './routes/contract-types.routes.js';
 import linterRoutes from './routes/linter.routes.js';
+import systemRoutes from './routes/system.routes.js';
 import { legalNLPClient } from './services/nlp/legal_nlp_client.js';
 
 dotenv.config();
@@ -70,6 +71,7 @@ mountRoute('/templates', templatesRoutes);
 mountRoute('/research', researchRoutes);
 mountRoute('/contract-types', contractTypesRoutes);
 mountRoute('/linter', linterRoutes);
+mountRoute('/system', systemRoutes);
 
 // Global Error Handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

@@ -156,7 +156,7 @@ export class BenchmarkEvaluator {
       const lintRes = lintContract(testCase.text, testCase.contractType);
       latencies.full.push(performance.now() - t0);
 
-      const hasPhInAnalysis = analysis.riskAreas.some(r => r.id === 'unresolved_placeholders');
+      const hasPhInAnalysis = analysis.riskAreas.some(r => r.id === 'unresolved_placeholders' || r.nature === 'TEMPLATE_PLACEHOLDER');
       const hasPhInLint = lintRes.errors.some(e => e.code === 'UNRESOLVED_PLACEHOLDER');
       const detected = hasPhInAnalysis || hasPhInLint;
 
@@ -184,7 +184,7 @@ export class BenchmarkEvaluator {
       totalTests++;
       const analysis = await contractAnalyzer.analyzeContract(testCase.text);
       const lintRes = lintContract(testCase.text, testCase.contractType);
-      const hasPhInAnalysis = analysis.riskAreas.some(r => r.id === 'unresolved_placeholders');
+      const hasPhInAnalysis = analysis.riskAreas.some(r => r.id === 'unresolved_placeholders' || r.nature === 'TEMPLATE_PLACEHOLDER');
       const hasPhInLint = lintRes.errors.some(e => e.code === 'UNRESOLVED_PLACEHOLDER');
 
       if (!hasPhInAnalysis && !hasPhInLint) {

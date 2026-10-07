@@ -91,14 +91,22 @@ export function parseDocumentStructure(content: string): StructuredDocument {
   const fullText = content || '';
   const sections: DocumentSection[] = [];
 
-  // Determine section blocks using markdown thematic dividers (---) or top-level headers (# / ##)
-  let rawBlocks = fullText.split(/\n\s*---\s*\n/);
-  if (rawBlocks.length <= 1 && /(?:^|\n)#{1,3}\s+/m.test(fullText)) {
-    const headerSplit = fullText.split(/(?=\n#{1,3}\s+)/g).filter(b => b.trim().length > 0);
-    if (headerSplit.length > 1) {
-      rawBlocks = headerSplit;
-    }
+  // Determine section blocks: split by header boundaries (## or #) or thematic dividers (---)
+  let rawBlocks: string[] = [];
+
+  if (/(?:^|\n)#{1,3}\s+/m.test(fullText)) {
+    rawBlocks = fullText.split(/(?=(?:^|\n)#{1,3}\s+)/g).map(b => b.trim()).filter(b => b.length > 0);
+  } else if (fullText.includes('---')) {
+    rawBlocks = fullText.split(/\n\s*---\s*\n/).map(b => b.trim()).filter(b => b.length > 0);
+  } else {
+    rawBlocks = [fullText.trim()];
   }
+
+  // If any block has internal dividers (---), separate them cleanly
+  rawBlocks = rawBlocks.flatMap(block => {
+    const internal = block.split(/\n\s*---\s*\n/).map(b => b.trim()).filter(b => b.length > 0);
+    return internal.length > 1 ? internal : [block];
+  });
 
   let globalOffset = 0;
 

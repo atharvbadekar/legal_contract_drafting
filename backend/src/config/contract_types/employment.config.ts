@@ -47,5 +47,85 @@ export const employmentConfig: ContractTypeConfig = {
     { key: 'governingLaw', label: 'Governing Law', type: 'text', required: 'REQUIRED', defaultValue: 'Laws of India', section: 'Terms' },
   ],
   requiredFacts: ['employer.name', 'employee.name', 'designation', 'salary', 'joiningDate', 'governingLaw'],
-  optionalFacts: ['probationPeriod', 'noticePeriodEmployee', 'workLocation', 'currency', 'department']
+  optionalFacts: ['probationPeriod', 'noticePeriodEmployee', 'workLocation', 'currency', 'department'],
+  clauses: {
+    requiredClauses: [
+      'preamble',
+      'appointment',
+      'compensation',
+      'confidentiality',
+      'ip_assignment',
+      'termination',
+      'governing_law',
+      'signatures'
+    ],
+    recommendedClauses: [
+      'term_probation',
+      'working_hours',
+      'leave_policy',
+      'severability'
+    ],
+    conditionalClauses: [
+      {
+        clauseKey: 'non_compete_restrictive',
+        conditionField: 'nonCompete',
+        conditionValue: true,
+        reason: 'Reasonable non-solicitation during employment pursuant to Section 27 of Indian Contract Act 1872.'
+      }
+    ],
+    optionalClauses: [
+      'relocation_allowance',
+      'bonus_structure',
+      'remote_work_policy'
+    ]
+  },
+  clauseDependencies: {
+    termination: ['appointment'],
+    ip_assignment: ['appointment'],
+    confidentiality: ['appointment']
+  },
+  validationRules: [
+    {
+      id: 'val_emp_parties',
+      name: 'Employer & Employee Identification',
+      description: 'Both employer entity and employee full legal name must be provided.',
+      ruleType: 'FIELD_PRESENCE',
+      severity: 'CRITICAL',
+      fieldOrClause: 'parties'
+    },
+    {
+      id: 'val_emp_salary',
+      name: 'Salary & Compensation Specification',
+      description: 'Definite compensation figure and currency must be stipulated.',
+      ruleType: 'FIELD_PRESENCE',
+      severity: 'CRITICAL',
+      fieldOrClause: 'salary'
+    },
+    {
+      id: 'val_emp_notice',
+      name: 'Notice Period Symmetry',
+      description: 'Notice period must be clearly defined for resignation and termination.',
+      ruleType: 'FIELD_PRESENCE',
+      severity: 'HIGH',
+      fieldOrClause: 'noticePeriodEmployee'
+    }
+  ],
+  riskRules: [
+    {
+      id: 'risk_post_term_non_compete',
+      name: 'Post-Termination Non-Compete Invalidation',
+      description: 'Post-termination covenants restraining profession or trade are void under Section 27 of the Indian Contract Act 1872 (Percept D\'Mark v. Zaheer Khan).',
+      triggerCondition: 'nonCompetePostTermination == true',
+      riskLevel: 'CRITICAL',
+      suggestedResolution: 'Confine non-compete to duration of active employment; rely on non-solicitation and trade secret protection post-separation.'
+    },
+    {
+      id: 'risk_missing_ip_assignment',
+      name: 'Missing Work Product Assignment',
+      description: 'Without explicit assignment of copyright and patent rights, employee may retain ownership under Section 17 of Copyright Act 1957.',
+      triggerCondition: 'ipAssignment == false',
+      riskLevel: 'HIGH',
+      suggestedResolution: 'Include comprehensive work-for-hire assignment clause covering all inventions during employment.'
+    }
+  ]
 };

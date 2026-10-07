@@ -15,6 +15,7 @@ import { AdminTemplates } from './pages/admin/AdminTemplates';
 import { AdminClauses } from './pages/admin/AdminClauses';
 import { AdminKnowledge } from './pages/admin/AdminKnowledge';
 import { AdminAudit } from './pages/admin/AdminAudit';
+import { SystemStatus } from './pages/SystemStatus';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
@@ -55,6 +56,7 @@ export function App() {
             <Route path="documents/:id/edit" element={<DocumentEditor />} />
             <Route path="documents/:id/versions" element={<DocumentVersions />} />
             <Route path="research" element={<ResearchDashboard />} />
+            <Route path="system-status" element={<SystemStatus />} />
 
             {/* Admin Routes */}
             <Route

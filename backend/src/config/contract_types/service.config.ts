@@ -40,8 +40,89 @@ export const serviceConfig: ContractTypeConfig = {
 
     { key: 'commencementDate', label: 'Services Commencement Date', type: 'date', required: 'REQUIRED', section: 'Terms' },
     { key: 'duration', label: 'Term Duration', type: 'text', required: 'RECOMMENDED', defaultValue: '1 year', section: 'Terms' },
-    { key: 'governingLaw', label: 'Governing Law', type: 'text', required: 'REQUIRED', defaultValue: 'State of New York', section: 'Terms' },
+    { key: 'governingLaw', label: 'Governing Law', type: 'text', required: 'REQUIRED', defaultValue: 'Laws of India', section: 'Terms' },
   ],
   requiredFacts: ['client.name', 'serviceProvider.name', 'scopeOfServices', 'fees', 'commencementDate', 'governingLaw'],
-  optionalFacts: ['deliverables', 'currency', 'duration', 'invoicePaymentDays']
+  optionalFacts: ['deliverables', 'currency', 'duration', 'invoicePaymentDays'],
+  clauses: {
+    requiredClauses: [
+      'preamble',
+      'scope',
+      'fees',
+      'ip_ownership',
+      'confidentiality',
+      'liability',
+      'term_termination',
+      'governing_law',
+      'signatures'
+    ],
+    recommendedClauses: [
+      'deliverables',
+      'warranties',
+      'indemnification',
+      'severability'
+    ],
+    conditionalClauses: [
+      {
+        clauseKey: 'service_level_agreement',
+        conditionField: 'hasSla',
+        conditionValue: true,
+        reason: 'Uptime guarantees and service credit provisions requested by client.'
+      }
+    ],
+    optionalClauses: [
+      'force_majeure',
+      'non_solicitation',
+      'subcontracting'
+    ]
+  },
+  clauseDependencies: {
+    deliverables: ['scope'],
+    liability: ['fees'],
+    term_termination: ['commencementDate']
+  },
+  validationRules: [
+    {
+      id: 'val_svc_parties',
+      name: 'Client & Service Provider Entities',
+      description: 'Both client and service provider legal entities must be clearly defined.',
+      ruleType: 'FIELD_PRESENCE',
+      severity: 'CRITICAL',
+      fieldOrClause: 'parties'
+    },
+    {
+      id: 'val_svc_fees',
+      name: 'Service Fees & Consideration',
+      description: 'Definite commercial consideration must be specified.',
+      ruleType: 'FIELD_PRESENCE',
+      severity: 'CRITICAL',
+      fieldOrClause: 'fees'
+    },
+    {
+      id: 'val_svc_scope',
+      name: 'Scope of Services',
+      description: 'Professional scope of services cannot be empty or placeholder.',
+      ruleType: 'FIELD_PRESENCE',
+      severity: 'HIGH',
+      fieldOrClause: 'scopeOfServices'
+    }
+  ],
+  riskRules: [
+    {
+      id: 'risk_uncapped_liability',
+      name: 'Uncapped Service Provider Liability',
+      description: 'Absence of an aggregate liability cap exposes service provider to unlimited damages.',
+      triggerCondition: 'liabilityCap == none',
+      riskLevel: 'CRITICAL',
+      suggestedResolution: 'Cap aggregate liability to fees paid or payable in preceding 12 months.'
+    },
+    {
+      id: 'risk_missing_ip_transfer',
+      name: 'Ambiguous Deliverable IP Ownership',
+      description: 'Failing to assign custom deliverables leaves copyright with the contractor under Section 17 Indian Copyright Act.',
+      triggerCondition: 'ipOwnership == ambiguous',
+      riskLevel: 'HIGH',
+      suggestedResolution: 'Specify that custom deliverables belong to Client upon payment in full, while retaining Service Provider background tools.'
+    }
+  ]
 };

@@ -45,7 +45,13 @@ export class ContractTypesController {
         ontologyCategories: config.ontologyCategories,
         questionnaire: config.questionnaire,
         requiredFacts: config.requiredFacts,
-        optionalFacts: config.optionalFacts
+        optionalFacts: config.optionalFacts,
+        clauses: config.clauses,
+        clauseDependencies: config.clauseDependencies,
+        validationRules: config.validationRules,
+        riskRules: config.riskRules,
+        defaultJurisdiction: config.defaultJurisdiction || config.jurisdiction,
+        supportedJurisdictions: config.supportedJurisdictions || ['India', 'United States', 'United Kingdom', 'Singapore']
       });
     } catch (err: any) {
       console.error('Get contract type schema error:', err);
