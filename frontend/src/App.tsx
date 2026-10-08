@@ -53,7 +53,11 @@ export function App() {
             <Route path="create" element={<CreateDocument />} />
             <Route path="documents" element={<DocumentsList />} />
             <Route path="analyzer" element={<ContractAnalyzer />} />
+            <Route path="editor" element={<DocumentEditor />} />
+            <Route path="editor/:id" element={<DocumentEditor />} />
+            <Route path="documents/:id" element={<DocumentEditor />} />
             <Route path="documents/:id/edit" element={<DocumentEditor />} />
+            <Route path="edit/:id" element={<DocumentEditor />} />
             <Route path="documents/:id/versions" element={<DocumentVersions />} />
             <Route path="research" element={<ResearchDashboard />} />
             <Route path="system-status" element={<SystemStatus />} />

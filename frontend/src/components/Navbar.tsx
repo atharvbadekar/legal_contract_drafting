@@ -12,7 +12,8 @@ import {
   User as UserIcon, 
   ChevronDown,
   Layers,
-  Search
+  Search,
+  Edit3
 } from 'lucide-react';
 import { SystemStatusWidget } from './SystemStatusWidget';
 
@@ -83,6 +84,18 @@ export const Navbar: React.FC = () => {
                 >
                   <Search className="w-4 h-4 text-purple-600" />
                   Contract Analyzer
+                </Link>
+
+                <Link
+                  to="/editor"
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
+                    isActive('/editor') || location.pathname.includes('/edit') || location.pathname.includes('/editor')
+                      ? 'bg-mira-light text-mira-primary font-semibold'
+                      : 'text-mira-dark hover:bg-gray-50'
+                  }`}
+                >
+                  <Edit3 className="w-4 h-4 text-purple-600" />
+                  Contract Editor
                 </Link>
 
                 <Link

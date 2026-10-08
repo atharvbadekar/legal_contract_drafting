@@ -113,6 +113,9 @@ export const DocumentEditor: React.FC = () => {
 
   const [document, setDocument] = useState<DocumentRecord | null>(null);
   const [content, setContent] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [availableDocs, setAvailableDocs] = useState<DocumentRecord[]>([]);
   const [saving, setSaving] = useState(false);
   const [validating, setValidating] = useState(false);
   const [activeTab, setActiveTab] = useState<'VALIDATION' | 'COMPLETENESS' | 'PERFECTION_GUIDE'>('VALIDATION');
@@ -501,18 +504,91 @@ export const DocumentEditor: React.FC = () => {
   };
 
   useEffect(() => {
-    if (id) loadDocument(id);
-  }, [id]);
+    let isMounted = true;
 
-  const loadDocument = async (docId: string) => {
-    try {
-      const doc = await documentService.getById(docId);
-      setDocument(doc);
-      setContent(doc.content);
-    } catch (err) {
-      console.error('Failed to load document:', err);
-    }
-  };
+    const initialize = async () => {
+      setLoading(true);
+      setLoadError(null);
+
+      // 1. If id is provided, attempt to load that document directly
+      if (id && id !== 'undefined' && id !== 'null') {
+        try {
+          const doc = await documentService.getById(id);
+          if (isMounted && doc) {
+            if (typeof doc.validationSummary === 'string') {
+              try { doc.validationSummary = JSON.parse(doc.validationSummary); } catch {}
+            }
+            if (typeof doc.structuredFacts === 'string') {
+              try { doc.structuredFacts = JSON.parse(doc.structuredFacts); } catch {}
+            }
+            setDocument(doc);
+            setContent(doc.content || '');
+            setLoading(false);
+            return;
+          }
+        } catch (err: any) {
+          console.warn(`Could not load document ${id}:`, err);
+        }
+      }
+
+      // 2. Fallback: fetch available documents if specific ID failed or no ID in route
+      try {
+        const docs = await documentService.list();
+        if (isMounted) {
+          setAvailableDocs(docs || []);
+          if (docs && docs.length > 0) {
+            // Select the most recent document
+            const latest = docs[0];
+            if (typeof latest.validationSummary === 'string') {
+              try { latest.validationSummary = JSON.parse(latest.validationSummary); } catch {}
+            }
+            if (typeof latest.structuredFacts === 'string') {
+              try { latest.structuredFacts = JSON.parse(latest.structuredFacts); } catch {}
+            }
+            setDocument(latest);
+            setContent(latest.content || '');
+            setLoading(false);
+            navigate(`/documents/${latest.id}/edit`, { replace: true });
+            return;
+          } else {
+            // No documents exist in workspace yet: auto-create initial draft NDA so editor opens immediately
+            const created = await documentService.create({
+              title: 'Non-Disclosure Agreement (NDA) Draft',
+              documentType: 'NDA',
+              generationMode: 'MIRA',
+              content: `## NON-DISCLOSURE AGREEMENT (NDA)\n\nThis Agreement is entered into on ${new Date().toLocaleDateString()}.\n\n### 1. CONFIDENTIALITY\nThe parties agree to safeguard all proprietary information and trade secrets.\n\n### 2. TERM\nThis Agreement shall remain in effect for three (3) years from the Effective Date.`
+            });
+            const createdId = created?.id || (created as any)?.document?.id;
+            if (createdId && isMounted) {
+              const fullDoc = await documentService.getById(createdId).catch(() => created);
+              setDocument(fullDoc || created);
+              setContent(fullDoc?.content || created?.content || '');
+              setLoading(false);
+              navigate(`/documents/${createdId}/edit`, { replace: true });
+              return;
+            }
+          }
+        }
+      } catch (listErr: any) {
+        if (isMounted) {
+          setLoadError(listErr.message || 'Unable to connect to document service. Please ensure backend is running.');
+        }
+      }
+
+      if (isMounted) {
+        setLoading(false);
+        if (id) {
+          setLoadError(`Document "${id}" could not be found or loaded.`);
+        }
+      }
+    };
+
+    initialize();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [id, navigate]);
 
   const handleSave = async (saveAsVersion: boolean = false) => {
     if (!id || !document) return;
@@ -984,8 +1060,75 @@ export const DocumentEditor: React.FC = () => {
     );
   };
 
+  if (loading && !document) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center p-12 text-center space-y-4">
+        <div className="w-12 h-12 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center animate-pulse">
+          <FileText className="w-6 h-6" />
+        </div>
+        <div>
+          <h2 className="text-base font-bold text-gray-800">Opening Legal Contract Editor...</h2>
+          <p className="text-xs text-gray-500 mt-1">Preparing multi-tier validation, clause library, and surgical AI tools</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (loadError && !document) {
+    return (
+      <div className="max-w-2xl mx-auto my-12 bg-white rounded-2xl border border-red-200 p-8 shadow-xs text-center space-y-6">
+        <div className="w-14 h-14 mx-auto rounded-2xl bg-red-50 text-red-600 flex items-center justify-center">
+          <AlertTriangle className="w-7 h-7" />
+        </div>
+        <div>
+          <h2 className="text-lg font-bold text-gray-900">Unable to Load Document</h2>
+          <p className="text-xs text-gray-600 mt-2 max-w-md mx-auto">{loadError}</p>
+        </div>
+        <div className="flex items-center justify-center gap-3">
+          <Link
+            to="/documents"
+            className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-lg text-xs font-semibold cursor-pointer"
+          >
+            Browse My Documents
+          </Link>
+          <Link
+            to="/create"
+            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-semibold shadow-xs cursor-pointer"
+          >
+            Create New Document
+          </Link>
+        </div>
+        {availableDocs.length > 0 && (
+          <div className="border-t border-gray-100 pt-6 text-left">
+            <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-3">Available Documents In Workspace</h3>
+            <div className="space-y-2 max-h-48 overflow-y-auto">
+              {availableDocs.map(d => (
+                <div
+                  key={d.id}
+                  onClick={() => navigate(`/documents/${d.id}/edit`)}
+                  className="p-3 bg-gray-50 hover:bg-purple-50 border border-gray-200 rounded-lg flex items-center justify-between cursor-pointer transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-purple-600" />
+                    <span className="text-xs font-medium text-gray-800">{d.title}</span>
+                  </div>
+                  <span className="text-[10px] text-gray-500 font-semibold px-2 py-0.5 bg-gray-100 rounded">{d.documentType}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   if (!document) {
-    return <div className="p-12 text-center text-xs text-mira-muted">Loading document editor...</div>;
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center p-12 text-center space-y-4">
+        <FileText className="w-8 h-8 text-purple-600 animate-pulse" />
+        <p className="text-xs text-gray-500">Preparing editor workspace...</p>
+      </div>
+    );
   }
 
   // Parse sections for outline cleanly by markdown headers
