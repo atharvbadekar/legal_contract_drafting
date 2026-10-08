@@ -1,12 +1,10 @@
 datasource db {
-  provider   = "postgresql"
-  url        = env("DATABASE_URL")
-  extensions = [vector]
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 generator client {
-  provider        = "prisma-client-js"
-  previewFeatures = ["postgresqlExtensions"]
+  provider = "prisma-client-js"
 }
 
 enum Role {
@@ -157,7 +155,7 @@ model Clause {
   sourceUrl      String?
   status         ClauseStatus             @default(DRAFT)
   version        Int                      @default(1)
-  embedding      Unsupported("vector(384)")?
+  embedding      String?                  @db.Text
   variants       ClauseVariant[]
   createdAt      DateTime                 @default(now())
   updatedAt      DateTime                 @updatedAt
@@ -201,7 +199,7 @@ model KnowledgeChunk {
   chunkIndex     Int
   content        String                   @db.Text
   metadata       Json                     @default("{}")
-  embedding      Unsupported("vector(384)")?
+  embedding      String?                  @db.Text
 
   @@map("knowledge_chunks")
 }

@@ -1,7 +1,9 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
 
 import authRoutes from './routes/auth.routes.js';
@@ -15,8 +17,6 @@ import contractTypesRoutes from './routes/contract-types.routes.js';
 import linterRoutes from './routes/linter.routes.js';
 import systemRoutes from './routes/system.routes.js';
 import { legalNLPClient } from './services/nlp/legal_nlp_client.js';
-
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;

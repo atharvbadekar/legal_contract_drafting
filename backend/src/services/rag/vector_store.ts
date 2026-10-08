@@ -32,11 +32,19 @@ export class VectorStore {
   async updateClauseEmbedding(clauseId: string, embedding: number[]): Promise<void> {
     try {
       const vectorStr = `[${embedding.join(',')}]`;
-      await prisma.$executeRawUnsafe(
-        `UPDATE "clauses" SET "embedding" = $1::vector WHERE "id" = $2`,
-        vectorStr,
-        clauseId
-      );
+      try {
+        await prisma.$executeRawUnsafe(
+          `UPDATE "clauses" SET "embedding" = $1::vector WHERE "id" = $2`,
+          vectorStr,
+          clauseId
+        );
+      } catch {
+        await prisma.$executeRawUnsafe(
+          `UPDATE "clauses" SET "embedding" = $1 WHERE "id" = $2`,
+          vectorStr,
+          clauseId
+        );
+      }
     } catch (err) {
       console.warn(`Could not set vector embedding for clause ${clauseId}:`, err);
     }
@@ -48,11 +56,19 @@ export class VectorStore {
   async updateChunkEmbedding(chunkId: string, embedding: number[]): Promise<void> {
     try {
       const vectorStr = `[${embedding.join(',')}]`;
-      await prisma.$executeRawUnsafe(
-        `UPDATE "knowledge_chunks" SET "embedding" = $1::vector WHERE "id" = $2`,
-        vectorStr,
-        chunkId
-      );
+      try {
+        await prisma.$executeRawUnsafe(
+          `UPDATE "knowledge_chunks" SET "embedding" = $1::vector WHERE "id" = $2`,
+          vectorStr,
+          chunkId
+        );
+      } catch {
+        await prisma.$executeRawUnsafe(
+          `UPDATE "knowledge_chunks" SET "embedding" = $1 WHERE "id" = $2`,
+          vectorStr,
+          chunkId
+        );
+      }
     } catch (err) {
       console.warn(`Could not set vector embedding for chunk ${chunkId}:`, err);
     }
