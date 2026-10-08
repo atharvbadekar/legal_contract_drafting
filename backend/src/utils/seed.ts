@@ -13,6 +13,7 @@ async function main() {
     where: { email: 'admin@atharv.legal' },
     update: {},
     create: {
+      id: '00000000-0000-0000-0000-000000000001',
       email: 'admin@atharv.legal',
       passwordHash: adminPasswordHash,
       name: 'Atharv Legal Admin (Legal Lead)',
@@ -35,6 +36,7 @@ async function main() {
     where: { email: 'user@atharv.legal' },
     update: {},
     create: {
+      id: '00000000-0000-0000-0000-000000000002',
       email: 'user@atharv.legal',
       passwordHash: userPasswordHash,
       name: 'Atharv Researcher',

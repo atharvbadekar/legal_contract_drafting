@@ -76,9 +76,33 @@ export class DocumentsController {
     return null;
   }
 
+  private async resolveUserId(requestedId?: string): Promise<string> {
+    const DEFAULT_USER_ID = '00000000-0000-0000-0000-000000000002';
+    const targetId = requestedId || DEFAULT_USER_ID;
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: targetId },
+        select: { id: true }
+      });
+      if (user) return user.id;
+
+      const defaultUser = await prisma.user.findUnique({
+        where: { id: DEFAULT_USER_ID },
+        select: { id: true }
+      });
+      if (defaultUser) return defaultUser.id;
+
+      const anyUser = await prisma.user.findFirst({ select: { id: true } });
+      if (anyUser) return anyUser.id;
+    } catch {
+      // Safe fallback when DB is unreachable
+    }
+    return DEFAULT_USER_ID;
+  }
+
   async list(req: AuthRequest, res: Response) {
     try {
-      const userId = req.user?.id || '00000000-0000-0000-0000-000000000002';
+      const userId = await this.resolveUserId(req.user?.id);
       const isAdmin = req.user?.role === 'ADMIN';
 
       let documents: any[] = [];
@@ -115,7 +139,7 @@ export class DocumentsController {
 
   async create(req: AuthRequest, res: Response) {
     try {
-      const userId = req.user?.id || '00000000-0000-0000-0000-000000000002';
+      const userId = await this.resolveUserId(req.user?.id);
       const { title, documentType, structuredFacts, content, generationMode } = req.body;
 
       if (!documentType) {
@@ -1070,7 +1094,7 @@ export class DocumentsController {
 
   async importAnalyzed(req: AuthRequest, res: Response) {
     try {
-      const userId = req.user?.id || '00000000-0000-0000-0000-000000000002';
+      const userId = await this.resolveUserId(req.user?.id);
       const { title, documentType, content, structuredFacts, health } = req.body;
 
       if (!content) {

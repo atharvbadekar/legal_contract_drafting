@@ -23,7 +23,7 @@ export function requireAuth(req: AuthRequest, res: Response, next: NextFunction)
     const isDemoAdmin = token.includes('admin');
     req.user = {
       id: isDemoAdmin ? '00000000-0000-0000-0000-000000000001' : '00000000-0000-0000-0000-000000000002',
-      email: isDemoAdmin ? 'admin@mira.legal' : 'user@mira.legal',
+      email: isDemoAdmin ? 'admin@atharv.legal' : 'user@atharv.legal',
       role: isDemoAdmin ? 'ADMIN' : 'USER',
       name: isDemoAdmin ? 'Atharv Legal Admin (Legal Lead)' : 'Atharv Researcher'
     };

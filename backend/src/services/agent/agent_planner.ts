@@ -129,13 +129,24 @@ export class AgentPlanner {
   ) {
     const startTime = Date.now();
 
-    // Create AgentRun record
-    const agentRun = await prisma.agentRun.create({
-      data: {
-        documentId,
-        status: 'RUNNING'
+    // Create AgentRun record if document exists in DB
+    let agentRun: any = null;
+    try {
+      const docExists = await prisma.document.findUnique({
+        where: { id: documentId },
+        select: { id: true }
+      });
+      if (docExists) {
+        agentRun = await prisma.agentRun.create({
+          data: {
+            documentId,
+            status: 'RUNNING'
+          }
+        });
       }
-    });
+    } catch (e) {
+      console.warn(`AgentRun creation skipped for doc ${documentId}:`, e);
+    }
 
     const recordStep = async (
       stepNum: number,
@@ -146,18 +157,24 @@ export class AgentPlanner {
       executionTimeMs: number = 0,
       modelUsed: string = 'InLegalBERT/RuleEngine'
     ) => {
-      return await prisma.agentStep.create({
-        data: {
-          agentRunId: agentRun.id,
-          stepNumber: stepNum,
-          stepName,
-          inputData: inputData || {},
-          outputData: outputData || {},
-          status,
-          executionTimeMs,
-          modelUsed
-        }
-      });
+      if (!agentRun?.id) return null;
+      try {
+        return await prisma.agentStep.create({
+          data: {
+            agentRunId: agentRun.id,
+            stepNumber: stepNum,
+            stepName,
+            inputData: inputData || {},
+            outputData: outputData || {},
+            status,
+            executionTimeMs,
+            modelUsed
+          }
+        });
+      } catch (stepErr) {
+        console.warn(`Agent step ${stepNum} recording skipped:`, stepErr);
+        return null;
+      }
     };
 
     try {
@@ -416,72 +433,91 @@ export class AgentPlanner {
         'Deterministic Engine + InLegalBERT Validator'
       );
 
-      // Record ValidationResult in DB
-      await prisma.validationResult.create({
-        data: {
-          documentId,
-          layer: 'DETERMINISTIC',
-          status: validationResult.status,
-          score: validationResult.overallScore,
-          issues: validationResult.allIssues as any
-        }
-      });
-
-      // Update Document
       const docStatus = validationResult.status === 'PASSED' ? 'COMPLETED' : 'NEEDS_REVIEW';
-      await prisma.document.update({
-        where: { id: documentId },
-        data: {
-          title: draftResult.title,
-          documentType: detectedDocType,
-          generationMode: 'MIRA',
-          status: docStatus,
-          content: draftResult.formattedDocument,
-          structuredFacts: structuredFacts as any,
-          validationScore: validationResult.overallScore,
-          validationSummary: {
-            status: validationResult.status,
-            score: validationResult.overallScore,
-            layerScores: validationResult.layerScores,
-            issues: validationResult.allIssues,
-            semanticStatus: validationResult.semanticStatus,
-            sourcesUsed: retrievedSources.map(s => ({ title: s.title, relevance: s.relevanceScore })),
-            approvedClausesUsed: approvedClauses.map(c => ({ title: c.title, similarity: c.similarity })),
-            disclaimer: validationResult.disclaimer
-          } as any
-        }
-      });
 
-      // Create DocumentVersion
-      const latestVersion = await prisma.documentVersion.findFirst({
-        where: { documentId },
-        orderBy: { versionNumber: 'desc' }
-      });
-      const nextVersionNumber = (latestVersion?.versionNumber || 0) + 1;
+      // Persist results to DB if document exists
+      try {
+        const docRecord = await prisma.document.findUnique({
+          where: { id: documentId },
+          select: { id: true, userId: true }
+        });
 
-      await prisma.documentVersion.create({
-        data: {
-          documentId,
-          versionNumber: nextVersionNumber,
-          content: draftResult.formattedDocument,
-          structuredFacts: structuredFacts as any,
-          validationResult: {
-            score: validationResult.overallScore,
-            status: validationResult.status,
-            issues: validationResult.allIssues
-          } as any,
-          createdById: (await prisma.document.findUnique({ where: { id: documentId } }))?.userId || ''
+        if (docRecord) {
+          // Record ValidationResult in DB
+          await prisma.validationResult.create({
+            data: {
+              documentId,
+              layer: 'DETERMINISTIC',
+              status: validationResult.status,
+              score: validationResult.overallScore,
+              issues: validationResult.allIssues as any
+            }
+          });
+
+          // Update Document
+          await prisma.document.update({
+            where: { id: documentId },
+            data: {
+              title: draftResult.title,
+              documentType: detectedDocType,
+              generationMode: 'MIRA',
+              status: docStatus,
+              content: draftResult.formattedDocument,
+              structuredFacts: structuredFacts as any,
+              validationScore: validationResult.overallScore,
+              validationSummary: {
+                status: validationResult.status,
+                score: validationResult.overallScore,
+                layerScores: validationResult.layerScores,
+                issues: validationResult.allIssues,
+                semanticStatus: validationResult.semanticStatus,
+                sourcesUsed: retrievedSources.map(s => ({ title: s.title, relevance: s.relevanceScore })),
+                approvedClausesUsed: approvedClauses.map(c => ({ title: c.title, similarity: c.similarity })),
+                disclaimer: validationResult.disclaimer
+              } as any
+            }
+          });
+
+          // Create DocumentVersion
+          const latestVersion = await prisma.documentVersion.findFirst({
+            where: { documentId },
+            orderBy: { versionNumber: 'desc' }
+          });
+          const nextVersionNumber = (latestVersion?.versionNumber || 0) + 1;
+
+          await prisma.documentVersion.create({
+            data: {
+              documentId,
+              versionNumber: nextVersionNumber,
+              content: draftResult.formattedDocument,
+              structuredFacts: structuredFacts as any,
+              validationResult: {
+                score: validationResult.overallScore,
+                status: validationResult.status,
+                issues: validationResult.allIssues
+              } as any,
+              createdById: docRecord.userId || ''
+            }
+          });
         }
-      });
+      } catch (persistErr) {
+        console.warn('Pipeline DB record update skipped:', persistErr);
+      }
 
       // Complete AgentRun
-      await prisma.agentRun.update({
-        where: { id: agentRun.id },
-        data: {
-          status: validationResult.status === 'PASSED' ? 'COMPLETED' : 'NEEDS_REVIEW',
-          completedAt: new Date()
+      if (agentRun?.id) {
+        try {
+          await prisma.agentRun.update({
+            where: { id: agentRun.id },
+            data: {
+              status: validationResult.status === 'PASSED' ? 'COMPLETED' : 'NEEDS_REVIEW',
+              completedAt: new Date()
+            }
+          });
+        } catch {
+          // Ignore
         }
-      });
+      }
 
       return {
         documentId,
@@ -494,13 +530,19 @@ export class AgentPlanner {
       };
 
     } catch (err: any) {
-      await prisma.agentRun.update({
-        where: { id: agentRun.id },
-        data: {
-          status: 'FAILED',
-          completedAt: new Date()
+      if (agentRun?.id) {
+        try {
+          await prisma.agentRun.update({
+            where: { id: agentRun.id },
+            data: {
+              status: 'FAILED',
+              completedAt: new Date()
+            }
+          });
+        } catch {
+          // Ignore
         }
-      });
+      }
       throw err;
     }
   }

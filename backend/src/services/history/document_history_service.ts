@@ -250,21 +250,27 @@ export class DocumentHistoryService {
     let createdVersion: any = null;
 
     try {
-      createdVersion = await prisma.documentVersion.create({
-        data: {
-          documentId,
-          versionNumber: nextVersionNum,
-          structuredFacts: structuredFacts as any,
-          content,
-          validationResult: versionMetadata as any,
-          createdById: userId
-        },
-        include: {
-          createdBy: { select: { name: true, email: true } }
-        }
+      const docExists = await prisma.document.findUnique({
+        where: { id: documentId },
+        select: { id: true }
       });
+      if (docExists) {
+        createdVersion = await prisma.documentVersion.create({
+          data: {
+            documentId,
+            versionNumber: nextVersionNum,
+            structuredFacts: structuredFacts as any,
+            content,
+            validationResult: versionMetadata as any,
+            createdById: userId
+          },
+          include: {
+            createdBy: { select: { name: true, email: true } }
+          }
+        });
+      }
     } catch (err) {
-      console.warn('Prisma documentVersion create failed, using memory store:', err);
+      console.warn('Prisma documentVersion create skipped/failed, using memory store:', err);
     }
 
     if (!createdVersion) {
@@ -316,21 +322,27 @@ export class DocumentHistoryService {
     };
 
     try {
-      const dbAudit = await prisma.auditLog.create({
-        data: {
-          userId,
-          action: `DOCUMENT_${operationType}`,
-          resourceType: 'DOCUMENT',
-          resourceId: documentId,
-          details: auditDetails as any
-        }
+      const userExists = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true }
       });
-      auditLog = {
-        ...dbAudit,
-        details: auditDetails
-      };
+      if (userExists) {
+        const dbAudit = await prisma.auditLog.create({
+          data: {
+            userId,
+            action: `DOCUMENT_${operationType}`,
+            resourceType: 'DOCUMENT',
+            resourceId: documentId,
+            details: auditDetails as any
+          }
+        });
+        auditLog = {
+          ...dbAudit,
+          details: auditDetails
+        };
+      }
     } catch (err) {
-      console.warn('Prisma auditLog create failed, storing in memory:', err);
+      console.warn('Prisma auditLog create skipped/failed, storing in memory:', err);
     }
 
     inMemoryAuditLogs.unshift(auditLog);
